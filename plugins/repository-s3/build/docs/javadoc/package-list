@@ -1,0 +1,4 @@
+org.elasticsearch.cloud.aws
+org.elasticsearch.cloud.aws.blobstore
+org.elasticsearch.plugin.repository.s3
+org.elasticsearch.repositories.s3

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.elasticsearch.test</groupId>
+  <artifactId>example-fixture</artifactId>
+  <version>5.0.0-alpha6-SNAPSHOT</version>
+  <inceptionYear>2009</inceptionYear>
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <name>Elastic</name>
+      <url>http://www.elastic.co</url>
+    </developer>
+  </developers>
+  <name>example-fixture</name>
+  <description>Elasticsearch subproject :test:fixtures:example-fixture</description>
+  <url>https://github.com/SoftwareEvolutionProject/elasticsearch</url>
+  <scm>
+    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  </scm>
+</project>

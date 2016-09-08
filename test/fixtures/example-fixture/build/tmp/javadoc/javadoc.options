@@ -1,0 +1,8 @@
+-Xdoclint:all,-missing '-quiet'
+-classpath '/Users/mussemac13/git/elasticsearch/test/fixtures/example-fixture/build/classes/main:/Users/mussemac13/git/elasticsearch/test/fixtures/example-fixture/build/resources/main'
+-d '/Users/mussemac13/git/elasticsearch/test/fixtures/example-fixture/build/docs/javadoc'
+-doctitle 'example-fixture 5.0.0-alpha6-SNAPSHOT API'
+-encoding 'UTF8'
+-quiet 
+-windowtitle 'example-fixture 5.0.0-alpha6-SNAPSHOT API'
+'/Users/mussemac13/git/elasticsearch/test/fixtures/example-fixture/src/main/java/example/ExampleTestFixture.java'

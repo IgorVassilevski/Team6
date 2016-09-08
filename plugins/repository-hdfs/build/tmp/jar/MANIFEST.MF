@@ -1,0 +1,22 @@
+Manifest-Version: 1.0
+Implementation-Title: org.elasticsearch.plugin#repository-hdfs;5.0.0-a
+ lpha6-SNAPSHOT
+Implementation-Version: 5.0.0-alpha6-SNAPSHOT
+Built-Status: integration
+Built-By: mussemac13
+Built-OS: Mac OS X
+Build-Date: 2016-09-06T15:18:43.140Z
+Gradle-Version: 2.13
+Created-By: 1.8.0_73-b02 (Oracle Corporation)
+Build-Java-Version: 1.8
+Module-Source: /plugins/repository-hdfs
+Module-Origin: https://github.com/SoftwareEvolutionProject/elasticsear
+ ch.git
+Change: faa03ad
+Branch: master
+X-Compile-Target-JDK: 1.8
+X-Compile-Source-JDK: 1.8
+X-Compile-Elasticsearch-Version: 5.0.0-alpha6
+X-Compile-Lucene-Version: 6.2.0
+X-Compile-Elasticsearch-Snapshot: true
+

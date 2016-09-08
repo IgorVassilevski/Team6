@@ -1,0 +1,14 @@
+Source: elasticsearch
+Section: web
+Priority: optional
+Maintainer: Elasticsearch Team <info@elastic.co>
+Uploaders: 
+Version: 5.0.0-alpha6-SNAPSHOT
+Standards-Version: 3.8.3
+Package: elasticsearch
+Homepage: https://www.elastic.co/
+Architecture: all
+Distribution: 
+Depends: libc6, adduser, bash
+Description: Elasticsearch is a distributed RESTful search engine built for the cloud. Reference documentation can be found at https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html and the 'Elasticsearch: The Definitive Guide' book can be found at https://www.elastic.co/guide/en/elasticsearch/guide/current/index.html
+ Elasticsearch subproject :distribution:deb

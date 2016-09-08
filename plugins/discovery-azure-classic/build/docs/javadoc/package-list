@@ -1,0 +1,4 @@
+org.elasticsearch.cloud.azure.classic
+org.elasticsearch.cloud.azure.classic.management
+org.elasticsearch.discovery.azure.classic
+org.elasticsearch.plugin.discovery.azure.classic

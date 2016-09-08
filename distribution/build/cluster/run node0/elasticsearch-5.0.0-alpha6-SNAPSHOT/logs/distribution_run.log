@@ -1,0 +1,23 @@
+[2016-09-08T12:22:20,297][INFO ][node                     ] [] initializing ...
+[2016-09-08T12:22:20,380][INFO ][env                      ] [1EGVjl4] using [1] data paths, mounts [[/ (/dev/disk1)]], net usable_space [182.6gb], net total_space [232.6gb], spins? [unknown], types [hfs]
+[2016-09-08T12:22:20,381][INFO ][env                      ] [1EGVjl4] heap size [494.9mb], compressed ordinary object pointers [true]
+[2016-09-08T12:22:20,382][INFO ][node                     ] [1EGVjl4] node name [1EGVjl4] derived from node ID; set [node.name] to override
+[2016-09-08T12:22:20,384][INFO ][node                     ] [1EGVjl4] version[5.0.0-alpha6-SNAPSHOT], pid[19640], build[faa03ad/2016-09-06T15:15:07.473Z], OS[Mac OS X/10.11.6/x86_64], JVM[Oracle Corporation/Java HotSpot(TM) 64-Bit Server VM/1.8.0_73/25.73-b02]
+[2016-09-08T12:22:21,405][INFO ][plugins                  ] [1EGVjl4] loaded module [aggs-matrix-stats]
+[2016-09-08T12:22:21,405][INFO ][plugins                  ] [1EGVjl4] loaded module [ingest-common]
+[2016-09-08T12:22:21,405][INFO ][plugins                  ] [1EGVjl4] loaded module [lang-expression]
+[2016-09-08T12:22:21,406][INFO ][plugins                  ] [1EGVjl4] loaded module [lang-groovy]
+[2016-09-08T12:22:21,406][INFO ][plugins                  ] [1EGVjl4] loaded module [lang-mustache]
+[2016-09-08T12:22:21,406][INFO ][plugins                  ] [1EGVjl4] loaded module [lang-painless]
+[2016-09-08T12:22:21,406][INFO ][plugins                  ] [1EGVjl4] loaded module [percolator]
+[2016-09-08T12:22:21,406][INFO ][plugins                  ] [1EGVjl4] loaded module [reindex]
+[2016-09-08T12:22:21,406][INFO ][plugins                  ] [1EGVjl4] loaded module [transport-netty3]
+[2016-09-08T12:22:21,406][INFO ][plugins                  ] [1EGVjl4] loaded module [transport-netty4]
+[2016-09-08T12:22:21,407][INFO ][plugins                  ] [1EGVjl4] no plugins loaded
+[2016-09-08T12:22:23,833][INFO ][node                     ] [1EGVjl4] initialized
+[2016-09-08T12:22:23,833][INFO ][node                     ] [1EGVjl4] starting ...
+[2016-09-08T12:22:23,973][INFO ][transport                ] [1EGVjl4] publish_address {127.0.0.1:9300}, bound_addresses {[fe80::1]:9300}, {[::1]:9300}, {127.0.0.1:9300}
+[2016-09-08T12:22:27,023][INFO ][cluster.service          ] [1EGVjl4] new_master {1EGVjl4}{1EGVjl4VR46asJcmakGD9w}{GENuwIl6Qeax4T5ET35pAw}{127.0.0.1}{127.0.0.1:9300}{testattr=test}, reason: zen-disco-elected-as-master ([0] nodes joined)
+[2016-09-08T12:22:27,040][INFO ][http                     ] [1EGVjl4] publish_address {127.0.0.1:9200}, bound_addresses {[fe80::1]:9200}, {[::1]:9200}, {127.0.0.1:9200}
+[2016-09-08T12:22:27,042][INFO ][node                     ] [1EGVjl4] started
+[2016-09-08T12:22:27,044][INFO ][gateway                  ] [1EGVjl4] recovered [0] indices into cluster_state

@@ -1,0 +1,7 @@
+/etc/elasticsearch/elasticsearch.yml
+/etc/elasticsearch/jvm.options
+/etc/elasticsearch/log4j2.properties
+/usr/lib/systemd/system/elasticsearch.service
+/etc/init.d/elasticsearch
+/etc/default/elasticsearch
+

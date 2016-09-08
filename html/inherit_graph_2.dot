@@ -1,0 +1,25 @@
+digraph "Graphical Class Hierarchy"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node13 [label="ToXContent",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node13 -> Node0 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node0 [label="org.elasticsearch.Elasticsearch\lException",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_exception.html"];
+  Node0 -> Node1 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node1 [label="org.elasticsearch.Elasticsearch\lGenerationException",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_generation_exception.html"];
+  Node0 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="org.elasticsearch.Elasticsearch\lParseException",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_parse_exception.html"];
+  Node0 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="org.elasticsearch.Elasticsearch\lStatusException",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_status_exception.html"];
+  Node3 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="org.elasticsearch.Elasticsearch\lSecurityException",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_security_exception.html"];
+  Node0 -> Node5 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="org.elasticsearch.Elasticsearch\lTimeoutException",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_timeout_exception.html"];
+  Node0 -> Node6 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node6 [label="org.elasticsearch.Resource\lNotFoundException",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_resource_not_found_exception.html"];
+  Node12 [label="Writeable",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node12 -> Node0 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node1 [label="RuntimeException",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled"];
+  Node1 -> Node0 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+}

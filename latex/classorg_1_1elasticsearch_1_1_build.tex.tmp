@@ -1,0 +1,58 @@
+\hypertarget{classorg_1_1elasticsearch_1_1_build}{}\section{org.\+elasticsearch.\+Build Class Reference}
+\label{classorg_1_1elasticsearch_1_1_build}\index{org.\+elasticsearch.\+Build@{org.\+elasticsearch.\+Build}}
+
+
+Collaboration diagram for org.\+elasticsearch.\+Build\+:
+% FIG 0
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_build_a14543155107b3d509f3c74ee5356d4bd}{}\label{classorg_1_1elasticsearch_1_1_build_a14543155107b3d509f3c74ee5356d4bd} 
+String {\bfseries short\+Hash} ()
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_build_a3b9f9888278e0a79c5426d9715687f1b}{}\label{classorg_1_1elasticsearch_1_1_build_a3b9f9888278e0a79c5426d9715687f1b} 
+String {\bfseries date} ()
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_build_ab596fcfab24a898e437a04b6709fc2ae}{}\label{classorg_1_1elasticsearch_1_1_build_ab596fcfab24a898e437a04b6709fc2ae} 
+boolean {\bfseries is\+Snapshot} ()
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_build_ab43b46422022f2e964a3eeecbae7a9f8}{}\label{classorg_1_1elasticsearch_1_1_build_ab43b46422022f2e964a3eeecbae7a9f8} 
+String {\bfseries to\+String} ()
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_build_af0f80b16de4a0db857f6c73915bee41b}{}\label{classorg_1_1elasticsearch_1_1_build_af0f80b16de4a0db857f6c73915bee41b} 
+boolean {\bfseries equals} (Object o)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_build_ad080a58165e1321917a2e8c36bb2d9e9}{}\label{classorg_1_1elasticsearch_1_1_build_ad080a58165e1321917a2e8c36bb2d9e9} 
+int {\bfseries hash\+Code} ()
+\end{DoxyCompactItemize}
+\subsection*{Static Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_build_ae7cac28aaf369cbc3b671c469a255cec}{}\label{classorg_1_1elasticsearch_1_1_build_ae7cac28aaf369cbc3b671c469a255cec} 
+static \hyperlink{classorg_1_1elasticsearch_1_1_build}{Build} {\bfseries read\+Build} (Stream\+Input in)  throws I\+O\+Exception 
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_build_a5372085ee8a0c4e22d9cbafcde243628}{}\label{classorg_1_1elasticsearch_1_1_build_a5372085ee8a0c4e22d9cbafcde243628} 
+static void {\bfseries write\+Build} (\hyperlink{classorg_1_1elasticsearch_1_1_build}{Build} build, Stream\+Output out)  throws I\+O\+Exception 
+\end{DoxyCompactItemize}
+\subsection*{Static Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_build}{Build} \hyperlink{classorg_1_1elasticsearch_1_1_build_a480d1a0be372a4a9609d59fdc864679f}{C\+U\+R\+R\+E\+NT}
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+Information about a build of Elasticsearch. 
+
+\subsection{Member Data Documentation}
+\hypertarget{classorg_1_1elasticsearch_1_1_build_a480d1a0be372a4a9609d59fdc864679f}{}\label{classorg_1_1elasticsearch_1_1_build_a480d1a0be372a4a9609d59fdc864679f} 
+\index{org\+::elasticsearch\+::\+Build@{org\+::elasticsearch\+::\+Build}!C\+U\+R\+R\+E\+NT@{C\+U\+R\+R\+E\+NT}}
+\index{C\+U\+R\+R\+E\+NT@{C\+U\+R\+R\+E\+NT}!org\+::elasticsearch\+::\+Build@{org\+::elasticsearch\+::\+Build}}
+\subsubsection{\texorpdfstring{C\+U\+R\+R\+E\+NT}{CURRENT}}
+{\footnotesize\ttfamily final \hyperlink{classorg_1_1elasticsearch_1_1_build}{Build} org.\+elasticsearch.\+Build.\+C\+U\+R\+R\+E\+NT\hspace{0.3cm}{\ttfamily [static]}}
+
+The current build of Elasticsearch. Filled with information scanned at startup from the jar. 
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+core/src/main/java/org/elasticsearch/Build.\+java\end{DoxyCompactItemize}

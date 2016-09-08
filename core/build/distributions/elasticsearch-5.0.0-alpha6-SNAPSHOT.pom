@@ -339,8 +339,7 @@
   </developers>
   <name>core</name>
   <description>Elasticsearch subproject :core</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

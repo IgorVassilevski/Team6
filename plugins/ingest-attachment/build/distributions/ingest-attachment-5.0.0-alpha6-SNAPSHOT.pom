@@ -21,8 +21,8 @@
   </developers>
   <name>ingest-attachment</name>
   <description>Ingest processor that uses Apache Tika to extract contents</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

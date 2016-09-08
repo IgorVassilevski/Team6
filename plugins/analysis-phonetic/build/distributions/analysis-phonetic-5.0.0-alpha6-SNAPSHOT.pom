@@ -21,8 +21,8 @@
   </developers>
   <name>analysis-phonetic</name>
   <description>The Phonetic Analysis plugin integrates phonetic token filter analysis with elasticsearch.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

@@ -21,8 +21,8 @@
   </developers>
   <name>store-smb</name>
   <description>The Store SMB plugin adds support for SMB stores.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

@@ -21,8 +21,8 @@
   </developers>
   <name>discovery-ec2</name>
   <description>The EC2 discovery plugin allows to use AWS API for the unicast discovery mechanism.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

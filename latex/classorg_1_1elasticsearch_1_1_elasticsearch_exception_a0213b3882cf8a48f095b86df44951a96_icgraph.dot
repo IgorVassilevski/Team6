@@ -1,0 +1,11 @@
+digraph "org.elasticsearch.ElasticsearchException.causeToXContent"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node18 [label="org.elasticsearch.Elasticsearch\lException.causeToXContent",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node18 -> Node19 [dir="back",color="midnightblue",fontsize="10",style="solid"];
+  Node19 [label="org.elasticsearch.Elasticsearch\lException.innerToXContent",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_exception.html#a05b642f5d4bc79afdd5629c2a003c889"];
+  Node19 -> Node20 [dir="back",color="midnightblue",fontsize="10",style="solid"];
+  Node20 [label="org.elasticsearch.Elasticsearch\lException.getId",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_exception.html#aba2a26f7f9671d79bdd82f9c7de2bab7"];
+}

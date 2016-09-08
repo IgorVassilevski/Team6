@@ -64,8 +64,7 @@
   </developers>
   <name>sniffer</name>
   <description>Elasticsearch subproject :client:sniffer</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

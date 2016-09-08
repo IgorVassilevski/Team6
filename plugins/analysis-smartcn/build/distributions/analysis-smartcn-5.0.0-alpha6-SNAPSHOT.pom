@@ -21,8 +21,8 @@
   </developers>
   <name>analysis-smartcn</name>
   <description>Smart Chinese Analysis plugin integrates Lucene Smart Chinese analysis module into elasticsearch.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

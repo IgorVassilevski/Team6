@@ -21,8 +21,8 @@
   </developers>
   <name>mapper-size</name>
   <description>The Mapper Size plugin allows document to record their uncompressed size at index time.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

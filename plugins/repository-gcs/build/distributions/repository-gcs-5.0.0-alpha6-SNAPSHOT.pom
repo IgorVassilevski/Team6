@@ -21,8 +21,8 @@
   </developers>
   <name>repository-gcs</name>
   <description>The GCS repository plugin adds Google Cloud Storage support for repositories.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

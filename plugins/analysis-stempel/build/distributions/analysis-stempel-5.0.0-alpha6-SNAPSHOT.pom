@@ -21,8 +21,8 @@
   </developers>
   <name>analysis-stempel</name>
   <description>The Stempel (Polish) Analysis plugin integrates Lucene stempel (polish) analysis module into elasticsearch.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

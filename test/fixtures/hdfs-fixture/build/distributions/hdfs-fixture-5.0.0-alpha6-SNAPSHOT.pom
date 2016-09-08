@@ -28,8 +28,7 @@
   </developers>
   <name>hdfs-fixture</name>
   <description>Elasticsearch subproject :test:fixtures:hdfs-fixture</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

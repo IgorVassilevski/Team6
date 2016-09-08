@@ -1,0 +1,9 @@
+digraph "org.elasticsearch.ElasticsearchException.readStackTrace"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node56 [label="org.elasticsearch.Elasticsearch\lException.readStackTrace",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node56 -> Node57 [dir="back",color="midnightblue",fontsize="10",style="solid"];
+  Node57 [label="org.elasticsearch.Elasticsearch\lException.ElasticsearchException",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_exception.html#a2202d9407b99327ee6af4af27d92f913"];
+}

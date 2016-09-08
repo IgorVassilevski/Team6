@@ -64,8 +64,8 @@
   </developers>
   <name>percolator</name>
   <description>Percolator module adds capability to index queries and query these queries by specifying documents</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

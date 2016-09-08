@@ -21,8 +21,8 @@
   </developers>
   <name>discovery-gce</name>
   <description>The Google Compute Engine (GCE) Discovery plugin allows to use GCE API for the unicast discovery mechanism.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

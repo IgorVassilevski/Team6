@@ -21,8 +21,8 @@
   </developers>
   <name>ingest-user-agent</name>
   <description>Ingest processor that extracts information from a user agent</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

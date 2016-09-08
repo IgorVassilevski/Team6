@@ -21,8 +21,7 @@
   </developers>
   <name>rpm</name>
   <description>Elasticsearch subproject :distribution:rpm</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

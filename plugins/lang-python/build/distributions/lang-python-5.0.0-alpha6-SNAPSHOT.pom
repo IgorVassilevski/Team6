@@ -21,8 +21,8 @@
   </developers>
   <name>lang-python</name>
   <description>The Python language plugin allows to have python as the language of scripts to execute.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

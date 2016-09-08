@@ -21,8 +21,8 @@
   </developers>
   <name>client-benchmark-noop-api</name>
   <description>Stubbed out Elasticsearch actions that can be used for client-side benchmarking</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

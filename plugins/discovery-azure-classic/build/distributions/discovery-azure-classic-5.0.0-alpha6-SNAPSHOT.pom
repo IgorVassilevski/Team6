@@ -21,8 +21,8 @@
   </developers>
   <name>discovery-azure-classic</name>
   <description>The Azure Classic Discovery plugin allows to use Azure Classic API for the unicast discovery mechanism</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

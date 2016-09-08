@@ -21,8 +21,8 @@
   </developers>
   <name>jvm-example</name>
   <description>Demonstrates all the pluggable Java entry points in Elasticsearch</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

@@ -1,7 +1,7 @@
 cluster.name: distribution_run
-pidfile: /Users/mussemac13/git/elasticsearch/distribution/build/cluster/run node0/es.pid
-path.repo: /Users/mussemac13/git/elasticsearch/distribution/build/cluster/shared/repo
-path.shared_data: /Users/mussemac13/git/elasticsearch/distribution/build/cluster/shared/
+pidfile: /Users/mussemac13/Downloads/elasticsearch-master/distribution/build/cluster/run node0/es.pid
+path.repo: /Users/mussemac13/Downloads/elasticsearch-master/distribution/build/cluster/shared/repo
+path.shared_data: /Users/mussemac13/Downloads/elasticsearch-master/distribution/build/cluster/shared/
 node.attr.testattr: test
 repositories.url.allowed_urls: http://snapshot.test*
 node.max_local_storage_nodes: 1

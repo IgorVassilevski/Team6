@@ -142,8 +142,8 @@
   </developers>
   <name>transport-netty4</name>
   <description>Netty 4 based transport implementation</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

@@ -1,0 +1,11 @@
+digraph "org.elasticsearch.ElasticsearchException.addHeader"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node12 [label="org.elasticsearch.Elasticsearch\lException.addHeader",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node12 -> Node13 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node13 [label="org.elasticsearch.Elasticsearch\lException.writeStackTraces",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_exception.html#a22de3652428c7858c91a58c7d225a158"];
+  Node13 -> Node14 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node14 [label="org.elasticsearch.Elasticsearch\lException.getRootCause",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_exception.html#a1d174a2312e18c883196ec07c87c2f50"];
+}

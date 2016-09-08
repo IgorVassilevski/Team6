@@ -76,8 +76,7 @@
   </developers>
   <name>rest</name>
   <description>Elasticsearch subproject :client:rest</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

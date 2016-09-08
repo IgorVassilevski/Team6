@@ -21,8 +21,8 @@
   </developers>
   <name>mapper-murmur3</name>
   <description>The Mapper Murmur3 plugin allows to compute hashes of a field's values at index-time and to store them in the index.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

@@ -21,8 +21,8 @@
   </developers>
   <name>ingest-geoip</name>
   <description>Ingest processor that uses looksup geo data based on ip adresses using the Maxmind geo database</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

@@ -88,8 +88,7 @@
   </developers>
   <name>build-tools</name>
   <description>Elasticsearch subproject :build-tools</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

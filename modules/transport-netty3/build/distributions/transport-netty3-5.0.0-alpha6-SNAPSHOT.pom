@@ -70,8 +70,8 @@
   </developers>
   <name>transport-netty3</name>
   <description>Netty 3 based transport implementation</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

@@ -1,0 +1,279 @@
+\hypertarget{classorg_1_1elasticsearch_1_1_version}{}\section{org.\+elasticsearch.\+Version Class Reference}
+\label{classorg_1_1elasticsearch_1_1_version}\index{org.\+elasticsearch.\+Version@{org.\+elasticsearch.\+Version}}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a11d948e265c4257f9448d85eee90825c}{}\label{classorg_1_1elasticsearch_1_1_version_a11d948e265c4257f9448d85eee90825c} 
+boolean {\bfseries after} (\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} version)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_ae710178d9a0c322226e5790df003e3c9}{}\label{classorg_1_1elasticsearch_1_1_version_ae710178d9a0c322226e5790df003e3c9} 
+boolean {\bfseries on\+Or\+After} (\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} version)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a49e0c223a8e06afcd81731643b3c4316}{}\label{classorg_1_1elasticsearch_1_1_version_a49e0c223a8e06afcd81731643b3c4316} 
+boolean {\bfseries before} (\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} version)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a9fbe54cd0de0cd556a7d1b4505965d0c}{}\label{classorg_1_1elasticsearch_1_1_version_a9fbe54cd0de0cd556a7d1b4505965d0c} 
+boolean {\bfseries on\+Or\+Before} (\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} version)
+\item 
+\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} \hyperlink{classorg_1_1elasticsearch_1_1_version_af19fa9cd6c365d9b6f1ab0003463e259}{minimum\+Compatibility\+Version} ()
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_add4796816f356001d35f37ce210fe0d7}{}\label{classorg_1_1elasticsearch_1_1_version_add4796816f356001d35f37ce210fe0d7} 
+String {\bfseries to\+String} ()
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a1b419a92f27a4035da69fc93e5ad2bbd}{}\label{classorg_1_1elasticsearch_1_1_version_a1b419a92f27a4035da69fc93e5ad2bbd} 
+boolean {\bfseries equals} (Object o)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a6e5d8805ef643a4a5c5585181550a82c}{}\label{classorg_1_1elasticsearch_1_1_version_a6e5d8805ef643a4a5c5585181550a82c} 
+int {\bfseries hash\+Code} ()
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_af128cc4619c4cc2cc5112b0de7b6fe71}{}\label{classorg_1_1elasticsearch_1_1_version_af128cc4619c4cc2cc5112b0de7b6fe71} 
+boolean {\bfseries is\+Beta} ()
+\item 
+boolean \hyperlink{classorg_1_1elasticsearch_1_1_version_a560e0d9bdd52a687b6920df72199dbec}{is\+Alpha} ()
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a2141338d4dbe770bc51ab06f41183afb}{}\label{classorg_1_1elasticsearch_1_1_version_a2141338d4dbe770bc51ab06f41183afb} 
+boolean {\bfseries is\+RC} ()
+\end{DoxyCompactItemize}
+\subsection*{Static Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a5727ea8291db517bb5f34a1d260ae52b}{}\label{classorg_1_1elasticsearch_1_1_version_a5727ea8291db517bb5f34a1d260ae52b} 
+static \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries read\+Version} (Stream\+Input in)  throws I\+O\+Exception 
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a50d41630cc6151425839dc725ff218e9}{}\label{classorg_1_1elasticsearch_1_1_version_a50d41630cc6151425839dc725ff218e9} 
+static \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries from\+Id} (int id)
+\item 
+static \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} \hyperlink{classorg_1_1elasticsearch_1_1_version_a6c61e82b33e6a02aeea43e0d5db810df}{index\+Created} (Settings index\+Settings)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_aa3c90bc0dea3484e4b887ab6dc030972}{}\label{classorg_1_1elasticsearch_1_1_version_aa3c90bc0dea3484e4b887ab6dc030972} 
+static void {\bfseries write\+Version} (\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} version, Stream\+Output out)  throws I\+O\+Exception 
+\item 
+static \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} \hyperlink{classorg_1_1elasticsearch_1_1_version_ab8ee3b9ccaaccbf4980b74541a5f7681}{smallest} (\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} version1, \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} version2)
+\item 
+static \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} \hyperlink{classorg_1_1elasticsearch_1_1_version_a86635d26e4db619bfa9f33cee16be1e5}{from\+String} (String version)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a0e8c9543e498ded25a46579eef920a3d}{}\label{classorg_1_1elasticsearch_1_1_version_a0e8c9543e498ded25a46579eef920a3d} 
+static void {\bfseries main} (String\mbox{[}$\,$\mbox{]} args)
+\end{DoxyCompactItemize}
+\subsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a7d0441a885a0f1709edc88263f0be6ff}{}\label{classorg_1_1elasticsearch_1_1_version_a7d0441a885a0f1709edc88263f0be6ff} 
+final int {\bfseries id}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a31ea702852277aa45220b971ea4bf680}{}\label{classorg_1_1elasticsearch_1_1_version_a31ea702852277aa45220b971ea4bf680} 
+final byte {\bfseries major}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_ae95e9b67f246cabaf72000b40ebad7ce}{}\label{classorg_1_1elasticsearch_1_1_version_ae95e9b67f246cabaf72000b40ebad7ce} 
+final byte {\bfseries minor}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_acd9113301ce4c217150d91740b194242}{}\label{classorg_1_1elasticsearch_1_1_version_acd9113301ce4c217150d91740b194242} 
+final byte {\bfseries revision}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_ae323f5d192871d0d18a36ff7f4c91b7d}{}\label{classorg_1_1elasticsearch_1_1_version_ae323f5d192871d0d18a36ff7f4c91b7d} 
+final byte {\bfseries build}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a040e34412520e347db6f3a4035a31833}{}\label{classorg_1_1elasticsearch_1_1_version_a040e34412520e347db6f3a4035a31833} 
+final org.\+apache.\+lucene.\+util.\+Version {\bfseries lucene\+Version}
+\end{DoxyCompactItemize}
+\subsection*{Static Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_ae67971c05a341e8421ee39d8e77d508d}{}\label{classorg_1_1elasticsearch_1_1_version_ae67971c05a341e8421ee39d8e77d508d} 
+static final int {\bfseries V\+\_\+2\+\_\+0\+\_\+0\+\_\+beta1\+\_\+\+ID} = 2000001
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a4b79c3ca4e491ec29822ca019e695a02}{}\label{classorg_1_1elasticsearch_1_1_version_a4b79c3ca4e491ec29822ca019e695a02} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+0\+\_\+0\+\_\+beta1} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+0\+\_\+0\+\_\+beta1\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+2\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a510d159b11776327ae3867239aec1146}{}\label{classorg_1_1elasticsearch_1_1_version_a510d159b11776327ae3867239aec1146} 
+static final int {\bfseries V\+\_\+2\+\_\+0\+\_\+0\+\_\+beta2\+\_\+\+ID} = 2000002
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a21a68fea86cce98773377c6e65156507}{}\label{classorg_1_1elasticsearch_1_1_version_a21a68fea86cce98773377c6e65156507} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+0\+\_\+0\+\_\+beta2} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+0\+\_\+0\+\_\+beta2\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+2\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a697af71ea3287723d904b1f69726debf}{}\label{classorg_1_1elasticsearch_1_1_version_a697af71ea3287723d904b1f69726debf} 
+static final int {\bfseries V\+\_\+2\+\_\+0\+\_\+0\+\_\+rc1\+\_\+\+ID} = 2000051
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a897706a30581a547efec56f4b4c4d03a}{}\label{classorg_1_1elasticsearch_1_1_version_a897706a30581a547efec56f4b4c4d03a} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+0\+\_\+0\+\_\+rc1} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+0\+\_\+0\+\_\+rc1\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+2\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a06e13e33c869f67483ce8458d78b5bf7}{}\label{classorg_1_1elasticsearch_1_1_version_a06e13e33c869f67483ce8458d78b5bf7} 
+static final int {\bfseries V\+\_\+2\+\_\+0\+\_\+0\+\_\+\+ID} = 2000099
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a87b611e0ba88f06806b8edf8a381bda2}{}\label{classorg_1_1elasticsearch_1_1_version_a87b611e0ba88f06806b8edf8a381bda2} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+0\+\_\+0} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+0\+\_\+0\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+2\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a3eee27028c8f1d3a9d7d84ccf73932da}{}\label{classorg_1_1elasticsearch_1_1_version_a3eee27028c8f1d3a9d7d84ccf73932da} 
+static final int {\bfseries V\+\_\+2\+\_\+0\+\_\+1\+\_\+\+ID} = 2000199
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a68b3bf2ba758c57455783749a491c38a}{}\label{classorg_1_1elasticsearch_1_1_version_a68b3bf2ba758c57455783749a491c38a} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+0\+\_\+1} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+0\+\_\+1\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+2\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a3860ab6ac12eb0aef3e2c710e3de2b8e}{}\label{classorg_1_1elasticsearch_1_1_version_a3860ab6ac12eb0aef3e2c710e3de2b8e} 
+static final int {\bfseries V\+\_\+2\+\_\+0\+\_\+2\+\_\+\+ID} = 2000299
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a48a99fae1a819d275c3683f762a0a984}{}\label{classorg_1_1elasticsearch_1_1_version_a48a99fae1a819d275c3683f762a0a984} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+0\+\_\+2} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+0\+\_\+2\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+2\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_ab15b9a36b36aebfd17bfc440b2312a52}{}\label{classorg_1_1elasticsearch_1_1_version_ab15b9a36b36aebfd17bfc440b2312a52} 
+static final int {\bfseries V\+\_\+2\+\_\+1\+\_\+0\+\_\+\+ID} = 2010099
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a783e179ec3efd7204778cade6eb507b1}{}\label{classorg_1_1elasticsearch_1_1_version_a783e179ec3efd7204778cade6eb507b1} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+1\+\_\+0} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+1\+\_\+0\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+3\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a32f70e6d57853490318169d22ab73f54}{}\label{classorg_1_1elasticsearch_1_1_version_a32f70e6d57853490318169d22ab73f54} 
+static final int {\bfseries V\+\_\+2\+\_\+1\+\_\+1\+\_\+\+ID} = 2010199
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a636aa3defc2c3067a55362a6b11d95dc}{}\label{classorg_1_1elasticsearch_1_1_version_a636aa3defc2c3067a55362a6b11d95dc} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+1\+\_\+1} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+1\+\_\+1\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+3\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a6bb1b66eaa74739eb6fc854fa3de814e}{}\label{classorg_1_1elasticsearch_1_1_version_a6bb1b66eaa74739eb6fc854fa3de814e} 
+static final int {\bfseries V\+\_\+2\+\_\+1\+\_\+2\+\_\+\+ID} = 2010299
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a7196fdae247d9c188e78662fce4b2742}{}\label{classorg_1_1elasticsearch_1_1_version_a7196fdae247d9c188e78662fce4b2742} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+1\+\_\+2} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+1\+\_\+2\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+3\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a305b805e6d45ed38692ad31128446351}{}\label{classorg_1_1elasticsearch_1_1_version_a305b805e6d45ed38692ad31128446351} 
+static final int {\bfseries V\+\_\+2\+\_\+2\+\_\+0\+\_\+\+ID} = 2020099
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a95464aced65710e86cb2ebfaad342ae9}{}\label{classorg_1_1elasticsearch_1_1_version_a95464aced65710e86cb2ebfaad342ae9} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+2\+\_\+0} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+2\+\_\+0\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+4\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a256ae5e14e7f75b03a0579ce8acdfd4b}{}\label{classorg_1_1elasticsearch_1_1_version_a256ae5e14e7f75b03a0579ce8acdfd4b} 
+static final int {\bfseries V\+\_\+2\+\_\+2\+\_\+1\+\_\+\+ID} = 2020199
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_af118f020279f557ee684c66d22e1ae36}{}\label{classorg_1_1elasticsearch_1_1_version_af118f020279f557ee684c66d22e1ae36} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+2\+\_\+1} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+2\+\_\+1\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+4\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a8c947b4f511bab02356eac6ef2916cf6}{}\label{classorg_1_1elasticsearch_1_1_version_a8c947b4f511bab02356eac6ef2916cf6} 
+static final int {\bfseries V\+\_\+2\+\_\+2\+\_\+2\+\_\+\+ID} = 2020299
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a7279b572121f3abcf762314f0012ee53}{}\label{classorg_1_1elasticsearch_1_1_version_a7279b572121f3abcf762314f0012ee53} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+2\+\_\+2} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+2\+\_\+2\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+4\+\_\+1)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a0611d17e6c88509c71c17dee99c06cff}{}\label{classorg_1_1elasticsearch_1_1_version_a0611d17e6c88509c71c17dee99c06cff} 
+static final int {\bfseries V\+\_\+2\+\_\+3\+\_\+0\+\_\+\+ID} = 2030099
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a2480c45bad7efd93778501da3b28fc6a}{}\label{classorg_1_1elasticsearch_1_1_version_a2480c45bad7efd93778501da3b28fc6a} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+3\+\_\+0} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+3\+\_\+0\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+5\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_acb4a9b91fad3884250854847a06b564b}{}\label{classorg_1_1elasticsearch_1_1_version_acb4a9b91fad3884250854847a06b564b} 
+static final int {\bfseries V\+\_\+2\+\_\+3\+\_\+1\+\_\+\+ID} = 2030199
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a7cebd868860667f90955b46806987f59}{}\label{classorg_1_1elasticsearch_1_1_version_a7cebd868860667f90955b46806987f59} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+3\+\_\+1} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+3\+\_\+1\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+5\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a3137f97b80bb7270cd748400a17d5b08}{}\label{classorg_1_1elasticsearch_1_1_version_a3137f97b80bb7270cd748400a17d5b08} 
+static final int {\bfseries V\+\_\+2\+\_\+3\+\_\+2\+\_\+\+ID} = 2030299
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_ad3f2d990f0cab07f72f612719021b4ff}{}\label{classorg_1_1elasticsearch_1_1_version_ad3f2d990f0cab07f72f612719021b4ff} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+3\+\_\+2} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+3\+\_\+2\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+5\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_ab56a3bde0084e627b82e1ecf3c98ae17}{}\label{classorg_1_1elasticsearch_1_1_version_ab56a3bde0084e627b82e1ecf3c98ae17} 
+static final int {\bfseries V\+\_\+2\+\_\+3\+\_\+3\+\_\+\+ID} = 2030399
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a0363efb972b45183fd176142512a1259}{}\label{classorg_1_1elasticsearch_1_1_version_a0363efb972b45183fd176142512a1259} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+3\+\_\+3} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+3\+\_\+3\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+5\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a1fc695463fb179a1c8390dfc022a9723}{}\label{classorg_1_1elasticsearch_1_1_version_a1fc695463fb179a1c8390dfc022a9723} 
+static final int {\bfseries V\+\_\+2\+\_\+3\+\_\+4\+\_\+\+ID} = 2030499
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a496fbb4261e9c0613fe68b379edb7eeb}{}\label{classorg_1_1elasticsearch_1_1_version_a496fbb4261e9c0613fe68b379edb7eeb} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+3\+\_\+4} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+3\+\_\+4\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+5\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a42b09c5c3f7b00ef0b7ce3e7f7567f02}{}\label{classorg_1_1elasticsearch_1_1_version_a42b09c5c3f7b00ef0b7ce3e7f7567f02} 
+static final int {\bfseries V\+\_\+2\+\_\+3\+\_\+5\+\_\+\+ID} = 2030599
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a22dab042fe8bc6d324bf00da4f952327}{}\label{classorg_1_1elasticsearch_1_1_version_a22dab042fe8bc6d324bf00da4f952327} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+3\+\_\+5} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+3\+\_\+5\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+5\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a6306f181cb77be8842e1b3a56d4b4d6c}{}\label{classorg_1_1elasticsearch_1_1_version_a6306f181cb77be8842e1b3a56d4b4d6c} 
+static final int {\bfseries V\+\_\+2\+\_\+4\+\_\+0\+\_\+\+ID} = 2040099
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a7a984eed79e4f3e173c75fd152adf6a5}{}\label{classorg_1_1elasticsearch_1_1_version_a7a984eed79e4f3e173c75fd152adf6a5} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+2\+\_\+4\+\_\+0} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+2\+\_\+4\+\_\+0\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+5\+\_\+5\+\_\+2)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_aca3c4817a3fb4900dd9a16dd97d988bc}{}\label{classorg_1_1elasticsearch_1_1_version_aca3c4817a3fb4900dd9a16dd97d988bc} 
+static final int {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha1\+\_\+\+ID} = 5000001
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a93ccc0fb4e5c52788f4b04db6f9d9294}{}\label{classorg_1_1elasticsearch_1_1_version_a93ccc0fb4e5c52788f4b04db6f9d9294} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha1} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha1\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+6\+\_\+0\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a985875efc04b9bd57021dfc660aede9b}{}\label{classorg_1_1elasticsearch_1_1_version_a985875efc04b9bd57021dfc660aede9b} 
+static final int {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha2\+\_\+\+ID} = 5000002
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a9080f5b4edfe669cc10fd9ea9d205205}{}\label{classorg_1_1elasticsearch_1_1_version_a9080f5b4edfe669cc10fd9ea9d205205} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha2} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha2\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+6\+\_\+0\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a0f7b4f29dcbb6008374cd56a2537e2c3}{}\label{classorg_1_1elasticsearch_1_1_version_a0f7b4f29dcbb6008374cd56a2537e2c3} 
+static final int {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha3\+\_\+\+ID} = 5000003
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a46831965bc5cfc4746382e633a4c7142}{}\label{classorg_1_1elasticsearch_1_1_version_a46831965bc5cfc4746382e633a4c7142} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha3} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha3\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+6\+\_\+0\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a5114e00d8b49dfea2b61bc9375ae1efd}{}\label{classorg_1_1elasticsearch_1_1_version_a5114e00d8b49dfea2b61bc9375ae1efd} 
+static final int {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha4\+\_\+\+ID} = 5000004
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a678f7f03da039c9a8aaa83710b44cdda}{}\label{classorg_1_1elasticsearch_1_1_version_a678f7f03da039c9a8aaa83710b44cdda} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha4} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha4\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+6\+\_\+1\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a33489dda5808bc1f9df00c25d3ec241f}{}\label{classorg_1_1elasticsearch_1_1_version_a33489dda5808bc1f9df00c25d3ec241f} 
+static final int {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha5\+\_\+\+ID} = 5000005
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_afaa33a100c4ff4b81e852de6640456ef}{}\label{classorg_1_1elasticsearch_1_1_version_afaa33a100c4ff4b81e852de6640456ef} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha5} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha5\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+6\+\_\+1\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a108b40df6c9e510239023f6f63001bf6}{}\label{classorg_1_1elasticsearch_1_1_version_a108b40df6c9e510239023f6f63001bf6} 
+static final int {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha6\+\_\+\+ID} = 5000006
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_ada51d61b7053a8ec51ecfea17d733745}{}\label{classorg_1_1elasticsearch_1_1_version_ada51d61b7053a8ec51ecfea17d733745} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha6} = new \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}(V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha6\+\_\+\+ID, org.\+apache.\+lucene.\+util.\+Version.\+L\+U\+C\+E\+N\+E\+\_\+6\+\_\+2\+\_\+0)
+\item 
+\hypertarget{classorg_1_1elasticsearch_1_1_version_adf1d54329f831a105ddcb53726c0592a}{}\label{classorg_1_1elasticsearch_1_1_version_adf1d54329f831a105ddcb53726c0592a} 
+static final \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} {\bfseries C\+U\+R\+R\+E\+NT} = V\+\_\+5\+\_\+0\+\_\+0\+\_\+alpha6
+\end{DoxyCompactItemize}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a86635d26e4db619bfa9f33cee16be1e5}{}\label{classorg_1_1elasticsearch_1_1_version_a86635d26e4db619bfa9f33cee16be1e5} 
+\index{org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}!from\+String@{from\+String}}
+\index{from\+String@{from\+String}!org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}}
+\subsubsection{\texorpdfstring{from\+String()}{fromString()}}
+{\footnotesize\ttfamily static \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} org.\+elasticsearch.\+Version.\+from\+String (\begin{DoxyParamCaption}\item[{String}]{version }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+Returns the version given its string representation, current version if the argument is null or empty \hypertarget{classorg_1_1elasticsearch_1_1_version_a6c61e82b33e6a02aeea43e0d5db810df}{}\label{classorg_1_1elasticsearch_1_1_version_a6c61e82b33e6a02aeea43e0d5db810df} 
+\index{org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}!index\+Created@{index\+Created}}
+\index{index\+Created@{index\+Created}!org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}}
+\subsubsection{\texorpdfstring{index\+Created()}{indexCreated()}}
+{\footnotesize\ttfamily static \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} org.\+elasticsearch.\+Version.\+index\+Created (\begin{DoxyParamCaption}\item[{Settings}]{index\+Settings }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+Return the \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} of Elasticsearch that has been used to create an index given its settings.
+
+
+\begin{DoxyExceptions}{Exceptions}
+{\em Illegal\+State\+Exception} & if the given index settings doesn\textquotesingle{}t contain a value for the key \{ Index\+Meta\+Data\+::\+S\+E\+T\+T\+I\+N\+G\+\_\+\+V\+E\+R\+S\+I\+O\+N\+\_\+\+C\+R\+E\+A\+T\+ED\} \\
+\hline
+\end{DoxyExceptions}
+\hypertarget{classorg_1_1elasticsearch_1_1_version_a560e0d9bdd52a687b6920df72199dbec}{}\label{classorg_1_1elasticsearch_1_1_version_a560e0d9bdd52a687b6920df72199dbec} 
+\index{org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}!is\+Alpha@{is\+Alpha}}
+\index{is\+Alpha@{is\+Alpha}!org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}}
+\subsubsection{\texorpdfstring{is\+Alpha()}{isAlpha()}}
+{\footnotesize\ttfamily boolean org.\+elasticsearch.\+Version.\+is\+Alpha (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Returns true iff this version is an alpha version Note\+: This has been introduced in elasticsearch version 5. Previous versions will never have an alpha version. \hypertarget{classorg_1_1elasticsearch_1_1_version_af19fa9cd6c365d9b6f1ab0003463e259}{}\label{classorg_1_1elasticsearch_1_1_version_af19fa9cd6c365d9b6f1ab0003463e259} 
+\index{org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}!minimum\+Compatibility\+Version@{minimum\+Compatibility\+Version}}
+\index{minimum\+Compatibility\+Version@{minimum\+Compatibility\+Version}!org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}}
+\subsubsection{\texorpdfstring{minimum\+Compatibility\+Version()}{minimumCompatibilityVersion()}}
+{\footnotesize\ttfamily \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} org.\+elasticsearch.\+Version.\+minimum\+Compatibility\+Version (\begin{DoxyParamCaption}{ }\end{DoxyParamCaption})}
+
+Returns the minimum compatible version based on the current version. Ie a node needs to have at least the return version in order to communicate with a node running the current version. The returned version is in most of the cases the smallest major version release unless the current version is a beta or RC release then the version itself is returned. \hypertarget{classorg_1_1elasticsearch_1_1_version_ab8ee3b9ccaaccbf4980b74541a5f7681}{}\label{classorg_1_1elasticsearch_1_1_version_ab8ee3b9ccaaccbf4980b74541a5f7681} 
+\index{org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}!smallest@{smallest}}
+\index{smallest@{smallest}!org\+::elasticsearch\+::\+Version@{org\+::elasticsearch\+::\+Version}}
+\subsubsection{\texorpdfstring{smallest()}{smallest()}}
+{\footnotesize\ttfamily static \hyperlink{classorg_1_1elasticsearch_1_1_version}{Version} org.\+elasticsearch.\+Version.\+smallest (\begin{DoxyParamCaption}\item[{\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}}]{version1,  }\item[{\hyperlink{classorg_1_1elasticsearch_1_1_version}{Version}}]{version2 }\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+Returns the smallest version between the 2. 
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+core/src/main/java/org/elasticsearch/Version.\+java\end{DoxyCompactItemize}

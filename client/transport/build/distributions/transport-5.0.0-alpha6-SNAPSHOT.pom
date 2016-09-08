@@ -58,8 +58,7 @@
   </developers>
   <name>transport</name>
   <description>Elasticsearch subproject :client:transport</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

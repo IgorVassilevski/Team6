@@ -21,8 +21,8 @@
   </developers>
   <name>lang-javascript</name>
   <description>The JavaScript language plugin allows to have javascript as the language of scripts to execute.</description>
-  <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+  <url>LOCAL</url>
   <scm>
-    <url>https://github.com/SoftwareEvolutionProject/elasticsearch.git</url>
+    <url>LOCAL</url>
   </scm>
 </project>

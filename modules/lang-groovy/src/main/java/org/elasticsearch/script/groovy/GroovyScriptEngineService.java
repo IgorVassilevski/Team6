@@ -23,14 +23,10 @@ import groovy.lang.Binding;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyCodeSource;
 import groovy.lang.Script;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Scorer;
 import org.codehaus.groovy.ast.ClassCodeExpressionTransformer;
 import org.codehaus.groovy.ast.ClassNode;
-import org.codehaus.groovy.ast.Parameter;
 import org.codehaus.groovy.ast.expr.ConstantExpression;
 import org.codehaus.groovy.ast.expr.Expression;
 import org.codehaus.groovy.classgen.GeneratorContext;
@@ -47,6 +43,7 @@ import org.elasticsearch.bootstrap.BootstrapInfo;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.hash.MessageDigests;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.script.ClassPermission;
 import org.elasticsearch.script.CompiledScript;
@@ -96,9 +93,6 @@ public class GroovyScriptEngineService extends AbstractComponent implements Scri
 
     public GroovyScriptEngineService(Settings settings) {
         super(settings);
-
-        deprecationLogger.deprecated("[groovy] scripts are deprecated, use [painless] scripts instead");
-
         // Creates the classloader here in order to isolate Groovy-land code
         final SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -185,8 +179,6 @@ public class GroovyScriptEngineService extends AbstractComponent implements Scri
 
     @Override
     public ExecutableScript executable(CompiledScript compiledScript, Map<String, Object> vars) {
-        deprecationLogger.deprecated("[groovy] scripts are deprecated, use [painless] scripts instead");
-
         try {
             Map<String, Object> allVars = new HashMap<>();
             if (vars != null) {
@@ -200,8 +192,6 @@ public class GroovyScriptEngineService extends AbstractComponent implements Scri
 
     @Override
     public SearchScript search(final CompiledScript compiledScript, final SearchLookup lookup, @Nullable final Map<String, Object> vars) {
-        deprecationLogger.deprecated("[groovy] scripts are deprecated, use [painless] scripts instead");
-
         return new SearchScript() {
 
             @Override
@@ -258,14 +248,14 @@ public class GroovyScriptEngineService extends AbstractComponent implements Scri
         private final Script script;
         private final LeafSearchLookup lookup;
         private final Map<String, Object> variables;
-        private final Logger logger;
+        private final ESLogger logger;
 
-        public GroovyScript(CompiledScript compiledScript, Script script, Logger logger) {
+        public GroovyScript(CompiledScript compiledScript, Script script, ESLogger logger) {
             this(compiledScript, script, null, logger);
         }
 
         @SuppressWarnings("unchecked")
-        public GroovyScript(CompiledScript compiledScript, Script script, @Nullable LeafSearchLookup lookup, Logger logger) {
+        public GroovyScript(CompiledScript compiledScript, Script script, @Nullable LeafSearchLookup lookup, ESLogger logger) {
             this.compiledScript = compiledScript;
             this.script = script;
             this.lookup = lookup;
@@ -303,19 +293,10 @@ public class GroovyScriptEngineService extends AbstractComponent implements Scri
                 // NOTE: we truncate the stack because IndyInterface has security issue (needs getClassLoader)
                 // we don't do a security check just as a tradeoff, it cannot really escalate to anything.
                 return AccessController.doPrivileged((PrivilegedAction<Object>) script::run);
-            } catch (AssertionError ae) {
-                // Groovy asserts are not java asserts, and cannot be disabled, so we do a best-effort trying to determine if this is a
-                // Groovy assert (in which case we wrap it and throw), or a real Java assert, in which case we rethrow it as-is, likely
-                // resulting in the uncaughtExceptionHandler handling it.
-                final StackTraceElement[] elements = ae.getStackTrace();
-                if (elements.length > 0 && "org.codehaus.groovy.runtime.InvokerHelper".equals(elements[0].getClassName())) {
-                    logger.trace((Supplier<?>) () -> new ParameterizedMessage("failed to run {}", compiledScript), ae);
-                    throw new ScriptException("Error evaluating " + compiledScript.name(),
-                            ae, emptyList(), "", compiledScript.lang());
+            } catch (Exception e) {
+                if (logger.isTraceEnabled()) {
+                    logger.trace("failed to run {}", e, compiledScript);
                 }
-                throw ae;
-            } catch (Exception | NoClassDefFoundError e) {
-                logger.trace("failed to run {}", e, compiledScript);
                 throw new ScriptException("Error evaluating " + compiledScript.name(), e, emptyList(), "", compiledScript.lang());
             }
         }

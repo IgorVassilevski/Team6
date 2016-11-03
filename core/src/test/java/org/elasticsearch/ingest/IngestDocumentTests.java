@@ -239,15 +239,6 @@ public class IngestDocumentTests extends ESTestCase {
         assertFalse(ingestDocument.hasField("list.10"));
     }
 
-    public void testListHasFieldIndexOutOfBounds_fail() {
-        assertTrue(ingestDocument.hasField("list.0", true));
-        assertTrue(ingestDocument.hasField("list.1", true));
-        Exception e = expectThrows(IllegalArgumentException.class, () -> ingestDocument.hasField("list.2", true));
-        assertThat(e.getMessage(), equalTo("[2] is out of bounds for array with length [2] as part of path [list.2]"));
-        e = expectThrows(IllegalArgumentException.class, () -> ingestDocument.hasField("list.10", true));
-        assertThat(e.getMessage(), equalTo("[10] is out of bounds for array with length [2] as part of path [list.10]"));
-    }
-
     public void testListHasFieldIndexNotNumeric() {
         assertFalse(ingestDocument.hasField("list.test"));
     }
@@ -916,7 +907,7 @@ public class IngestDocumentTests extends ESTestCase {
         for (int i = 0; i < numFields; i++) {
             sourceAndMetadata.put(randomFrom(IngestDocument.MetaData.values()).getFieldName(), randomAsciiOfLengthBetween(5, 10));
         }
-        Map<String, Object> ingestMetadata = new HashMap<>();
+        Map<String, String> ingestMetadata = new HashMap<>();
         numFields = randomIntBetween(1, 5);
         for (int i = 0; i < numFields; i++) {
             ingestMetadata.put(randomAsciiOfLengthBetween(5, 10), randomAsciiOfLengthBetween(5, 10));
@@ -939,7 +930,7 @@ public class IngestDocumentTests extends ESTestCase {
             changed = true;
         }
 
-        Map<String, Object> otherIngestMetadata;
+        Map<String, String> otherIngestMetadata;
         if (randomBoolean()) {
             otherIngestMetadata = new HashMap<>();
             numFields = randomIntBetween(1, 5);
@@ -971,7 +962,7 @@ public class IngestDocumentTests extends ESTestCase {
         long before = System.currentTimeMillis();
         IngestDocument ingestDocument = RandomDocumentPicks.randomIngestDocument(random());
         long after = System.currentTimeMillis();
-        String timestampString = (String) ingestDocument.getIngestMetadata().get("timestamp");
+        String timestampString = ingestDocument.getIngestMetadata().get("timestamp");
         assertThat(timestampString, notNullValue());
         assertThat(timestampString, endsWith("+0000"));
         DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZ", Locale.ROOT);

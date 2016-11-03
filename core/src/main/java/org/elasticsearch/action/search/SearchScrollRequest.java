@@ -27,9 +27,9 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.search.Scroll;
 
 import java.io.IOException;
-import java.util.Objects;
 
 import static org.elasticsearch.action.ValidateActions.addValidationError;
+import static org.elasticsearch.search.Scroll.readScroll;
 
 /**
  *
@@ -100,39 +100,20 @@ public class SearchScrollRequest extends ActionRequest<SearchScrollRequest> {
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         scrollId = in.readString();
-        scroll = in.readOptionalWriteable(Scroll::new);
+        if (in.readBoolean()) {
+            scroll = readScroll(in);
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(scrollId);
-        out.writeOptionalWriteable(scroll);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
+        if (scroll == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            scroll.writeTo(out);
         }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        SearchScrollRequest that = (SearchScrollRequest) o;
-        return Objects.equals(scrollId, that.scrollId) &&
-                Objects.equals(scroll, that.scroll);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(scrollId, scroll);
-    }
-
-    @Override
-    public String toString() {
-        return "SearchScrollRequest{" +
-                "scrollId='" + scrollId + '\'' +
-                ", scroll=" + scroll +
-                '}';
     }
 }

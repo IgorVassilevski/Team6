@@ -19,7 +19,6 @@
 
 package org.elasticsearch.index.reindex;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -27,17 +26,18 @@ import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.ParentTaskAssigningClient;
 import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.VersionType;
-import org.elasticsearch.index.mapper.IdFieldMapper;
-import org.elasticsearch.index.mapper.IndexFieldMapper;
-import org.elasticsearch.index.mapper.ParentFieldMapper;
-import org.elasticsearch.index.mapper.RoutingFieldMapper;
-import org.elasticsearch.index.mapper.SourceFieldMapper;
-import org.elasticsearch.index.mapper.TTLFieldMapper;
-import org.elasticsearch.index.mapper.TimestampFieldMapper;
-import org.elasticsearch.index.mapper.TypeFieldMapper;
-import org.elasticsearch.index.mapper.VersionFieldMapper;
+import org.elasticsearch.index.mapper.internal.IdFieldMapper;
+import org.elasticsearch.index.mapper.internal.IndexFieldMapper;
+import org.elasticsearch.index.mapper.internal.ParentFieldMapper;
+import org.elasticsearch.index.mapper.internal.RoutingFieldMapper;
+import org.elasticsearch.index.mapper.internal.SourceFieldMapper;
+import org.elasticsearch.index.mapper.internal.TTLFieldMapper;
+import org.elasticsearch.index.mapper.internal.TimestampFieldMapper;
+import org.elasticsearch.index.mapper.internal.TypeFieldMapper;
+import org.elasticsearch.index.mapper.internal.VersionFieldMapper;
 import org.elasticsearch.script.CompiledScript;
 import org.elasticsearch.script.ExecutableScript;
 import org.elasticsearch.script.Script;
@@ -71,7 +71,7 @@ public abstract class AbstractAsyncBulkIndexByScrollAction<Request extends Abstr
      */
     private final BiFunction<RequestWrapper<?>, ScrollableHitSource.Hit, RequestWrapper<?>> scriptApplier;
 
-    public AbstractAsyncBulkIndexByScrollAction(BulkByScrollTask task, Logger logger, ParentTaskAssigningClient client,
+    public AbstractAsyncBulkIndexByScrollAction(BulkByScrollTask task, ESLogger logger, ParentTaskAssigningClient client,
                                                 ThreadPool threadPool, Request mainRequest,
                                                 ActionListener<BulkIndexByScrollResponse> listener,
                                                 ScriptService scriptService, ClusterState clusterState) {
@@ -450,8 +450,6 @@ public abstract class AbstractAsyncBulkIndexByScrollAction<Request extends Abstr
             }
             if (context == null) {
                 context = new HashMap<>();
-            } else {
-                context.clear();
             }
 
             context.put(IndexFieldMapper.NAME, doc.getIndex());
@@ -487,23 +485,23 @@ public abstract class AbstractAsyncBulkIndexByScrollAction<Request extends Abstr
              */
             request.setSource((Map<String, Object>) resultCtx.remove(SourceFieldMapper.NAME));
 
-            Object newValue = resultCtx.remove(IndexFieldMapper.NAME);
+            Object newValue = context.remove(IndexFieldMapper.NAME);
             if (false == doc.getIndex().equals(newValue)) {
                 scriptChangedIndex(request, newValue);
             }
-            newValue = resultCtx.remove(TypeFieldMapper.NAME);
+            newValue = context.remove(TypeFieldMapper.NAME);
             if (false == doc.getType().equals(newValue)) {
                 scriptChangedType(request, newValue);
             }
-            newValue = resultCtx.remove(IdFieldMapper.NAME);
+            newValue = context.remove(IdFieldMapper.NAME);
             if (false == doc.getId().equals(newValue)) {
                 scriptChangedId(request, newValue);
             }
-            newValue = resultCtx.remove(VersionFieldMapper.NAME);
+            newValue = context.remove(VersionFieldMapper.NAME);
             if (false == Objects.equals(oldVersion, newValue)) {
                 scriptChangedVersion(request, newValue);
             }
-            newValue = resultCtx.remove(ParentFieldMapper.NAME);
+            newValue = context.remove(ParentFieldMapper.NAME);
             if (false == Objects.equals(oldParent, newValue)) {
                 scriptChangedParent(request, newValue);
             }
@@ -511,26 +509,26 @@ public abstract class AbstractAsyncBulkIndexByScrollAction<Request extends Abstr
              * Its important that routing comes after parent in case you want to
              * change them both.
              */
-            newValue = resultCtx.remove(RoutingFieldMapper.NAME);
+            newValue = context.remove(RoutingFieldMapper.NAME);
             if (false == Objects.equals(oldRouting, newValue)) {
                 scriptChangedRouting(request, newValue);
             }
-            newValue = resultCtx.remove(TimestampFieldMapper.NAME);
+            newValue = context.remove(TimestampFieldMapper.NAME);
             if (false == Objects.equals(oldTimestamp, newValue)) {
                 scriptChangedTimestamp(request, newValue);
             }
-            newValue = resultCtx.remove(TTLFieldMapper.NAME);
+            newValue = context.remove(TTLFieldMapper.NAME);
             if (false == Objects.equals(oldTTL, newValue)) {
                 scriptChangedTTL(request, newValue);
             }
 
             OpType newOpType = OpType.fromString(newOp);
-            if (newOpType != oldOpType) {
+            if (newOpType !=  oldOpType) {
                 return scriptChangedOpType(request, oldOpType, newOpType);
             }
 
-            if (false == resultCtx.isEmpty()) {
-                throw new IllegalArgumentException("Invalid fields added to context [" + String.join(",", resultCtx.keySet()) + ']');
+            if (false == context.isEmpty()) {
+                throw new IllegalArgumentException("Invalid fields added to context [" + String.join(",", context.keySet()) + ']');
             }
             return request;
         }

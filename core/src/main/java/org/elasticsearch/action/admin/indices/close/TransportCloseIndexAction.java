@@ -19,8 +19,6 @@
 
 package org.elasticsearch.action.admin.indices.close;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.DestructiveOperations;
@@ -110,7 +108,7 @@ public class TransportCloseIndexAction extends TransportMasterNodeAction<CloseIn
 
             @Override
             public void onFailure(Exception t) {
-                logger.debug((Supplier<?>) () -> new ParameterizedMessage("failed to close indices [{}]", (Object) concreteIndices), t);
+                logger.debug("failed to close indices [{}]", t, (Object)concreteIndices);
                 listener.onFailure(t);
             }
         });

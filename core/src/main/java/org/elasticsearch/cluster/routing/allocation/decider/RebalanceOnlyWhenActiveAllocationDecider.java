@@ -21,6 +21,7 @@ package org.elasticsearch.cluster.routing.allocation.decider;
 
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 
 /**
@@ -30,6 +31,7 @@ public class RebalanceOnlyWhenActiveAllocationDecider extends AllocationDecider 
 
     public static final String NAME = "rebalance_only_when_active";
 
+    @Inject
     public RebalanceOnlyWhenActiveAllocationDecider(Settings settings) {
         super(settings);
     }

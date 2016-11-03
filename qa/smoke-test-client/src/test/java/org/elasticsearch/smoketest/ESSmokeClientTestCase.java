@@ -19,11 +19,11 @@
 
 package org.elasticsearch.smoketest;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.util.LuceneTestCase;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.ESLoggerFactory;
 import org.elasticsearch.common.network.NetworkModule;
 import org.elasticsearch.common.settings.Settings;
@@ -32,8 +32,6 @@ import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.env.Environment;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.transport.MockTcpTransportPlugin;
-import org.elasticsearch.transport.Netty3Plugin;
-import org.elasticsearch.transport.Netty4Plugin;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -51,7 +49,6 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.carrotsearch.randomizedtesting.RandomizedTest.randomAsciiOfLength;
-import static com.carrotsearch.randomizedtesting.RandomizedTest.randomIntBetween;
 import static org.hamcrest.Matchers.notNullValue;
 
 /**
@@ -72,7 +69,7 @@ public abstract class ESSmokeClientTestCase extends LuceneTestCase {
      */
     public static final String TESTS_CLUSTER = "tests.cluster";
 
-    protected static final Logger logger = ESLoggerFactory.getLogger(ESSmokeClientTestCase.class.getName());
+    protected static final ESLogger logger = ESLoggerFactory.getLogger(ESSmokeClientTestCase.class.getName());
 
     private static final AtomicInteger counter = new AtomicInteger();
     private static Client client;
@@ -85,22 +82,13 @@ public abstract class ESSmokeClientTestCase extends LuceneTestCase {
             .put("client.transport.ignore_cluster_name", true)
             .put(Environment.PATH_HOME_SETTING.getKey(), tempDir);
         final Collection<Class<? extends Plugin>> plugins;
-        switch (randomIntBetween(0, 2)) {
-            case 0:
-                builder.put(NetworkModule.TRANSPORT_TYPE_KEY, MockTcpTransportPlugin.MOCK_TCP_TRANSPORT_NAME);
-                plugins = Collections.singleton(MockTcpTransportPlugin.class);
-                break;
-            case 1:
-                plugins = Collections.emptyList();
-                builder.put(NetworkModule.TRANSPORT_TYPE_KEY, Netty3Plugin.NETTY_TRANSPORT_NAME);
-                break;
-            case 2:
-                plugins = Collections.emptyList();
-                break;
-            default:
-                throw new AssertionError();
+        if (random().nextBoolean()) {
+            builder.put(NetworkModule.TRANSPORT_TYPE_KEY, MockTcpTransportPlugin.MOCK_TCP_TRANSPORT_NAME);
+            plugins = Collections.singleton(MockTcpTransportPlugin.class);
+        } else {
+            plugins = Collections.emptyList();
         }
-        TransportClient client = new PreBuiltTransportClient(builder.build(), plugins).addTransportAddresses(transportAddresses);
+        TransportClient client = new PreBuiltTransportClient(builder.build(),  plugins).addTransportAddresses(transportAddresses);
 
         logger.info("--> Elasticsearch Java TransportClient started");
 

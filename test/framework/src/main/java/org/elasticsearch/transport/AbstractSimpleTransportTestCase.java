@@ -19,8 +19,6 @@
 
 package org.elasticsearch.transport;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListenerResponseHandler;
@@ -34,7 +32,6 @@ import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
-import org.elasticsearch.node.Node;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.test.junit.annotations.TestLogging;
 import org.elasticsearch.test.transport.MockTransportService;
@@ -71,12 +68,12 @@ public abstract class AbstractSimpleTransportTestCase extends ESTestCase {
     protected ThreadPool threadPool;
 
     protected static final Version version0 = Version.CURRENT.minimumCompatibilityVersion();
-    protected volatile DiscoveryNode nodeA;
-    protected volatile MockTransportService serviceA;
+    protected DiscoveryNode nodeA;
+    protected MockTransportService serviceA;
 
     protected static final Version version1 = Version.fromId(Version.CURRENT.id + 1);
-    protected volatile DiscoveryNode nodeB;
-    protected volatile MockTransportService serviceB;
+    protected DiscoveryNode nodeB;
+    protected MockTransportService serviceB;
 
     protected abstract MockTransportService build(Settings settings, Version version);
 
@@ -130,7 +127,7 @@ public abstract class AbstractSimpleTransportTestCase extends ESTestCase {
     private MockTransportService buildService(final String name, final Version version) {
         MockTransportService service = build(
             Settings.builder()
-                .put(Node.NODE_NAME_SETTING.getKey(), name)
+                .put("name", name)
                 .put(TransportService.TRACE_LOG_INCLUDE_SETTING.getKey(), "")
                 .put(TransportService.TRACE_LOG_EXCLUDE_SETTING.getKey(), "NOTHING")
                 .build(),
@@ -508,7 +505,7 @@ public abstract class AbstractSimpleTransportTestCase extends ESTestCase {
                 channel.sendResponse(new TestResponse());
             } catch (Exception e) {
                 // we don't really care what's going on B, we're testing through A
-                logger.trace("caught exception while responding from node B", e);
+                logger.trace("caught exception while res    ponding from node B", e);
             }
         };
         serviceB.registerRequestHandler("test", TestRequest::new, ThreadPool.Names.SAME, ignoringRequestHandler);
@@ -537,8 +534,7 @@ public abstract class AbstractSimpleTransportTestCase extends ESTestCase {
                             listener.actionGet();
 
                         } catch (Exception e) {
-                            logger.trace(
-                                (Supplier<?>) () -> new ParameterizedMessage("caught exception while sending to node {}", nodeA), e);
+                            logger.trace("caught exception while sending to node {}", e, nodeA);
                         }
                     }
                 }
@@ -565,16 +561,14 @@ public abstract class AbstractSimpleTransportTestCase extends ESTestCase {
                     for (int iter = 0; iter < 10; iter++) {
                         PlainActionFuture<TestResponse> listener = new PlainActionFuture<>();
                         final String info = sender + "_" + iter;
-                        final DiscoveryNode node = nodeB; // capture now
-                        serviceA.sendRequest(node, "test", new TestRequest(info),
+                        serviceA.sendRequest(nodeB, "test", new TestRequest(info),
                             new ActionListenerResponseHandler<>(listener, TestResponse::new));
                         try {
                             listener.actionGet();
                         } catch (ConnectTransportException e) {
                             // ok!
                         } catch (Exception e) {
-                            logger.error(
-                                (Supplier<?>) () -> new ParameterizedMessage("caught exception while sending to node {}", node), e);
+                            logger.error("caught exception while sending to node {}", e, nodeB);
                             sendingErrors.add(e);
                         }
                     }
@@ -591,10 +585,10 @@ public abstract class AbstractSimpleTransportTestCase extends ESTestCase {
             if (i % 3 == 0) {
                 // simulate restart of nodeB
                 serviceB.close();
-                MockTransportService newService = buildService("TS_B_" + i, version1);
+                MockTransportService newService = buildService("TS_B", version1);
                 newService.registerRequestHandler("test", TestRequest::new, ThreadPool.Names.SAME, ignoringRequestHandler);
                 serviceB = newService;
-                nodeB = new DiscoveryNode("TS_B_" + i, "TS_B", serviceB.boundAddress().publishAddress(), emptyMap(), emptySet(), version1);
+                nodeB = new DiscoveryNode("TS_B", serviceB.boundAddress().publishAddress(), emptyMap(), emptySet(), version1);
                 serviceB.connectToNode(nodeA);
                 serviceA.connectToNode(nodeB);
             } else if (serviceA.nodeConnected(nodeB)) {
@@ -791,7 +785,7 @@ public abstract class AbstractSimpleTransportTestCase extends ESTestCase {
         assertTrue(inFlight.tryAcquire(Integer.MAX_VALUE, 10, TimeUnit.SECONDS));
     }
 
-    @TestLogging(value = "test.transport.tracer:TRACE")
+    @TestLogging(value = "test. transport.tracer:TRACE")
     public void testTracerLog() throws InterruptedException {
         TransportRequestHandler handler = new TransportRequestHandler<StringMessageRequest>() {
             @Override
@@ -1688,7 +1682,7 @@ public abstract class AbstractSimpleTransportTestCase extends ESTestCase {
 
             @Override
             public void handleException(TransportException exp) {
-                logger.debug((Supplier<?>) () -> new ParameterizedMessage("---> received exception for id {}", id), exp);
+                logger.debug("---> received exception for id {}", exp, id);
                 allRequestsDone.countDown();
                 Throwable unwrap = ExceptionsHelper.unwrap(exp, IOException.class);
                 assertNotNull(unwrap);

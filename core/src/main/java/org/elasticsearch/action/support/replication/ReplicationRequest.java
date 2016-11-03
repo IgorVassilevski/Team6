@@ -22,9 +22,9 @@ package org.elasticsearch.action.support.replication;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.IndicesRequest;
+import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.indices.refresh.TransportShardRefreshAction;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.support.ActiveShardCount;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -60,10 +60,7 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
     protected TimeValue timeout = DEFAULT_TIMEOUT;
     protected String index;
 
-    /**
-     * The number of shard copies that must be active before proceeding with the replication action.
-     */
-    protected ActiveShardCount waitForActiveShards = ActiveShardCount.DEFAULT;
+    private WriteConsistencyLevel consistencyLevel = WriteConsistencyLevel.DEFAULT;
 
     private long routedBasedOnClusterVersion = 0;
 
@@ -119,8 +116,8 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
         return IndicesOptions.strictSingleIndexNoExpandForbidClosed();
     }
 
-    public ActiveShardCount waitForActiveShards() {
-        return this.waitForActiveShards;
+    public WriteConsistencyLevel consistencyLevel() {
+        return this.consistencyLevel;
     }
 
     /**
@@ -133,27 +130,12 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
     }
 
     /**
-     * Sets the number of shard copies that must be active before proceeding with the replication
-     * operation. Defaults to {@link ActiveShardCount#DEFAULT}, which requires one shard copy
-     * (the primary) to be active. Set this value to {@link ActiveShardCount#ALL} to
-     * wait for all shards (primary and all replicas) to be active. Otherwise, use
-     * {@link ActiveShardCount#from(int)} to set this value to any non-negative integer, up to the
-     * total number of shard copies (number of replicas + 1).
+     * Sets the consistency level of write. Defaults to {@link org.elasticsearch.action.WriteConsistencyLevel#DEFAULT}
      */
     @SuppressWarnings("unchecked")
-    public final Request waitForActiveShards(ActiveShardCount waitForActiveShards) {
-        this.waitForActiveShards = waitForActiveShards;
+    public final Request consistencyLevel(WriteConsistencyLevel consistencyLevel) {
+        this.consistencyLevel = consistencyLevel;
         return (Request) this;
-    }
-
-    /**
-     * A shortcut for {@link #waitForActiveShards(ActiveShardCount)} where the numerical
-     * shard count is passed in, instead of having to first call {@link ActiveShardCount#from(int)}
-     * to get the ActiveShardCount.
-     */
-    @SuppressWarnings("unchecked")
-    public final Request waitForActiveShards(final int waitForActiveShards) {
-        return waitForActiveShards(ActiveShardCount.from(waitForActiveShards));
     }
 
     /**
@@ -197,7 +179,7 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
         } else {
             shardId = null;
         }
-        waitForActiveShards = ActiveShardCount.readFrom(in);
+        consistencyLevel = WriteConsistencyLevel.fromId(in.readByte());
         timeout = new TimeValue(in);
         index = in.readString();
         routedBasedOnClusterVersion = in.readVLong();
@@ -213,7 +195,7 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
         } else {
             out.writeBoolean(false);
         }
-        waitForActiveShards.writeTo(out);
+        out.writeByte(consistencyLevel.id());
         timeout.writeTo(out);
         out.writeString(index);
         out.writeVLong(routedBasedOnClusterVersion);
@@ -247,13 +229,5 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
     @Override
     public String getDescription() {
         return toString();
-    }
-
-    /**
-     * This method is called before this replication request is retried
-     * the first time.
-     */
-    public void onRetry() {
-        // nothing by default
     }
 }

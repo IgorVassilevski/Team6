@@ -29,7 +29,8 @@ import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestController;
 import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.RestResponse;
-import org.elasticsearch.rest.action.RestResponseListener;
+import org.elasticsearch.rest.action.support.RestResponseListener;
+import org.elasticsearch.rest.action.support.RestTable;
 
 import java.util.Locale;
 

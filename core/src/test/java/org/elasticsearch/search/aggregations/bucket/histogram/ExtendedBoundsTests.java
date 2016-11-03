@@ -31,10 +31,8 @@ import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.SearchParseException;
-import org.elasticsearch.search.aggregations.bucket.histogram.ExtendedBounds;
 import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.test.ESTestCase;
-import org.elasticsearch.threadpool.ThreadPoolStats;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Instant;
 
@@ -42,7 +40,6 @@ import java.io.IOException;
 
 import static java.lang.Math.max;
 import static java.lang.Math.min;
-import static org.hamcrest.Matchers.equalTo;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -151,21 +148,9 @@ public class ExtendedBoundsTests extends ESTestCase {
         ExtendedBounds orig = randomExtendedBounds();
 
         try (XContentBuilder out = JsonXContent.contentBuilder()) {
-            out.startObject();
             orig.toXContent(out, ToXContent.EMPTY_PARAMS);
-            out.endObject();
-
             try (XContentParser in = JsonXContent.jsonXContent.createParser(out.bytes())) {
-                XContentParser.Token token = in.currentToken();
-                assertNull(token);
-
-                token = in.nextToken();
-                assertThat(token, equalTo(XContentParser.Token.START_OBJECT));
-
-                token = in.nextToken();
-                assertThat(token, equalTo(XContentParser.Token.FIELD_NAME));
-                assertThat(in.currentName(), equalTo(ExtendedBounds.EXTENDED_BOUNDS_FIELD.getPreferredName()));
-
+                in.nextToken();
                 ExtendedBounds read = ExtendedBounds.PARSER.apply(in, () -> ParseFieldMatcher.STRICT);
                 assertEquals(orig, read);
             } catch (Exception e) {

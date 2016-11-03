@@ -26,6 +26,7 @@ import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.termvectors.TermVectorsRequest;
 import org.elasticsearch.action.termvectors.TermVectorsResponse;
+import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.logging.ESLoggerFactory;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
@@ -43,7 +44,6 @@ import org.elasticsearch.test.ESIntegTestCase.Scope;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -63,7 +63,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 public class FetchSubPhasePluginIT extends ESIntegTestCase {
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(FetchTermVectorsPlugin.class);
+        return pluginList(FetchTermVectorsPlugin.class);
     }
 
     public void testPlugin() throws Exception {

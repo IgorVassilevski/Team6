@@ -30,23 +30,27 @@ import org.elasticsearch.painless.Locals;
 import org.elasticsearch.painless.MethodWriter;
 
 /**
- * Represents a cast that is inserted into the tree replacing other casts.  (Internal only.)
+ * Represents an implicit cast in most cases, though it will replace
+ * explicit casts in the tree for simplicity.  (Internal only.)
  */
 final class ECast extends AExpression {
 
-    private AExpression child;
-    private final Cast cast;
+    final String type;
+    AExpression child;
+
+    Cast cast = null;
 
     ECast(Location location, AExpression child, Cast cast) {
         super(location);
 
+        this.type = null;
         this.child = Objects.requireNonNull(child);
         this.cast = Objects.requireNonNull(cast);
     }
-
+    
     @Override
     void extractVariables(Set<String> variables) {
-        throw new IllegalStateException("Illegal tree structure.");
+        child.extractVariables(variables);
     }
 
     @Override
@@ -59,5 +63,6 @@ final class ECast extends AExpression {
         child.write(writer, globals);
         writer.writeDebugInfo(location);
         writer.writeCast(cast);
+        writer.writeBranch(tru, fals);
     }
 }

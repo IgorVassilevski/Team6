@@ -38,7 +38,7 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.SearchShardTarget;
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
+import org.elasticsearch.search.highlight.HighlightField;
 import org.elasticsearch.search.internal.InternalSearchHits.StreamContext.ShardTargetType;
 import org.elasticsearch.search.lookup.SourceLookup;
 
@@ -55,7 +55,7 @@ import static java.util.Collections.singletonMap;
 import static java.util.Collections.unmodifiableMap;
 import static org.elasticsearch.common.lucene.Lucene.readExplanation;
 import static org.elasticsearch.common.lucene.Lucene.writeExplanation;
-import static org.elasticsearch.search.fetch.subphase.highlight.HighlightField.readHighlightField;
+import static org.elasticsearch.search.highlight.HighlightField.readHighlightField;
 import static org.elasticsearch.search.internal.InternalSearchHitField.readSearchHitField;
 
 /**
@@ -100,17 +100,9 @@ public class InternalSearchHit implements SearchHit {
 
     }
 
-    public InternalSearchHit(int docId) {
-        this(docId, null, null, null);
-    }
-
     public InternalSearchHit(int docId, String id, Text type, Map<String, SearchHitField> fields) {
         this.docId = docId;
-        if (id != null) {
-            this.id = new Text(id);
-        } else {
-            this.id = null;
-        }
+        this.id = new Text(id);
         this.type = type;
         this.fields = fields;
     }
@@ -176,7 +168,7 @@ public class InternalSearchHit implements SearchHit {
 
     @Override
     public String id() {
-        return id != null ? id.string() : null;
+        return id.string();
     }
 
     @Override
@@ -186,7 +178,7 @@ public class InternalSearchHit implements SearchHit {
 
     @Override
     public String type() {
-        return type != null ? type.string() : null;
+        return type.string();
     }
 
     @Override
@@ -423,8 +415,8 @@ public class InternalSearchHit implements SearchHit {
         static final String INNER_HITS = "inner_hits";
     }
 
-    // public because we render hit as part of completion suggestion option
-    public XContentBuilder toInnerXContent(XContentBuilder builder, Params params) throws IOException {
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         List<SearchHitField> metaFields = new ArrayList<>();
         List<SearchHitField> otherFields = new ArrayList<>();
         if (fields != null && !fields.isEmpty()) {
@@ -440,6 +432,7 @@ public class InternalSearchHit implements SearchHit {
             }
         }
 
+        builder.startObject();
         // For inner_hit hits shard is null and that is ok, because the parent search hit has all this information.
         // Even if this was included in the inner_hit hits this would be the same, so better leave it out.
         if (explanation() != null && shard != null) {
@@ -452,12 +445,8 @@ public class InternalSearchHit implements SearchHit {
             if (shard != null) {
                 builder.field(Fields._INDEX, shard.indexText());
             }
-            if (type != null) {
-                builder.field(Fields._TYPE, type);
-            }
-            if (id != null) {
-                builder.field(Fields._ID, id);
-            }
+            builder.field(Fields._TYPE, type);
+            builder.field(Fields._ID, id);
         }
         if (version != -1) {
             builder.field(Fields._VERSION, version);
@@ -527,6 +516,7 @@ public class InternalSearchHit implements SearchHit {
             }
             builder.endObject();
         }
+        builder.endObject();
         return builder;
     }
 
@@ -543,15 +533,6 @@ public class InternalSearchHit implements SearchHit {
             builder.endArray();
         }
         builder.endObject();
-
-    }
-
-    @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        toInnerXContent(builder, params);
-        builder.endObject();
-        return builder;
     }
 
     public static InternalSearchHit readSearchHit(StreamInput in, InternalSearchHits.StreamContext context) throws IOException {
@@ -567,8 +548,8 @@ public class InternalSearchHit implements SearchHit {
 
     public void readFrom(StreamInput in, InternalSearchHits.StreamContext context) throws IOException {
         score = in.readFloat();
-        id = in.readOptionalText();
-        type = in.readOptionalText();
+        id = in.readText();
+        type = in.readText();
         nestedIdentity = in.readOptionalStreamable(InternalNestedIdentity::new);
         version = in.readLong();
         source = in.readBytesReference();
@@ -676,8 +657,8 @@ public class InternalSearchHit implements SearchHit {
 
     public void writeTo(StreamOutput out, InternalSearchHits.StreamContext context) throws IOException {
         out.writeFloat(score);
-        out.writeOptionalText(id);
-        out.writeOptionalText(type);
+        out.writeText(id);
+        out.writeText(type);
         out.writeOptionalStreamable(nestedIdentity);
         out.writeLong(version);
         out.writeBytesReference(source);

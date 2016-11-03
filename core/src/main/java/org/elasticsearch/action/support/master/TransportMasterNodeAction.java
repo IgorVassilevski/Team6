@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.support.master;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionListenerResponseHandler;
 import org.elasticsearch.action.ActionResponse;
@@ -156,7 +155,7 @@ public abstract class TransportMasterNodeAction<Request extends MasterNodeReques
                         public void onFailure(Exception t) {
                             if (t instanceof Discovery.FailedToCommitClusterStateException
                                     || (t instanceof NotMasterException)) {
-                                logger.debug((org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("master could not publish cluster state or stepped down before publishing action [{}], scheduling a retry", actionName), t);
+                                logger.debug("master could not publish cluster state or stepped down before publishing action [{}], scheduling a retry", t, actionName);
                                 retry(t, MasterNodeChangePredicate.INSTANCE);
                             } else {
                                 listener.onFailure(t);
@@ -210,7 +209,7 @@ public abstract class TransportMasterNodeAction<Request extends MasterNodeReques
 
                     @Override
                     public void onTimeout(TimeValue timeout) {
-                        logger.debug((org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("timed out while retrying [{}] after failure (timeout [{}])", actionName, timeout), failure);
+                        logger.debug("timed out while retrying [{}] after failure (timeout [{}])", failure, actionName, timeout);
                         listener.onFailure(new MasterNotDiscoveredException(failure));
                     }
                 }, changePredicate

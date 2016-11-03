@@ -53,7 +53,6 @@ import org.elasticsearch.transport.local.LocalTransport;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -90,7 +89,7 @@ public class MockTransportService extends TransportService {
     }
 
     public static MockTransportService local(Settings settings, Version version, ThreadPool threadPool) {
-        NamedWriteableRegistry namedWriteableRegistry = new NamedWriteableRegistry(Collections.emptyList());
+        NamedWriteableRegistry namedWriteableRegistry = new NamedWriteableRegistry();
         Transport transport = new LocalTransport(settings, threadPool, namedWriteableRegistry, new NoneCircuitBreakerService()) {
             @Override
             protected Version getVersion() {

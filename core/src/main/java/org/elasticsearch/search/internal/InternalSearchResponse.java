@@ -136,8 +136,14 @@ public class InternalSearchResponse implements Streamable, ToXContent {
             suggest = Suggest.readSuggest(in);
         }
         timedOut = in.readBoolean();
+
         terminatedEarly = in.readOptionalBoolean();
-        profileResults = in.readOptionalWriteable(SearchProfileShardResults::new);
+
+        if (in.getVersion().onOrAfter(Version.V_2_2_0) && in.readBoolean()) {
+            profileResults = new SearchProfileShardResults(in);
+        } else {
+            profileResults = null;
+        }
     }
 
     @Override
@@ -156,7 +162,16 @@ public class InternalSearchResponse implements Streamable, ToXContent {
             suggest.writeTo(out);
         }
         out.writeBoolean(timedOut);
+
         out.writeOptionalBoolean(terminatedEarly);
-        out.writeOptionalWriteable(profileResults);
+
+        if (out.getVersion().onOrAfter(Version.V_2_2_0)) {
+            if (profileResults == null) {
+                out.writeBoolean(false);
+            } else {
+                out.writeBoolean(true);
+                profileResults.writeTo(out);
+            }
+        }
     }
 }

@@ -38,7 +38,7 @@ public class LoggerUsageTask extends LoggedExec {
 
     private FileCollection classpath;
 
-    private FileCollection classDirectories;
+    private List<File> classDirectories;
 
     public LoggerUsageTask() {
         project.afterEvaluate {
@@ -46,25 +46,15 @@ public class LoggerUsageTask extends LoggedExec {
             description = "Runs LoggerUsageCheck on ${classDirectories}"
             executable = new File(project.javaHome, 'bin/java')
             if (classDirectories == null) {
-                // Default to main and test class files
-                List files = []
-                // But only if the source sets that will make them exist
-                if (project.sourceSets.findByName("main")) {
-                    files.add(project.sourceSets.main.output.classesDir)
+                classDirectories = []
+                if (project.sourceSets.findByName("main") && project.sourceSets.main.output.classesDir.exists()) {
+                    classDirectories += [project.sourceSets.main.output.classesDir]
                     dependsOn project.tasks.classes
                 }
-                if (project.sourceSets.findByName("test")) {
-                    files.add(project.sourceSets.test.output.classesDir)
+                if (project.sourceSets.findByName("test") && project.sourceSets.test.output.classesDir.exists()) {
+                    classDirectories += [project.sourceSets.test.output.classesDir]
                     dependsOn project.tasks.testClasses
                 }
-                /* In an extra twist, it isn't good enough that the source set
-                 * exists. Empty source sets won't make a classes directory
-                 * which will cause the check to fail. We have to filter the
-                 * empty directories out manually. This filter is done right
-                 * before the actual logger usage check giving the rest of the
-                 * build the opportunity to actually build the directory.
-                 */
-                classDirectories = project.files(files).filter { it.exists() }
             }
             doFirst({
                 args('-cp', getClasspath().asPath, 'org.elasticsearch.test.loggerusage.ESLoggerUsageChecker')
@@ -89,11 +79,11 @@ public class LoggerUsageTask extends LoggedExec {
     }
 
     @InputFiles
-    FileCollection getClassDirectories() {
+    List<File> getClassDirectories() {
         return classDirectories
     }
 
-    void setClassDirectories(FileCollection classDirectories) {
+    void setClassDirectories(List<File> classDirectories) {
         this.classDirectories = classDirectories
     }
 

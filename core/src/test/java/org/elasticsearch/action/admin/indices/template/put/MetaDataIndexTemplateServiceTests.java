@@ -158,6 +158,7 @@ public class MetaDataIndexTemplateServiceTests extends ESSingleNodeTestCase {
                 null,
                 null,
                 null,
+                new HashSet<>(),
                 null,
                 null, null, null);
         MetaDataIndexTemplateService service = new MetaDataIndexTemplateService(Settings.EMPTY, null, createIndexService, new AliasValidator(Settings.EMPTY), null, null);
@@ -187,6 +188,7 @@ public class MetaDataIndexTemplateServiceTests extends ESSingleNodeTestCase {
             indicesService,
             null,
             null,
+            new HashSet<>(),
             null,
             nodeServicesProvider,
             null,

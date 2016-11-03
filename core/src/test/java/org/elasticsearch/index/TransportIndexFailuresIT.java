@@ -34,7 +34,6 @@ import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.transport.MockTransportService;
 import org.elasticsearch.transport.TransportService;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -62,7 +61,7 @@ public class TransportIndexFailuresIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(MockTransportService.TestPlugin.class);
+        return pluginList(MockTransportService.TestPlugin.class);
     }
 
     @Override

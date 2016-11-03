@@ -19,13 +19,12 @@
 
 package org.elasticsearch.action.support.replication;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionListenerResponseHandler;
 import org.elasticsearch.action.UnavailableShardsException;
+import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.support.ActionFilters;
-import org.elasticsearch.action.support.ActiveShardCount;
 import org.elasticsearch.action.support.TransportAction;
 import org.elasticsearch.action.support.TransportActions;
 import org.elasticsearch.client.transport.NoNodeAvailableException;
@@ -57,6 +56,7 @@ import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.node.NodeClosedException;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.ConnectTransportException;
 import org.elasticsearch.transport.TransportChannel;
 import org.elasticsearch.transport.TransportChannelResponseHandler;
@@ -65,7 +65,6 @@ import org.elasticsearch.transport.TransportRequestHandler;
 import org.elasticsearch.transport.TransportRequestOptions;
 import org.elasticsearch.transport.TransportResponse;
 import org.elasticsearch.transport.TransportResponse.Empty;
-import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
@@ -91,6 +90,7 @@ public abstract class TransportReplicationAction<
     protected final ClusterService clusterService;
     protected final IndicesService indicesService;
     private final ShardStateAction shardStateAction;
+    private final WriteConsistencyLevel defaultWriteConsistencyLevel;
     private final TransportRequestOptions transportOptions;
     private final String executor;
 
@@ -122,6 +122,8 @@ public abstract class TransportReplicationAction<
 
         this.transportOptions = transportOptions();
 
+        this.defaultWriteConsistencyLevel = WriteConsistencyLevel.fromString(settings.get("action.write_consistency", "quorum"));
+
         this.replicasProxy = new ReplicasProxy();
     }
 
@@ -147,11 +149,6 @@ public abstract class TransportReplicationAction<
      * @param request       the request to resolve
      */
     protected void resolveRequest(MetaData metaData, IndexMetaData indexMetaData, Request request) {
-        if (request.waitForActiveShards() == ActiveShardCount.DEFAULT) {
-            // if the wait for active shard count has not been set in the request,
-            // resolve it from the index settings
-            request.waitForActiveShards(indexMetaData.getWaitForActiveShards());
-        }
     }
 
     /**
@@ -166,6 +163,13 @@ public abstract class TransportReplicationAction<
      * {@link #acquireReplicaOperationLock(ShardId, long, ActionListener)}.
      */
     protected abstract ReplicaResult shardOperationOnReplica(ReplicaRequest shardRequest);
+
+    /**
+     * True if write consistency should be checked for an implementation
+     */
+    protected boolean checkWriteConsistency() {
+        return true;
+    }
 
     /**
      * Cluster level block to check before request execution
@@ -216,9 +220,7 @@ public abstract class TransportReplicationAction<
                         channel.sendResponse(e);
                     } catch (Exception inner) {
                         inner.addSuppressed(e);
-                        logger.warn(
-                            (org.apache.logging.log4j.util.Supplier<?>)
-                                () -> new ParameterizedMessage("Failed to send response for {}", actionName), inner);
+                        logger.warn("Failed to send response for {}", inner, actionName);
                     }
                 }
             });
@@ -351,7 +353,7 @@ public abstract class TransportReplicationAction<
             Request request, ActionListener<PrimaryResult> listener,
             PrimaryShardReference primaryShardReference, boolean executeOnReplicas) {
             return new ReplicationOperation<>(request, primaryShardReference, listener,
-                executeOnReplicas, replicasProxy, clusterService::state, logger, actionName
+                executeOnReplicas, checkWriteConsistency(), replicasProxy, clusterService::state, logger, actionName
             );
         }
     }
@@ -447,13 +449,7 @@ public abstract class TransportReplicationAction<
         @Override
         public void onFailure(Exception e) {
             if (e instanceof RetryOnReplicaException) {
-                logger.trace(
-                    (org.apache.logging.log4j.util.Supplier<?>)
-                        () -> new ParameterizedMessage(
-                            "Retrying operation on replica, action [{}], request [{}]",
-                            transportReplicaAction,
-                            request),
-                    e);
+                logger.trace("Retrying operation on replica, action [{}], request [{}]", e, transportReplicaAction, request);
                 final ThreadContext.StoredContext context = threadPool.getThreadContext().newStoredContext();
                 observer.waitForNextChange(new ClusterStateObserver.Listener() {
                     @Override
@@ -488,12 +484,7 @@ public abstract class TransportReplicationAction<
                 channel.sendResponse(e);
             } catch (IOException responseException) {
                 responseException.addSuppressed(e);
-                logger.warn(
-                    (org.apache.logging.log4j.util.Supplier<?>)
-                        () -> new ParameterizedMessage(
-                            "failed to send error message back to client for action [{}]",
-                            transportReplicaAction),
-                    responseException);
+                logger.warn("failed to send error message back to client for action [{}]", responseException, transportReplicaAction);
             }
         }
 
@@ -575,9 +566,11 @@ public abstract class TransportReplicationAction<
             }
 
             // resolve all derived request fields, so we can route and apply it
+            if (request.consistencyLevel() == WriteConsistencyLevel.DEFAULT) {
+                request.consistencyLevel(defaultWriteConsistencyLevel);
+            }
             resolveRequest(state.metaData(), indexMetaData, request);
             assert request.shardId() != null : "request shardId must be set in resolveRequest";
-            assert request.waitForActiveShards() != ActiveShardCount.DEFAULT : "request waitForActiveShards must be set in resolveRequest";
 
             final ShardRouting primary = primary(state);
             if (retryIfUnavailable(state, primary)) {
@@ -696,12 +689,8 @@ public abstract class TransportReplicationAction<
                         final Throwable cause = exp.unwrapCause();
                         if (cause instanceof ConnectTransportException || cause instanceof NodeClosedException ||
                             (isPrimaryAction && retryPrimaryException(cause))) {
-                            logger.trace(
-                                (org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage(
-                                    "received an error from node [{}] for request [{}], scheduling a retry",
-                                    node.getId(),
-                                    request),
-                                exp);
+                            logger.trace("received an error from node [{}] for request [{}], scheduling a retry", exp, node.getId(),
+                                request);
                             retry(exp);
                         } else {
                             finishAsFailed(exp);
@@ -722,7 +711,6 @@ public abstract class TransportReplicationAction<
                 return;
             }
             setPhase(task, "waiting_for_retry");
-            request.onRetry();
             final ThreadContext.StoredContext context = threadPool.getThreadContext().newStoredContext();
             observer.waitForNextChange(new ClusterStateObserver.Listener() {
                 @Override
@@ -748,9 +736,7 @@ public abstract class TransportReplicationAction<
         void finishAsFailed(Exception failure) {
             if (finished.compareAndSet(false, true)) {
                 setPhase(task, "failed");
-                logger.trace(
-                    (org.apache.logging.log4j.util.Supplier<?>)
-                        () -> new ParameterizedMessage("operation failed. action [{}], request [{}]", actionName, request), failure);
+                logger.trace("operation failed. action [{}], request [{}]", failure, actionName, request);
                 listener.onFailure(failure);
             } else {
                 assert false : "finishAsFailed called but operation is already finished";
@@ -758,13 +744,7 @@ public abstract class TransportReplicationAction<
         }
 
         void finishWithUnexpectedFailure(Exception failure) {
-            logger.warn(
-                (org.apache.logging.log4j.util.Supplier<?>)
-                    () -> new ParameterizedMessage(
-                        "unexpected error during the primary phase for action [{}], request [{}]",
-                        actionName,
-                        request),
-                failure);
+            logger.warn("unexpected error during the primary phase for action [{}], request [{}]", failure, actionName, request);
             if (finished.compareAndSet(false, true)) {
                 setPhase(task, "failed");
                 listener.onFailure(failure);
@@ -893,40 +873,30 @@ public abstract class TransportReplicationAction<
         }
 
         @Override
-        public void failShard(ShardRouting replica, long primaryTerm, String message, Exception exception,
-                              Runnable onSuccess, Consumer<Exception> onPrimaryDemoted, Consumer<Exception> onIgnoredFailure) {
-            shardStateAction.remoteShardFailed(replica.shardId(), replica.allocationId().getId(), primaryTerm, message, exception,
-                createListener(onSuccess, onPrimaryDemoted, onIgnoredFailure));
-        }
+        public void failShard(ShardRouting replica, ShardRouting primary, String message, Exception exception,
+                              Runnable onSuccess, Consumer<Exception> onFailure, Consumer<Exception> onIgnoredFailure) {
+            shardStateAction.shardFailed(
+                replica, primary, message, exception,
+                new ShardStateAction.Listener() {
+                    @Override
+                    public void onSuccess() {
+                        onSuccess.run();
+                    }
 
-        @Override
-        public void markShardCopyAsStale(ShardId shardId, String allocationId, long primaryTerm, Runnable onSuccess,
-                                         Consumer<Exception> onPrimaryDemoted, Consumer<Exception> onIgnoredFailure) {
-            shardStateAction.remoteShardFailed(shardId, allocationId, primaryTerm, "mark copy as stale", null,
-                createListener(onSuccess, onPrimaryDemoted, onIgnoredFailure));
-        }
-
-        private ShardStateAction.Listener createListener(final Runnable onSuccess, final Consumer<Exception> onPrimaryDemoted,
-                                                         final Consumer<Exception> onIgnoredFailure) {
-            return new ShardStateAction.Listener() {
-                @Override
-                public void onSuccess() {
-                    onSuccess.run();
-                }
-
-                @Override
-                public void onFailure(Exception shardFailedError) {
-                    if (shardFailedError instanceof ShardStateAction.NoLongerPrimaryShardException) {
-                        onPrimaryDemoted.accept(shardFailedError);
-                    } else {
-                        // these can occur if the node is shutting down and are okay
-                        // any other exception here is not expected and merits investigation
-                        assert shardFailedError instanceof TransportException ||
-                            shardFailedError instanceof NodeClosedException : shardFailedError;
-                        onIgnoredFailure.accept(shardFailedError);
+                    @Override
+                    public void onFailure(Exception shardFailedError) {
+                        if (shardFailedError instanceof ShardStateAction.NoLongerPrimaryShardException) {
+                            onFailure.accept(shardFailedError);
+                        } else {
+                            // these can occur if the node is shutting down and are okay
+                            // any other exception here is not expected and merits investigation
+                            assert shardFailedError instanceof TransportException ||
+                                shardFailedError instanceof NodeClosedException : shardFailedError;
+                            onIgnoredFailure.accept(shardFailedError);
+                        }
                     }
                 }
-            };
+            );
         }
     }
 

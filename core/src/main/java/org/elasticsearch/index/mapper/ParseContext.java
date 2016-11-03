@@ -30,6 +30,7 @@ import org.elasticsearch.common.lucene.all.AllEntries;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.analysis.AnalysisService;
+import org.elasticsearch.index.mapper.object.RootObjectMapper;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -423,22 +424,6 @@ public abstract class ParseContext {
 
     public abstract DocumentMapperParser docMapperParser();
 
-    /** Return a view of this {@link ParseContext} that changes the return
-     *  value of {@link #getIncludeInAllDefault()}. */
-    public final ParseContext setIncludeInAllDefault(boolean includeInAll) {
-        return new FilterParseContext(this) {
-            @Override
-            public Boolean getIncludeInAllDefault() {
-                return includeInAll;
-            }
-        };
-    }
-
-    /** Whether field values should be added to the _all field by default. */
-    public Boolean getIncludeInAllDefault() {
-        return null;
-    }
-
     /**
      * Return a new context that will be within a copy-to operation.
      */
@@ -538,11 +523,11 @@ public abstract class ParseContext {
     }
 
     /**
-     * Is all included or not. Will always disable it if {@link org.elasticsearch.index.mapper.AllFieldMapper#enabled()}
+     * Is all included or not. Will always disable it if {@link org.elasticsearch.index.mapper.internal.AllFieldMapper#enabled()}
      * is <tt>false</tt>. If its enabled, then will return <tt>true</tt> only if the specific flag is <tt>null</tt> or
      * its actual value (so, if not set, defaults to "true") and the field is indexed.
      */
-    private boolean includeInAll(Boolean includeInAll, boolean indexed) {
+    private boolean includeInAll(Boolean specificIncludeInAll, boolean indexed) {
         if (isWithinCopyTo()) {
             return false;
         }
@@ -552,14 +537,11 @@ public abstract class ParseContext {
         if (!docMapper().allFieldMapper().enabled()) {
             return false;
         }
-        if (includeInAll == null) {
-            includeInAll = getIncludeInAllDefault();
-        }
         // not explicitly set
-        if (includeInAll == null) {
+        if (specificIncludeInAll == null) {
             return indexed;
         }
-        return includeInAll;
+        return specificIncludeInAll;
     }
 
     public abstract AllEntries allEntries();

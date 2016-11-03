@@ -108,11 +108,7 @@ public class ReindexFailureTests extends ReindexTestCase {
                 attempt++;
             } catch (ExecutionException e) {
                 logger.info("Triggered a reindex failure on the {} attempt", attempt);
-                assertThat(e.getMessage(),
-                        either(containsString("all shards failed"))
-                        .or(containsString("No search context found"))
-                        .or(containsString("no such index"))
-                        );
+                assertThat(e.getMessage(), either(containsString("all shards failed")).or(containsString("No search context found")));
                 return;
             }
         }

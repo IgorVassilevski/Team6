@@ -29,7 +29,7 @@ import com.carrotsearch.randomizedtesting.generators.RandomInts;
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 import com.carrotsearch.randomizedtesting.generators.RandomStrings;
 import com.carrotsearch.randomizedtesting.rules.TestRuleAdapter;
-import org.apache.logging.log4j.Logger;
+
 import org.apache.lucene.uninverting.UninvertingReader;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
@@ -43,6 +43,8 @@ import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.PathUtils;
 import org.elasticsearch.common.io.PathUtilsForTesting;
+import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.MockBigArrays;
@@ -61,8 +63,8 @@ import org.elasticsearch.index.mapper.MetadataFieldMapper;
 import org.elasticsearch.indices.IndicesModule;
 import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.indices.analysis.AnalysisModule;
-import org.elasticsearch.plugins.AnalysisPlugin;
 import org.elasticsearch.plugins.MapperPlugin;
+import org.elasticsearch.plugins.AnalysisPlugin;
 import org.elasticsearch.script.MockScriptEngine;
 import org.elasticsearch.script.ScriptModule;
 import org.elasticsearch.script.ScriptService;
@@ -128,16 +130,10 @@ import static org.hamcrest.Matchers.equalTo;
 public abstract class ESTestCase extends LuceneTestCase {
 
     static {
-        System.setProperty("log4j.shutdownHookEnabled", "false");
-        // we can not shutdown logging when tests are running or the next test that runs within the
-        // same JVM will try to initialize logging after a security manager has been installed and
-        // this will fail
-        System.setProperty("es.log4j.shutdownEnabled", "false");
-        System.setProperty("log4j2.disable.jmx", "true");
         BootstrapForTesting.ensureInitialized();
     }
 
-    protected final Logger logger = Loggers.getLogger(getClass());
+    protected final ESLogger logger = Loggers.getLogger(getClass());
 
     // -----------------------------------------------------------------
     // Suite and test case setup/cleanup.
@@ -839,14 +835,13 @@ public abstract class ESTestCase extends LuceneTestCase {
                 .put(ScriptService.SCRIPT_AUTO_RELOAD_ENABLED_SETTING.getKey(), false)
                 .build();
         Environment environment = new Environment(settings);
-        MockScriptEngine scriptEngine = new MockScriptEngine(MockScriptEngine.NAME, Collections.singletonMap("1", script -> "1"));
-        return new ScriptModule(settings, environment, null, singletonList(scriptEngine), emptyList());
+        return new ScriptModule(settings, environment, null, singletonList(new MockScriptEngine()), emptyList());
     }
 
     /** Creates an IndicesModule for testing with the given mappers and metadata mappers. */
     public static IndicesModule newTestIndicesModule(Map<String, Mapper.TypeParser> extraMappers,
                                                      Map<String, MetadataFieldMapper.TypeParser> extraMetadataMappers) {
-        return new IndicesModule(Collections.singletonList(
+        return new IndicesModule(new NamedWriteableRegistry(), Collections.singletonList(
             new MapperPlugin() {
                 @Override
                 public Map<String, Mapper.TypeParser> getMappers() {

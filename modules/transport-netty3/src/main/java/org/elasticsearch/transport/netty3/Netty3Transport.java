@@ -19,8 +19,6 @@
 
 package org.elasticsearch.transport.netty3;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.Booleans;
@@ -95,36 +93,31 @@ public class Netty3Transport extends TcpTransport<Channel> {
     public static final Setting<Integer> WORKER_COUNT =
         new Setting<>("transport.netty.worker_count",
             (s) -> Integer.toString(EsExecutors.boundedNumberOfProcessors(s) * 2),
-            (s) -> Setting.parseInt(s, 1, "transport.netty.worker_count"), Property.NodeScope, Property.Shared);
+            (s) -> Setting.parseInt(s, 1, "transport.netty.worker_count"), Property.NodeScope);
 
     public static final Setting<ByteSizeValue> NETTY_MAX_CUMULATION_BUFFER_CAPACITY =
-        Setting.byteSizeSetting(
-                "transport.netty.max_cumulation_buffer_capacity",
-                new ByteSizeValue(-1),
-                Property.NodeScope,
-                Property.Shared);
+        Setting.byteSizeSetting("transport.netty.max_cumulation_buffer_capacity", new ByteSizeValue(-1), Property.NodeScope);
     public static final Setting<Integer> NETTY_MAX_COMPOSITE_BUFFER_COMPONENTS =
-        Setting.intSetting("transport.netty.max_composite_buffer_components", -1, -1, Property.NodeScope, Property.Shared);
+        Setting.intSetting("transport.netty.max_composite_buffer_components", -1, -1, Property.NodeScope);
 
     // See AdaptiveReceiveBufferSizePredictor#DEFAULT_XXX for default values in netty..., we can use higher ones for us, even fixed one
     public static final Setting<ByteSizeValue> NETTY_RECEIVE_PREDICTOR_SIZE = Setting.byteSizeSetting(
-            "transport.netty.receive_predictor_size",
-            settings -> {
-                long defaultReceiverPredictor = 512 * 1024;
-                if (JvmInfo.jvmInfo().getMem().getDirectMemoryMax().bytes() > 0) {
-                    // we can guess a better default...
-                    long l = (long) ((0.3 * JvmInfo.jvmInfo().getMem().getDirectMemoryMax().bytes()) / WORKER_COUNT.get(settings));
-                    defaultReceiverPredictor = Math.min(defaultReceiverPredictor, Math.max(l, 64 * 1024));
-                }
-                return new ByteSizeValue(defaultReceiverPredictor).toString();
-            }, Property.NodeScope,
-            Property.Shared);
+        "transport.netty.receive_predictor_size",
+        settings -> {
+            long defaultReceiverPredictor = 512 * 1024;
+            if (JvmInfo.jvmInfo().getMem().getDirectMemoryMax().bytes() > 0) {
+                // we can guess a better default...
+                long l = (long) ((0.3 * JvmInfo.jvmInfo().getMem().getDirectMemoryMax().bytes()) / WORKER_COUNT.get(settings));
+                defaultReceiverPredictor = Math.min(defaultReceiverPredictor, Math.max(l, 64 * 1024));
+            }
+            return new ByteSizeValue(defaultReceiverPredictor).toString();
+        }, Property.NodeScope);
     public static final Setting<ByteSizeValue> NETTY_RECEIVE_PREDICTOR_MIN =
-        byteSizeSetting("transport.netty.receive_predictor_min", NETTY_RECEIVE_PREDICTOR_SIZE, Property.NodeScope, Property.Shared);
+        byteSizeSetting("transport.netty.receive_predictor_min", NETTY_RECEIVE_PREDICTOR_SIZE, Property.NodeScope);
     public static final Setting<ByteSizeValue> NETTY_RECEIVE_PREDICTOR_MAX =
-        byteSizeSetting("transport.netty.receive_predictor_max", NETTY_RECEIVE_PREDICTOR_SIZE, Property.NodeScope, Property.Shared);
+        byteSizeSetting("transport.netty.receive_predictor_max", NETTY_RECEIVE_PREDICTOR_SIZE, Property.NodeScope);
     public static final Setting<Integer> NETTY_BOSS_COUNT =
-        intSetting("transport.netty.boss_count", 1, 1, Property.NodeScope, Property.Shared);
+        intSetting("transport.netty.boss_count", 1, 1, Property.NodeScope);
 
 
     protected final ByteSizeValue maxCumulationBufferCapacity;
@@ -286,8 +279,8 @@ public class Netty3Transport extends TcpTransport<Channel> {
                 receivePredictorMax);
         }
 
-        final ThreadFactory bossFactory = daemonThreadFactory(this.settings, TRANSPORT_SERVER_BOSS_THREAD_NAME_PREFIX, name);
-        final ThreadFactory workerFactory = daemonThreadFactory(this.settings, TRANSPORT_SERVER_WORKER_THREAD_NAME_PREFIX, name);
+        final ThreadFactory bossFactory = daemonThreadFactory(this.settings, HTTP_SERVER_BOSS_THREAD_NAME_PREFIX, name);
+        final ThreadFactory workerFactory = daemonThreadFactory(this.settings, HTTP_SERVER_WORKER_THREAD_NAME_PREFIX, name);
         final ServerBootstrap serverBootstrap;
         if (blockingServer) {
             serverBootstrap = new ServerBootstrap(new OioServerSocketChannelFactory(
@@ -554,7 +547,7 @@ public class Netty3Transport extends TcpTransport<Channel> {
                 try {
                     serverBootstrap.releaseExternalResources();
                 } catch (Exception e) {
-                    logger.debug((Supplier<?>) () -> new ParameterizedMessage("Error closing serverBootstrap for profile [{}]", name), e);
+                    logger.debug("Error closing serverBootstrap for profile [{}]", e, name);
                 }
             }
             serverBootstraps.clear();
@@ -564,5 +557,4 @@ public class Netty3Transport extends TcpTransport<Channel> {
             }
         });
     }
-
 }

@@ -31,9 +31,9 @@ import org.elasticsearch.index.query.QueryParseContext;
 import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.aggregations.AggregatorFactory;
 import org.elasticsearch.search.aggregations.PipelineAggregationBuilder;
+import org.elasticsearch.search.aggregations.bucket.histogram.AbstractHistogramAggregatorFactory;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregatorFactory;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval;
-import org.elasticsearch.search.aggregations.bucket.histogram.HistogramAggregatorFactory;
 import org.elasticsearch.search.aggregations.pipeline.AbstractPipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketHelpers.GapPolicy;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
@@ -47,6 +47,7 @@ import java.util.Objects;
 
 public class DerivativePipelineAggregationBuilder extends AbstractPipelineAggregationBuilder<DerivativePipelineAggregationBuilder> {
     public static final String NAME = "derivative";
+    public static final ParseField AGGREGATION_NAME_FIELD = new ParseField(NAME);
 
     private static final ParseField FORMAT_FIELD = new ParseField("format");
     private static final ParseField GAP_POLICY_FIELD = new ParseField("gap_policy");
@@ -161,21 +162,15 @@ public class DerivativePipelineAggregationBuilder extends AbstractPipelineAggreg
             throw new IllegalStateException(PipelineAggregator.Parser.BUCKETS_PATH.getPreferredName()
                     + " must contain a single entry for aggregation [" + name + "]");
         }
-        if (parent instanceof HistogramAggregatorFactory) {
-            HistogramAggregatorFactory histoParent = (HistogramAggregatorFactory) parent;
-            if (histoParent.minDocCount() != 0) {
-                throw new IllegalStateException("parent histogram of derivative aggregation [" + name
-                        + "] must have min_doc_count of 0");
-            }
-        } else if (parent instanceof DateHistogramAggregatorFactory) {
-            DateHistogramAggregatorFactory histoParent = (DateHistogramAggregatorFactory) parent;
-            if (histoParent.minDocCount() != 0) {
-                throw new IllegalStateException("parent histogram of derivative aggregation [" + name
-                        + "] must have min_doc_count of 0");
-            }
-        } else {
+        if (!(parent instanceof AbstractHistogramAggregatorFactory<?>)) {
             throw new IllegalStateException("derivative aggregation [" + name
                     + "] must have a histogram or date_histogram as parent");
+        } else {
+            AbstractHistogramAggregatorFactory<?> histoParent = (AbstractHistogramAggregatorFactory<?>) parent;
+            if (histoParent.minDocCount() != 0) {
+                throw new IllegalStateException("parent histogram of derivative aggregation [" + name
+                        + "] must have min_doc_count of 0");
+            }
         }
     }
 

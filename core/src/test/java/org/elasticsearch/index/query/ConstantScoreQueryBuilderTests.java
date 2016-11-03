@@ -61,8 +61,12 @@ public class ConstantScoreQueryBuilderTests extends AbstractQueryTestCase<Consta
      */
     public void testFilterElement() throws IOException {
         String queryString = "{ \"" + ConstantScoreQueryBuilder.NAME + "\" : {} }";
-        ParsingException e = expectThrows(ParsingException.class, () -> parseQuery(queryString));
-        assertThat(e.getMessage(), containsString("requires a 'filter' element"));
+        try {
+            parseQuery(queryString);
+            fail("Expected ParsingException");
+        } catch (ParsingException e) {
+            assertThat(e.getMessage(), containsString("requires a 'filter' element"));
+        }
     }
 
     /**
@@ -73,8 +77,12 @@ public class ConstantScoreQueryBuilderTests extends AbstractQueryTestCase<Consta
                                     "\"filter\" : { \"term\": { \"foo\": \"a\" } },\n" +
                                     "\"filter\" : { \"term\": { \"foo\": \"x\" } },\n" +
                             "} }";
-        ParsingException e = expectThrows(ParsingException.class, () -> parseQuery(queryString));
-        assertThat(e.getMessage(), containsString("accepts only one 'filter' element"));
+        try {
+            parseQuery(queryString);
+            fail("Expected ParsingException");
+        } catch (ParsingException e) {
+            assertThat(e.getMessage(), containsString("accepts only one 'filter' element"));
+        }
     }
 
     /**
@@ -85,8 +93,12 @@ public class ConstantScoreQueryBuilderTests extends AbstractQueryTestCase<Consta
                                     "\"filter\" : [ { \"term\": { \"foo\": \"a\" } },\n" +
                                                    "{ \"term\": { \"foo\": \"x\" } } ]\n" +
                             "} }";
-        ParsingException e = expectThrows(ParsingException.class, () -> parseQuery(queryString));
-        assertThat(e.getMessage(), containsString("unexpected token [START_ARRAY]"));
+        try {
+            parseQuery(queryString);
+            fail("Expected ParsingException");
+        } catch (ParsingException e) {
+            assertThat(e.getMessage(), containsString("unexpected token [START_ARRAY]"));
+        }
     }
 
     public void testIllegalArguments() {

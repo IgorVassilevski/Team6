@@ -19,7 +19,6 @@
 
 package org.elasticsearch.indices.recovery;
 
-import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.index.IndexResponse;
@@ -28,13 +27,10 @@ import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.allocation.command.MoveAllocationCommand;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.hamcrest.ElasticsearchAssertions;
 import org.elasticsearch.test.junit.annotations.TestLogging;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.Matchers.equalTo;
 
@@ -52,18 +48,16 @@ public class IndexPrimaryRelocationIT extends ESIntegTestCase {
             .addMapping("type", "field", "type=text")
             .get();
         ensureGreen("test");
-        AtomicInteger numAutoGenDocs = new AtomicInteger();
+
         final AtomicBoolean finished = new AtomicBoolean(false);
         Thread indexingThread = new Thread() {
             @Override
             public void run() {
                 while (finished.get() == false) {
                     IndexResponse indexResponse = client().prepareIndex("test", "type", "id").setSource("field", "value").get();
-                    assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+                    assertThat("deleted document was found", indexResponse.isCreated(), equalTo(true));
                     DeleteResponse deleteResponse = client().prepareDelete("test", "type", "id").get();
-                    assertEquals(DocWriteResponse.Result.DELETED, deleteResponse.getResult());
-                    client().prepareIndex("test", "type").setSource("auto", true).get();
-                    numAutoGenDocs.incrementAndGet();
+                    assertThat("indexed document was not found", deleteResponse.isFound(), equalTo(true));
                 }
             }
         };
@@ -81,7 +75,7 @@ public class IndexPrimaryRelocationIT extends ESIntegTestCase {
             client().admin().cluster().prepareReroute()
                 .add(new MoveAllocationCommand("test", 0, relocationSource.getId(), relocationTarget.getId()))
                 .execute().actionGet();
-            ClusterHealthResponse clusterHealthResponse = client().admin().cluster().prepareHealth().setWaitForEvents(Priority.LANGUID).setWaitForNoRelocatingShards(true).execute().actionGet();
+            ClusterHealthResponse clusterHealthResponse = client().admin().cluster().prepareHealth().setWaitForEvents(Priority.LANGUID).setWaitForRelocatingShards(0).execute().actionGet();
             assertThat(clusterHealthResponse.isTimedOut(), equalTo(false));
             logger.info("--> [iteration {}] relocation complete", i);
             relocationSource = relocationTarget;
@@ -92,9 +86,5 @@ public class IndexPrimaryRelocationIT extends ESIntegTestCase {
         }
         finished.set(true);
         indexingThread.join();
-        refresh("test");
-        ElasticsearchAssertions.assertHitCount(client().prepareSearch("test").get(), numAutoGenDocs.get());
-        ElasticsearchAssertions.assertHitCount(client().prepareSearch("test")// extra paranoia ;)
-            .setQuery(QueryBuilders.termQuery("auto", true)).get(), numAutoGenDocs.get());
     }
 }

@@ -19,12 +19,12 @@
 
 package org.elasticsearch.cluster.routing.allocation.decider;
 
-import org.elasticsearch.cluster.routing.RecoverySource;
-import org.elasticsearch.cluster.routing.RecoverySource.SnapshotRecoverySource;
+import org.elasticsearch.cluster.routing.RestoreSource;
 import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.RoutingNodes;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 
 /**
@@ -38,6 +38,7 @@ public class NodeVersionAllocationDecider extends AllocationDecider {
 
     public static final String NAME = "node_version";
 
+    @Inject
     public NodeVersionAllocationDecider(Settings settings) {
         super(settings);
     }
@@ -46,12 +47,12 @@ public class NodeVersionAllocationDecider extends AllocationDecider {
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
         if (shardRouting.primary()) {
             if (shardRouting.currentNodeId() == null) {
-                if (shardRouting.recoverySource() != null && shardRouting.recoverySource().getType() == RecoverySource.Type.SNAPSHOT) {
+                if (shardRouting.restoreSource() != null) {
                     // restoring from a snapshot - check that the node can handle the version
-                    return isVersionCompatible((SnapshotRecoverySource)shardRouting.recoverySource(), node, allocation);
+                    return isVersionCompatible(shardRouting.restoreSource(), node, allocation);
                 } else {
-                    // existing or fresh primary on the node
-                    return allocation.decision(Decision.YES, NAME, "the primary shard is new or already existed on the node");
+                    // fresh primary, we can allocate wherever
+                    return allocation.decision(Decision.YES, NAME, "the primary shard is new and can be allocated anywhere");
                 }
             } else {
                 // relocating primary, only migrate to newer host
@@ -84,14 +85,14 @@ public class NodeVersionAllocationDecider extends AllocationDecider {
         }
     }
 
-    private Decision isVersionCompatible(SnapshotRecoverySource recoverySource, final RoutingNode target, RoutingAllocation allocation) {
-        if (target.node().getVersion().onOrAfter(recoverySource.version())) {
+    private Decision isVersionCompatible(RestoreSource restoreSource, final RoutingNode target, RoutingAllocation allocation) {
+        if (target.node().getVersion().onOrAfter(restoreSource.version())) {
             /* we can allocate if we can restore from a snapshot that is older or on the same version */
             return allocation.decision(Decision.YES, NAME, "target node version [%s] is the same or newer than snapshot version [%s]",
-                target.node().getVersion(), recoverySource.version());
+                target.node().getVersion(), restoreSource.version());
         } else {
             return allocation.decision(Decision.NO, NAME, "target node version [%s] is older than the snapshot version [%s]",
-                target.node().getVersion(), recoverySource.version());
+                target.node().getVersion(), restoreSource.version());
         }
     }
 }

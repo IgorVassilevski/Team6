@@ -237,8 +237,7 @@ public class MultiMatchQueryIT extends ESIntegTestCase {
         assertNoFailures(searchResponse);
         assertFirstHit(searchResponse, hasId("theone"));
 
-        String[] fields = { "full_name", "first_name", "last_name", "last_name_phrase", "first_name_phrase", "category_phrase", "category",
-                "missing_field", "missing_fields*" };
+        String[] fields = {"full_name", "first_name", "last_name", "last_name_phrase", "first_name_phrase", "category_phrase", "category"};
 
         String[] query = {"marvel","hero", "captain",  "america", "15", "17", "1", "5", "ultimate", "Man",
                 "marvel", "wolferine", "ninja"};
@@ -270,9 +269,6 @@ public class MultiMatchQueryIT extends ESIntegTestCase {
                     .setQuery(matchQueryBuilder).get();
             assertThat("field: " + field + " query: " + builder.toString(), multiMatchResp.getHits().getTotalHits(), equalTo(matchResp.getHits().getTotalHits()));
             SearchHits hits = multiMatchResp.getHits();
-            if (field.startsWith("missing")) {
-                assertEquals(0, hits.hits().length);
-            }
             for (int j = 0; j < hits.hits().length; j++) {
                 assertThat(hits.getHits()[j].score(), equalTo(matchResp.getHits().getHits()[j].score()));
                 assertThat(hits.getHits()[j].getId(), equalTo(matchResp.getHits().getHits()[j].getId()));

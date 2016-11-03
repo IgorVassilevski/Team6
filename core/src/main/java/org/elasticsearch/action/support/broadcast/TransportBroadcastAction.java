@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.support.broadcast;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.NoShardAvailableActionException;
 import org.elasticsearch.action.support.ActionFilters;
@@ -38,10 +37,10 @@ import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.TransportChannel;
 import org.elasticsearch.transport.TransportException;
 import org.elasticsearch.transport.TransportRequestHandler;
-import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.TransportService;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -225,13 +224,7 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
                 if (e != null) {
                     if (logger.isTraceEnabled()) {
                         if (!TransportActions.isShardNotAvailableException(e)) {
-                            logger.trace(
-                                (org.apache.logging.log4j.util.Supplier<?>)
-                                    () -> new ParameterizedMessage(
-                                        "{}: failed to execute [{}]",
-                                        shard != null ? shard.shortSummary() : shardIt.shardId(),
-                                        request),
-                                e);
+                            logger.trace("{}: failed to execute [{}]", e, shard != null ? shard.shortSummary() : shardIt.shardId(), request);
                         }
                     }
                 }
@@ -240,13 +233,7 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
                 if (logger.isDebugEnabled()) {
                     if (e != null) {
                         if (!TransportActions.isShardNotAvailableException(e)) {
-                            logger.debug(
-                                (org.apache.logging.log4j.util.Supplier<?>)
-                                    () -> new ParameterizedMessage(
-                                        "{}: failed to execute [{}]",
-                                        shard != null ? shard.shortSummary() : shardIt.shardId(),
-                                        request),
-                                e);
+                            logger.debug("{}: failed to execute [{}]", e, shard != null ? shard.shortSummary() : shardIt.shardId(), request);
                         }
                     }
                 }

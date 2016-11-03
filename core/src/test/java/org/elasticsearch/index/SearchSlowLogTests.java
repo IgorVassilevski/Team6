@@ -41,6 +41,7 @@ import java.io.IOException;
 
 import static org.hamcrest.Matchers.startsWith;
 
+
 public class SearchSlowLogTests extends ESSingleNodeTestCase {
     @Override
     protected SearchContext createSearchContext(IndexService indexService) {
@@ -53,7 +54,7 @@ public class SearchSlowLogTests extends ESSingleNodeTestCase {
                 return new ShardSearchRequest() {
                     @Override
                     public ShardId shardId() {
-                        return new ShardId(indexService.index(), 0);
+                        return null;
                     }
 
                     @Override
@@ -128,8 +129,8 @@ public class SearchSlowLogTests extends ESSingleNodeTestCase {
         IndexService index = createIndex("foo");
         // Turning off document logging doesn't log source[]
         SearchContext searchContext = createSearchContext(index);
-        SearchSlowLog.SlowLogSearchContextPrinter p = new SearchSlowLog.SlowLogSearchContextPrinter(searchContext, 10, true);
-        assertThat(p.toString(), startsWith("[foo][0]"));
+        SearchSlowLog.SlowLogSearchContextPrinter p = new SearchSlowLog.SlowLogSearchContextPrinter(index.index(), searchContext, 10, true);
+        assertThat(p.toString(), startsWith(index.index().toString()));
     }
 
     public void testReformatSetting() {

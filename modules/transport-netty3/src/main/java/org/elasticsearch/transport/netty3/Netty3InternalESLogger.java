@@ -19,8 +19,8 @@
 
 package org.elasticsearch.transport.netty3;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.SuppressLoggerChecks;
+import org.elasticsearch.common.logging.ESLogger;
 import org.jboss.netty.logging.AbstractInternalLogger;
 
 /**
@@ -29,9 +29,9 @@ import org.jboss.netty.logging.AbstractInternalLogger;
 @SuppressLoggerChecks(reason = "safely delegates to logger")
 final class Netty3InternalESLogger extends AbstractInternalLogger {
 
-    private final Logger logger;
+    private final ESLogger logger;
 
-    Netty3InternalESLogger(Logger logger) {
+    Netty3InternalESLogger(ESLogger logger) {
         this.logger = logger;
     }
 

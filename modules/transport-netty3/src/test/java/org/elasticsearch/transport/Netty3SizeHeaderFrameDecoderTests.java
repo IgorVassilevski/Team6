@@ -38,7 +38,6 @@ import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 
 import static org.hamcrest.Matchers.is;
 
@@ -62,10 +61,10 @@ public class Netty3SizeHeaderFrameDecoderTests extends ESTestCase {
     @Before
     public void startThreadPool() {
         threadPool = new ThreadPool(settings);
-        NetworkService networkService = new NetworkService(settings, Collections.emptyList());
+        NetworkService networkService = new NetworkService(settings);
         BigArrays bigArrays = new MockBigArrays(Settings.EMPTY, new NoneCircuitBreakerService());
-        nettyTransport = new Netty3Transport(settings, threadPool, networkService, bigArrays,
-            new NamedWriteableRegistry(Collections.emptyList()), new NoneCircuitBreakerService());
+        nettyTransport = new Netty3Transport(settings, threadPool, networkService, bigArrays, new NamedWriteableRegistry(),
+            new NoneCircuitBreakerService());
         nettyTransport.start();
         TransportService transportService = new TransportService(settings, nettyTransport, threadPool);
         nettyTransport.transportServiceAdapter(transportService.createAdapter());

@@ -120,7 +120,7 @@ public class ZenDiscoveryIT extends ESIntegTestCase {
         ClusterHealthResponse clusterHealthResponse = client().admin().cluster().prepareHealth()
                 .setWaitForEvents(Priority.LANGUID)
                 .setWaitForNodes("4")
-                .setWaitForNoRelocatingShards(true)
+                .setWaitForRelocatingShards(0)
                 .get();
         assertThat(clusterHealthResponse.isTimedOut(), is(false));
 
@@ -210,7 +210,7 @@ public class ZenDiscoveryIT extends ESIntegTestCase {
         assert node != null;
 
         DiscoveryNodes.Builder nodes = DiscoveryNodes.builder(state.nodes())
-                .add(new DiscoveryNode("abc", new LocalTransportAddress("abc"), emptyMap(),
+                .put(new DiscoveryNode("abc", new LocalTransportAddress("abc"), emptyMap(),
                         emptySet(), Version.CURRENT)).masterNodeId("abc");
         ClusterState.Builder builder = ClusterState.builder(state);
         builder.nodes(nodes);

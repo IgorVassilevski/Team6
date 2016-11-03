@@ -53,9 +53,8 @@ public class SortBuilderTests extends ESTestCase {
 
     @BeforeClass
     public static void init() {
-        SearchModule searchModule = new SearchModule(Settings.EMPTY, false, emptyList());
-        namedWriteableRegistry = new NamedWriteableRegistry(searchModule.getNamedWriteables());
-        indicesQueriesRegistry = searchModule.getQueryParserRegistry();
+        namedWriteableRegistry = new NamedWriteableRegistry();
+        indicesQueriesRegistry = new SearchModule(Settings.EMPTY, namedWriteableRegistry, false, emptyList()).getQueryParserRegistry();
     }
 
     @AfterClass

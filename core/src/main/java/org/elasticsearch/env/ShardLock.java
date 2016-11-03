@@ -49,7 +49,7 @@ public abstract class ShardLock implements Closeable {
     }
 
     @Override
-    public final void close() {
+    public final void close() throws IOException {
         if (this.closed.compareAndSet(false, true)) {
            closeInternal();
         }

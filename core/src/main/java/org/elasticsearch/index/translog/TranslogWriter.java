@@ -76,14 +76,8 @@ public class TranslogWriter extends BaseTranslogReader implements Closeable {
         return getHeaderLength(new BytesRef(translogUUID).length);
     }
 
-    static int getHeaderLength(int uuidLength) {
+    private static int getHeaderLength(int uuidLength) {
         return CodecUtil.headerLength(TRANSLOG_CODEC) + uuidLength + Integer.BYTES;
-    }
-
-    static void writeHeader(OutputStreamDataOutput out, BytesRef ref) throws IOException {
-        CodecUtil.writeHeader(out, TRANSLOG_CODEC, VERSION);
-        out.writeInt(ref.length);
-        out.writeBytes(ref.bytes, ref.offset, ref.length);
     }
 
     public static TranslogWriter create(ShardId shardId, String translogUUID, long fileGeneration, Path file, ChannelFactory channelFactory, ByteSizeValue bufferSize) throws IOException {
@@ -94,7 +88,9 @@ public class TranslogWriter extends BaseTranslogReader implements Closeable {
             // This OutputStreamDataOutput is intentionally not closed because
             // closing it will close the FileChannel
             final OutputStreamDataOutput out = new OutputStreamDataOutput(java.nio.channels.Channels.newOutputStream(channel));
-            writeHeader(out, ref);
+            CodecUtil.writeHeader(out, TRANSLOG_CODEC, VERSION);
+            out.writeInt(ref.length);
+            out.writeBytes(ref.bytes, ref.offset, ref.length);
             channel.force(true);
             writeCheckpoint(channelFactory, headerLength, 0, file.getParent(), fileGeneration);
             final TranslogWriter writer = new TranslogWriter(channelFactory, shardId, fileGeneration, channel, file, bufferSize);

@@ -32,7 +32,6 @@ import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.InternalSettingsPlugin;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Locale;
 
@@ -53,7 +52,7 @@ public class SimpleTimestampIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(InternalSettingsPlugin.class);
+        return pluginList(InternalSettingsPlugin.class);
     }
 
     public void testSimpleTimestamp() throws Exception {
@@ -68,13 +67,22 @@ public class SimpleTimestampIT extends ESIntegTestCase {
         client().prepareIndex("test", "type1", "1").setSource("field1", "value1").setRefreshPolicy(IMMEDIATE).get();
         long now2 = System.currentTimeMillis();
 
-        // non realtime get (stored)
-        GetResponse getResponse = client().prepareGet("test", "type1", "1").setFields("_timestamp").setRealtime(randomBoolean()).execute().actionGet();
+        // we check both realtime get and non realtime get
+        GetResponse getResponse = client().prepareGet("test", "type1", "1").setFields("_timestamp").setRealtime(true).execute().actionGet();
         long timestamp = ((Number) getResponse.getField("_timestamp").getValue()).longValue();
         assertThat(timestamp, greaterThanOrEqualTo(now1));
         assertThat(timestamp, lessThanOrEqualTo(now2));
         // verify its the same timestamp when going the replica
-        getResponse = client().prepareGet("test", "type1", "1").setFields("_timestamp").setRealtime(randomBoolean()).execute().actionGet();
+        getResponse = client().prepareGet("test", "type1", "1").setFields("_timestamp").setRealtime(true).execute().actionGet();
+        assertThat(((Number) getResponse.getField("_timestamp").getValue()).longValue(), equalTo(timestamp));
+
+        // non realtime get (stored)
+        getResponse = client().prepareGet("test", "type1", "1").setFields("_timestamp").setRealtime(false).execute().actionGet();
+        timestamp = ((Number) getResponse.getField("_timestamp").getValue()).longValue();
+        assertThat(timestamp, greaterThanOrEqualTo(now1));
+        assertThat(timestamp, lessThanOrEqualTo(now2));
+        // verify its the same timestamp when going the replica
+        getResponse = client().prepareGet("test", "type1", "1").setFields("_timestamp").setRealtime(false).execute().actionGet();
         assertThat(((Number) getResponse.getField("_timestamp").getValue()).longValue(), equalTo(timestamp));
 
         logger.info("--> check with custom timestamp (numeric)");

@@ -19,13 +19,8 @@
 
 package org.elasticsearch.common.xcontent.cbor;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
-
 import org.elasticsearch.common.xcontent.BaseXContentTestCase;
 import org.elasticsearch.common.xcontent.XContentType;
-
-import java.io.ByteArrayOutputStream;
 
 public class CborXContentTests extends BaseXContentTestCase {
 
@@ -34,9 +29,4 @@ public class CborXContentTests extends BaseXContentTestCase {
         return XContentType.CBOR;
     }
 
-    public void testBigInteger() throws Exception {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        JsonGenerator generator = new CBORFactory().createGenerator(os);
-        doTestBigInteger(generator, os);
-    }
 }

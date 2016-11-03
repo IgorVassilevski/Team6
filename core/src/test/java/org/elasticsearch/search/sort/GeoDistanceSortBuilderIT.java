@@ -55,7 +55,7 @@ public class GeoDistanceSortBuilderIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(InternalSettingsPlugin.class);
+        return pluginList(InternalSettingsPlugin.class);
     }
 
     public void testManyToManyGeoPoints() throws ExecutionException, InterruptedException, IOException {

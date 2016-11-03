@@ -28,6 +28,7 @@ import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.network.NetworkModule;
 import org.elasticsearch.common.settings.Settings;
@@ -58,6 +59,7 @@ import java.util.Collections;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
 /**
@@ -175,7 +177,6 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
             .put("node.name", nodeName())
             .put("script.inline", "true")
             .put("script.stored", "true")
-            .put(ScriptService.SCRIPT_MAX_COMPILATIONS_PER_MINUTE.getKey(), 1000)
             .put(EsExecutors.PROCESSORS_SETTING.getKey(), 1) // limit the number of threads created
             .put(NetworkModule.HTTP_ENABLED.getKey(), false)
             .put("discovery.type", "local")
@@ -257,7 +258,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
         // Wait for the index to be allocated so that cluster state updates don't override
         // changes that would have been done locally
         ClusterHealthResponse health = client().admin().cluster()
-                .health(Requests.clusterHealthRequest(index).waitForYellowStatus().waitForEvents(Priority.LANGUID).waitForNoRelocatingShards(true)).actionGet();
+                .health(Requests.clusterHealthRequest(index).waitForYellowStatus().waitForEvents(Priority.LANGUID).waitForRelocatingShards(0)).actionGet();
         assertThat(health.getStatus(), lessThanOrEqualTo(ClusterHealthStatus.YELLOW));
         assertThat("Cluster must be a single node cluster", health.getNumberOfDataNodes(), equalTo(1));
         IndicesService instanceFromNode = getInstanceFromNode(IndicesService.class);
@@ -300,7 +301,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
      */
     public ClusterHealthStatus ensureGreen(TimeValue timeout, String... indices) {
         ClusterHealthResponse actionGet = client().admin().cluster()
-                .health(Requests.clusterHealthRequest(indices).timeout(timeout).waitForGreenStatus().waitForEvents(Priority.LANGUID).waitForNoRelocatingShards(true)).actionGet();
+                .health(Requests.clusterHealthRequest(indices).timeout(timeout).waitForGreenStatus().waitForEvents(Priority.LANGUID).waitForRelocatingShards(0)).actionGet();
         if (actionGet.isTimedOut()) {
             logger.info("ensureGreen timed out, cluster state:\n{}\n{}", client().admin().cluster().prepareState().get().getState().prettyPrint(), client().admin().cluster().preparePendingClusterTasks().get().prettyPrint());
             assertThat("timed out waiting for green state", actionGet.isTimedOut(), equalTo(false));

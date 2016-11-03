@@ -19,9 +19,6 @@
 
 package org.elasticsearch.action.admin.cluster.reroute;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.master.TransportMasterNodeAction;
@@ -36,6 +33,7 @@ import org.elasticsearch.cluster.routing.allocation.RoutingExplanations;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
@@ -79,13 +77,13 @@ public class TransportClusterRerouteAction extends TransportMasterNodeAction<Clu
 
         private final ClusterRerouteRequest request;
         private final ActionListener<ClusterRerouteResponse> listener;
-        private final Logger logger;
+        private final ESLogger logger;
         private final AllocationService allocationService;
         private volatile ClusterState clusterStateToSend;
         private volatile RoutingExplanations explanations;
 
-        ClusterRerouteResponseAckedClusterStateUpdateTask(Logger logger, AllocationService allocationService, ClusterRerouteRequest request,
-                                                          ActionListener<ClusterRerouteResponse> listener) {
+        ClusterRerouteResponseAckedClusterStateUpdateTask(ESLogger logger, AllocationService allocationService, ClusterRerouteRequest request,
+                                                                 ActionListener<ClusterRerouteResponse> listener) {
             super(Priority.IMMEDIATE, request, listener);
             this.request = request;
             this.listener = listener;
@@ -105,7 +103,7 @@ public class TransportClusterRerouteAction extends TransportMasterNodeAction<Clu
 
         @Override
         public void onFailure(String source, Exception e) {
-            logger.debug((Supplier<?>) () -> new ParameterizedMessage("failed to perform [{}]", source), e);
+            logger.debug("failed to perform [{}]", e, source);
             super.onFailure(source, e);
         }
 

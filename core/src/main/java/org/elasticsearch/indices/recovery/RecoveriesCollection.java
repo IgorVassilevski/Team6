@@ -19,11 +19,9 @@
 
 package org.elasticsearch.indices.recovery;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.cluster.node.DiscoveryNode;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.Callback;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
@@ -48,11 +46,11 @@ public class RecoveriesCollection {
     /** This is the single source of truth for ongoing recoveries. If it's not here, it was canceled or done */
     private final ConcurrentMap<Long, RecoveryTarget> onGoingRecoveries = ConcurrentCollections.newConcurrentMap();
 
-    private final Logger logger;
+    private final ESLogger logger;
     private final ThreadPool threadPool;
     private final Callback<Long> ensureClusterStateVersionCallback;
 
-    public RecoveriesCollection(Logger logger, ThreadPool threadPool, Callback<Long> ensureClusterStateVersionCallback) {
+    public RecoveriesCollection(ESLogger logger, ThreadPool threadPool, Callback<Long> ensureClusterStateVersionCallback) {
         this.logger = logger;
         this.threadPool = threadPool;
         this.ensureClusterStateVersionCallback = ensureClusterStateVersionCallback;
@@ -64,7 +62,7 @@ public class RecoveriesCollection {
      * @return the id of the new recovery.
      */
     public long startRecovery(IndexShard indexShard, DiscoveryNode sourceNode,
-                              PeerRecoveryTargetService.RecoveryListener listener, TimeValue activityTimeout) {
+                              RecoveryTargetService.RecoveryListener listener, TimeValue activityTimeout) {
         RecoveryTarget status = new RecoveryTarget(indexShard, sourceNode, listener, ensureClusterStateVersionCallback);
         RecoveryTarget existingStatus = onGoingRecoveries.putIfAbsent(status.recoveryId(), status);
         assert existingStatus == null : "found two RecoveryStatus instances with the same id";
@@ -224,7 +222,7 @@ public class RecoveriesCollection {
 
         @Override
         public void onFailure(Exception e) {
-            logger.error((Supplier<?>) () -> new ParameterizedMessage("unexpected error while monitoring recovery [{}]", recoveryId), e);
+            logger.error("unexpected error while monitoring recovery [{}]", e, recoveryId);
         }
 
         @Override

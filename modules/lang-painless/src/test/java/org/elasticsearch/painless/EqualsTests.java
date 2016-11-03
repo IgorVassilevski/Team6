@@ -23,7 +23,6 @@ package org.elasticsearch.painless;
 public class EqualsTests extends ScriptTestCase {
     public void testTypesEquals() {
         assertEquals(true, exec("return false === false;"));
-        assertEquals(false, exec("boolean x = false; boolean y = true; return x === y;"));
         assertEquals(true, exec("boolean x = false; boolean y = false; return x === y;"));
         assertEquals(false, exec("return (byte)3 === (byte)4;"));
         assertEquals(true, exec("byte x = 3; byte y = 3; return x === y;"));
@@ -41,7 +40,6 @@ public class EqualsTests extends ScriptTestCase {
         assertEquals(true, exec("double x = 3; double y = 3; return x === y;"));
 
         assertEquals(true, exec("return false == false;"));
-        assertEquals(false, exec("boolean x = false; boolean y = true; return x == y;"));
         assertEquals(true, exec("boolean x = false; boolean y = false; return x == y;"));
         assertEquals(false, exec("return (byte)3 == (byte)4;"));
         assertEquals(true, exec("byte x = 3; byte y = 3; return x == y;"));
@@ -61,7 +59,6 @@ public class EqualsTests extends ScriptTestCase {
 
     public void testTypesNotEquals() {
         assertEquals(false, exec("return true !== true;"));
-        assertEquals(true, exec("boolean x = true; boolean y = false; return x !== y;"));
         assertEquals(false, exec("boolean x = false; boolean y = false; return x !== y;"));
         assertEquals(true, exec("return (byte)3 !== (byte)4;"));
         assertEquals(false, exec("byte x = 3; byte y = 3; return x !== y;"));
@@ -79,7 +76,6 @@ public class EqualsTests extends ScriptTestCase {
         assertEquals(false, exec("double x = 3; double y = 3; return x !== y;"));
 
         assertEquals(false, exec("return true != true;"));
-        assertEquals(true, exec("boolean x = true; boolean y = false; return x != y;"));
         assertEquals(false, exec("boolean x = false; boolean y = false; return x != y;"));
         assertEquals(true, exec("return (byte)3 != (byte)4;"));
         assertEquals(false, exec("byte x = 3; byte y = 3; return x != y;"));

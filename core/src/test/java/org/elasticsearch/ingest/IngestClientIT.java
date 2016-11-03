@@ -22,7 +22,6 @@ package org.elasticsearch.ingest;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.ExceptionsHelper;
-import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
@@ -41,7 +40,6 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,7 +67,7 @@ public class IngestClientIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(IngestTestPlugin.class);
+        return pluginList(IngestTestPlugin.class);
     }
 
     public void testSimulate() throws Exception {
@@ -163,7 +161,7 @@ public class IngestClientIT extends ESIntegTestCase {
                     itemResponse.isFailed(), is(false));
                 assertThat(indexResponse, notNullValue());
                 assertThat(indexResponse.getId(), equalTo(Integer.toString(i)));
-                assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+                assertThat(indexResponse.isCreated(), is(true));
             }
         }
     }

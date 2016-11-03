@@ -60,7 +60,7 @@ public class SimulatePipelineResponse extends ActionResponse implements ToXConte
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeOptionalString(pipelineId);
+        out.writeString(pipelineId);
         out.writeBoolean(verbose);
         out.writeVInt(results.size());
         for (SimulateDocumentResult response : results) {
@@ -71,7 +71,7 @@ public class SimulatePipelineResponse extends ActionResponse implements ToXConte
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
-        this.pipelineId = in.readOptionalString();
+        this.pipelineId = in.readString();
         boolean verbose = in.readBoolean();
         int responsesLength = in.readVInt();
         results = new ArrayList<>();

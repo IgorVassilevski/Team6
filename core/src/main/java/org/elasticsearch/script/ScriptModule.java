@@ -19,7 +19,6 @@
 
 package org.elasticsearch.script;
 
-import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.env.Environment;
@@ -46,8 +45,8 @@ public class ScriptModule {
      * Build from {@linkplain ScriptPlugin}s. Convenient for normal use but not great for tests. See
      * {@link ScriptModule#ScriptModule(Settings, Environment, ResourceWatcherService, List, List)} for easier use in tests.
      */
-    public static ScriptModule create(Settings settings, Environment environment,
-                                      ResourceWatcherService resourceWatcherService, List<ScriptPlugin> scriptPlugins) {
+    public static ScriptModule create(Settings settings, Environment environment, ResourceWatcherService resourceWatcherService,
+            List<ScriptPlugin> scriptPlugins) {
         Map<String, NativeScriptFactory> factoryMap = scriptPlugins.stream().flatMap(x -> x.getNativeScripts().stream())
             .collect(Collectors.toMap(NativeScriptFactory::getName, Function.identity()));
         NativeScriptEngineService nativeScriptEngineService = new NativeScriptEngineService(settings, factoryMap);
@@ -62,9 +61,8 @@ public class ScriptModule {
     /**
      * Build {@linkplain ScriptEngineService} and {@linkplain ScriptContext.Plugin}.
      */
-    public ScriptModule(Settings settings, Environment environment,
-                        ResourceWatcherService resourceWatcherService, List<ScriptEngineService> scriptEngineServices,
-                        List<ScriptContext.Plugin> customScriptContexts) {
+    public ScriptModule(Settings settings, Environment environment, ResourceWatcherService resourceWatcherService,
+            List<ScriptEngineService> scriptEngineServices, List<ScriptContext.Plugin> customScriptContexts) {
         ScriptContextRegistry scriptContextRegistry = new ScriptContextRegistry(customScriptContexts);
         ScriptEngineRegistry scriptEngineRegistry = new ScriptEngineRegistry(scriptEngineServices);
         scriptSettings = new ScriptSettings(scriptEngineRegistry, scriptContextRegistry);
@@ -88,12 +86,5 @@ public class ScriptModule {
      */
     public ScriptService getScriptService() {
         return scriptService;
-    }
-
-    /**
-     * Allow the script service to register any settings update handlers on the cluster settings
-     */
-    public void registerClusterSettingsListeners(ClusterSettings clusterSettings) {
-        scriptService.registerClusterSettingsListeners(clusterSettings);
     }
 }

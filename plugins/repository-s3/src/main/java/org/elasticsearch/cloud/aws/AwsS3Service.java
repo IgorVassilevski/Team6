@@ -24,7 +24,6 @@ import com.amazonaws.services.s3.AmazonS3;
 import org.elasticsearch.common.component.LifecycleComponent;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
-import org.elasticsearch.common.settings.Settings;
 
 import java.util.Locale;
 import java.util.function.Function;
@@ -155,6 +154,6 @@ public interface AwsS3Service extends LifecycleComponent {
         Setting<String> ENDPOINT_SETTING = Setting.simpleString("cloud.aws.s3.endpoint", Property.NodeScope);
     }
 
-    AmazonS3 client(Settings repositorySettings, String endpoint, Protocol protocol, String region, Integer maxRetries,
+    AmazonS3 client(String endpoint, Protocol protocol, String region, String account, String key, Integer maxRetries,
                     boolean useThrottleRetries, Boolean pathStyleAccess);
 }

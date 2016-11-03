@@ -122,7 +122,7 @@ public class MockTcpTransport extends TcpTransport<MockTcpTransport.MockChannel>
         try {
             started.await();
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            Thread.interrupted();
         }
         return serverMockChannel;
     }
@@ -146,8 +146,8 @@ public class MockTcpTransport extends TcpTransport<MockTcpTransport.MockChannel>
             output.write(minimalHeader);
             output.writeInt(msgSize);
             output.write(buffer);
-            final BytesReference bytes = output.bytes();
-            if (TcpTransport.validateMessageHeader(bytes)) {
+            BytesReference bytes = output.bytes();
+            if (validateMessageHeader(bytes)) {
                 InetSocketAddress remoteAddress = (InetSocketAddress) socket.getRemoteSocketAddress();
                 messageReceived(bytes.slice(TcpHeader.MARKER_BYTES_SIZE + TcpHeader.MESSAGE_LENGTH_SIZE, msgSize),
                     mockChannel, mockChannel.profile, remoteAddress, msgSize);
@@ -261,14 +261,6 @@ public class MockTcpTransport extends TcpTransport<MockTcpTransport.MockChannel>
         private final CancellableThreads cancellableThreads = new CancellableThreads();
         private final Closeable onClose;
 
-        /**
-         * Constructs a new MockChannel instance intended for handling the actual incoming / outgoing traffic.
-         *
-         * @param socket The client socket. Mut not be null.
-         * @param localAddress Address associated with the corresponding local server socket. Must not be null.
-         * @param profile The associated profile name.
-         * @param onClose Callback to execute when this channel is closed.
-         */
         public MockChannel(Socket socket, InetSocketAddress localAddress, String profile, Consumer<MockChannel> onClose) {
             this.localAddress = localAddress;
             this.activeChannel = socket;
@@ -276,44 +268,13 @@ public class MockTcpTransport extends TcpTransport<MockTcpTransport.MockChannel>
             this.profile = profile;
             this.onClose = () -> onClose.accept(this);
         }
-
-        /**
-         * Constructs a new MockChannel instance intended for accepting requests.
-         *
-         * @param serverSocket The associated server socket. Must not be null.
-         * @param profile The associated profile name.
-         */
-        public MockChannel(ServerSocket serverSocket, String profile) {
-            this.localAddress = (InetSocketAddress) serverSocket.getLocalSocketAddress();
-            this.serverSocket = serverSocket;
-            this.profile = profile;
-            this.activeChannel = null;
-            this.onClose = null;
-        }
-
         public void accept(Executor executor) throws IOException {
             while (isOpen.get()) {
-                Socket incomingSocket = serverSocket.accept();
-                MockChannel incomingChannel = null;
-                try {
-                    configureSocket(incomingSocket);
-                    incomingChannel = new MockChannel(incomingSocket, localAddress, profile, workerChannels::remove);
-                    //establish a happens-before edge between closing and accepting a new connection
-                    synchronized (this) {
-                        if (isOpen.get()) {
-                            workerChannels.put(incomingChannel, Boolean.TRUE);
-                            // this spawns a new thread immediately, so OK under lock
-                            incomingChannel.loopRead(executor);
-                            // the channel is properly registered and will be cleared by the close code.
-                            incomingSocket = null;
-                            incomingChannel = null;
-                        }
-                    }
-                } finally {
-                    // ensure we don't leak sockets and channels in the failure case. Note that we null both
-                    // if there are no exceptions so this becomes a no op.
-                    IOUtils.closeWhileHandlingException(incomingSocket, incomingChannel);
-                }
+                Socket accept = serverSocket.accept();
+                configureSocket(accept);
+                MockChannel mockChannel = new MockChannel(accept, localAddress, profile, workerChannels::remove);
+                workerChannels.put(mockChannel, Boolean.TRUE);
+                mockChannel.loopRead(executor);
             }
         }
 
@@ -333,22 +294,26 @@ public class MockTcpTransport extends TcpTransport<MockTcpTransport.MockChannel>
                 @Override
                 protected void doRun() throws Exception {
                     StreamInput input = new InputStreamStreamInput(new BufferedInputStream(activeChannel.getInputStream()));
-                    // There is a (slim) chance that we get interrupted right after a loop iteration, so check explicitly
-                    while (isOpen.get() && !Thread.currentThread().isInterrupted()) {
+                    while (isOpen.get()) {
                         cancellableThreads.executeIO(() -> readMessage(MockChannel.this, input));
                     }
                 }
             });
         }
 
+        public MockChannel(ServerSocket serverSocket, String profile) {
+            this.localAddress = (InetSocketAddress) serverSocket.getLocalSocketAddress();
+            this.serverSocket = serverSocket;
+            this.profile = profile;
+            this.activeChannel = null;
+            this.onClose = null;
+        }
+
         @Override
         public void close() throws IOException {
             if (isOpen.compareAndSet(true, false)) {
-                //establish a happens-before edge between closing and accepting a new connection
-                synchronized (this) {
-                    IOUtils.close(serverSocket, activeChannel, () -> IOUtils.close(workerChannels.keySet()),
-                        () -> cancellableThreads.cancel("channel closed"), onClose);
-                }
+                IOUtils.close( () -> cancellableThreads.cancel("channel closed"), serverSocket, activeChannel,
+                    () -> IOUtils.close(workerChannels.keySet()), onClose);
             }
         }
     }
@@ -384,6 +349,5 @@ public class MockTcpTransport extends TcpTransport<MockTcpTransport.MockChannel>
     protected Version getCurrentVersion() {
         return mockVersion;
     }
-
 }
 

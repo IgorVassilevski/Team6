@@ -43,7 +43,6 @@ import org.elasticsearch.transport.TransportResponseOptions;
 import org.elasticsearch.transport.TransportSettings;
 
 import java.io.IOException;
-import java.util.Collections;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
@@ -62,15 +61,16 @@ public class Netty3ScheduledPingTests extends ESTestCase {
 
         CircuitBreakerService circuitBreakerService = new NoneCircuitBreakerService();
 
-        NamedWriteableRegistry registry = new NamedWriteableRegistry(Collections.emptyList());
-        final Netty3Transport nettyA = new Netty3Transport(settings, threadPool, new NetworkService(settings, Collections.emptyList()),
-            BigArrays.NON_RECYCLING_INSTANCE, registry, circuitBreakerService);
+        NamedWriteableRegistry registryA = new NamedWriteableRegistry();
+        final Netty3Transport nettyA = new Netty3Transport(settings, threadPool, new NetworkService(settings),
+            BigArrays.NON_RECYCLING_INSTANCE, registryA, circuitBreakerService);
         MockTransportService serviceA = new MockTransportService(settings, nettyA, threadPool);
         serviceA.start();
         serviceA.acceptIncomingRequests();
 
-        final Netty3Transport nettyB = new Netty3Transport(settings, threadPool, new NetworkService(settings, Collections.emptyList()),
-            BigArrays.NON_RECYCLING_INSTANCE, registry, circuitBreakerService);
+        NamedWriteableRegistry registryB = new NamedWriteableRegistry();
+        final Netty3Transport nettyB = new Netty3Transport(settings, threadPool, new NetworkService(settings),
+            BigArrays.NON_RECYCLING_INSTANCE, registryB, circuitBreakerService);
         MockTransportService serviceB = new MockTransportService(settings, nettyB, threadPool);
 
         serviceB.start();

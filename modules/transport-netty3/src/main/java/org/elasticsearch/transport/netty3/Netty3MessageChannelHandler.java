@@ -50,7 +50,7 @@ class Netty3MessageChannelHandler extends SimpleChannelUpstreamHandler {
 
     @Override
     public void writeComplete(ChannelHandlerContext ctx, WriteCompletionEvent e) throws Exception {
-        transportServiceAdapter.addBytesSent(e.getWrittenAmount());
+        transportServiceAdapter.sent(e.getWrittenAmount());
         super.writeComplete(ctx, e);
     }
 

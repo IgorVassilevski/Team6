@@ -37,9 +37,7 @@ public class AliasedIndexDocumentActionsIT extends DocumentActionsIT {
             // ignore
         }
         logger.info("--> creating index test");
-        client().admin().indices().create(createIndexRequest("test1")
-                .mapping("type1", "name", "type=keyword,store=true")
-                .alias(new Alias("test"))).actionGet();
+        client().admin().indices().create(createIndexRequest("test1").alias(new Alias("test"))).actionGet();
     }
 
     @Override

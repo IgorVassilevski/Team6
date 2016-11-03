@@ -4,11 +4,12 @@
     "methods": [ "GET" ],
     "url": {
       "path": "/_ingest/pipeline/{id}",
-      "paths": [ "/_ingest/pipeline", "/_ingest/pipeline/{id}" ],
+      "paths": [ "/_ingest/pipeline/{id}" ],
       "parts": {
         "id": {
           "type" : "string",
-          "description" : "Comma separated list of pipeline ids. Wildcards supported"
+          "description" : "Comma separated list of pipeline ids. Wildcards supported",
+          "required" : true
         }
       },
       "params": {

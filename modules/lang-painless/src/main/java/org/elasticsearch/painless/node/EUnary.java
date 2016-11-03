@@ -34,18 +34,16 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.elasticsearch.painless.MethodWriter;
-import org.objectweb.asm.Opcodes;
 
 /**
  * Represents a unary math expression.
  */
 public final class EUnary extends AExpression {
 
-    private final Operation operation;
-    private AExpression child;
-
-    private Type promote;
-    private boolean originallyExplicit = false; // record whether there was originally an explicit cast
+    final Operation operation;
+    AExpression child;
+    Type promote;
+    boolean originallyExplicit = false; // record whether there was originally an explicit cast
 
     public EUnary(Location location, Operation operation, AExpression child) {
         super(location);
@@ -53,7 +51,7 @@ public final class EUnary extends AExpression {
         this.operation = Objects.requireNonNull(operation);
         this.child = Objects.requireNonNull(child);
     }
-
+    
     @Override
     void extractVariables(Set<String> variables) {
         child.extractVariables(variables);
@@ -62,7 +60,6 @@ public final class EUnary extends AExpression {
     @Override
     void analyze(Locals locals) {
         originallyExplicit = explicit;
-
         if (operation == Operation.NOT) {
             analyzeNot(locals);
         } else if (operation == Operation.BWNOT) {
@@ -194,29 +191,33 @@ public final class EUnary extends AExpression {
         writer.writeDebugInfo(location);
 
         if (operation == Operation.NOT) {
-            Label fals = new Label();
-            Label end = new Label();
+            if (tru == null && fals == null) {
+                Label localfals = new Label();
+                Label end = new Label();
 
-            child.write(writer, globals);
-            writer.ifZCmp(Opcodes.IFEQ, fals);
+                child.fals = localfals;
+                child.write(writer, globals);
 
-            writer.push(false);
-            writer.goTo(end);
-            writer.mark(fals);
-            writer.push(true);
-            writer.mark(end);
+                writer.push(false);
+                writer.goTo(end);
+                writer.mark(localfals);
+                writer.push(true);
+                writer.mark(end);
+            } else {
+                child.tru = fals;
+                child.fals = tru;
+                child.write(writer, globals);
+            }
         } else {
             Sort sort = promote.sort;
             child.write(writer, globals);
 
-            // Def calls adopt the wanted return value. If there was a narrowing cast,
-            // we need to flag that so that it's done at runtime.
+            // def calls adopt the wanted return value. if there was a narrowing cast,
+            // we need to flag that so that its done at runtime.
             int defFlags = 0;
-
             if (originallyExplicit) {
                 defFlags |= DefBootstrap.OPERATOR_EXPLICIT_CAST;
             }
-
             if (operation == Operation.BWNOT) {
                 if (sort == Sort.DEF) {
                     org.objectweb.asm.Type descriptor = org.objectweb.asm.Type.getMethodType(actual.type, child.actual.type);
@@ -243,10 +244,12 @@ public final class EUnary extends AExpression {
                 if (sort == Sort.DEF) {
                     org.objectweb.asm.Type descriptor = org.objectweb.asm.Type.getMethodType(actual.type, child.actual.type);
                     writer.invokeDefCall("plus", descriptor, DefBootstrap.UNARY_OPERATOR, defFlags);
-                }
+                } 
             } else {
                 throw createError(new IllegalStateException("Illegal tree structure."));
             }
+
+            writer.writeBranch(tru, fals);
         }
     }
 }

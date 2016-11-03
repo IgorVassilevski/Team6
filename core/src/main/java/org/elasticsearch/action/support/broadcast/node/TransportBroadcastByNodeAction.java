@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.support.broadcast.node;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.FailedNodeException;
 import org.elasticsearch.action.IndicesRequest;
@@ -47,13 +46,13 @@ import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.NodeShouldNotConnectException;
 import org.elasticsearch.transport.TransportChannel;
 import org.elasticsearch.transport.TransportException;
 import org.elasticsearch.transport.TransportRequest;
 import org.elasticsearch.transport.TransportRequestHandler;
 import org.elasticsearch.transport.TransportResponse;
-import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
@@ -364,9 +363,7 @@ public abstract class TransportBroadcastByNodeAction<Request extends BroadcastRe
         protected void onNodeFailure(DiscoveryNode node, int nodeIndex, Throwable t) {
             String nodeId = node.getId();
             if (logger.isDebugEnabled() && !(t instanceof NodeShouldNotConnectException)) {
-                logger.debug(
-                    (org.apache.logging.log4j.util.Supplier<?>)
-                        () -> new ParameterizedMessage("failed to execute [{}] on node [{}]", actionName, nodeId), t);
+                logger.debug("failed to execute [{}] on node [{}]", t, actionName, nodeId);
             }
 
             // this is defensive to protect against the possibility of double invocation
@@ -444,23 +441,11 @@ public abstract class TransportBroadcastByNodeAction<Request extends BroadcastRe
                 shardResults[shardIndex] = failure;
                 if (TransportActions.isShardNotAvailableException(e)) {
                     if (logger.isTraceEnabled()) {
-                        logger.trace(
-                            (org.apache.logging.log4j.util.Supplier<?>)
-                                () -> new ParameterizedMessage(
-                                    "[{}] failed to execute operation for shard [{}]",
-                                    actionName,
-                                    shardRouting.shortSummary()),
-                            e);
+                        logger.trace("[{}] failed to execute operation for shard [{}]", e, actionName, shardRouting.shortSummary());
                     }
                 } else {
                     if (logger.isDebugEnabled()) {
-                        logger.debug(
-                            (org.apache.logging.log4j.util.Supplier<?>)
-                                () -> new ParameterizedMessage(
-                                    "[{}] failed to execute operation for shard [{}]",
-                                    actionName,
-                                    shardRouting.shortSummary()),
-                            e);
+                        logger.debug("[{}] failed to execute operation for shard [{}]", e, actionName, shardRouting.shortSummary());
                     }
                 }
             }

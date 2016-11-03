@@ -85,8 +85,8 @@ public class IcuTokenizerFactory extends AbstractTokenizerFactory {
                     String resourcePath = entry.getValue();
                     breakers[code] = parseRules(resourcePath, env);
                 }
-                // cjkAsWords nor myanmarAsWords are not configurable yet.
-                ICUTokenizerConfig config = new DefaultICUTokenizerConfig(true, true) {
+                // cjkAsWords is not configurable yet.
+                ICUTokenizerConfig config = new DefaultICUTokenizerConfig(true) {
                     @Override
                     public BreakIterator getBreakIterator(int script) {
                         if (breakers[script] != null) {

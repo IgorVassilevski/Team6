@@ -24,13 +24,12 @@ import com.fasterxml.jackson.core.JsonStreamContext;
 import com.fasterxml.jackson.core.base.GeneratorBase;
 import com.fasterxml.jackson.core.filter.FilteringGeneratorDelegate;
 import com.fasterxml.jackson.core.io.SerializedString;
-import com.fasterxml.jackson.core.json.JsonWriteContext;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
-import com.fasterxml.jackson.core.util.JsonGeneratorDelegate;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.Streams;
 import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.util.CollectionUtils;
 import org.elasticsearch.common.xcontent.XContent;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentGenerator;
@@ -43,9 +42,6 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Collections;
-import java.util.Objects;
-import java.util.Set;
 
 /**
  *
@@ -75,38 +71,23 @@ public class JsonXContentGenerator implements XContentGenerator {
     private static final DefaultPrettyPrinter.Indenter INDENTER = new DefaultIndenter("  ", LF.getValue());
     private boolean prettyPrint = false;
 
-    public JsonXContentGenerator(JsonGenerator jsonGenerator, OutputStream os) {
-        this(jsonGenerator, os, Collections.emptySet(), Collections.emptySet());
-    }
-
-    public JsonXContentGenerator(JsonGenerator jsonGenerator, OutputStream os, Set<String> includes, Set<String> excludes) {
-        Objects.requireNonNull(includes, "Including filters must not be null");
-        Objects.requireNonNull(excludes, "Excluding filters must not be null");
-        this.os = os;
+    public JsonXContentGenerator(JsonGenerator jsonGenerator, OutputStream os, String[] filters, boolean inclusive) {
         if (jsonGenerator instanceof GeneratorBase) {
             this.base = (GeneratorBase) jsonGenerator;
         } else {
             this.base = null;
         }
 
-        JsonGenerator generator = jsonGenerator;
-
-        boolean hasExcludes = excludes.isEmpty() == false;
-        if (hasExcludes) {
-            generator = new FilteringGeneratorDelegate(generator, new FilterPathBasedFilter(excludes, false), true, true);
-        }
-
-        boolean hasIncludes = includes.isEmpty() == false;
-        if (hasIncludes) {
-            generator = new FilteringGeneratorDelegate(generator, new FilterPathBasedFilter(includes, true), true, true);
-        }
-
-        if (hasExcludes || hasIncludes) {
-            this.filter = (FilteringGeneratorDelegate) generator;
-        } else {
+        if (CollectionUtils.isEmpty(filters)) {
+            this.generator = jsonGenerator;
             this.filter = null;
+        } else {
+            this.filter = new FilteringGeneratorDelegate(jsonGenerator,
+                    new FilterPathBasedFilter(filters, inclusive), true, true);
+            this.generator = this.filter;
         }
-        this.generator = generator;
+
+        this.os = os;
     }
 
     @Override
@@ -140,34 +121,23 @@ public class JsonXContentGenerator implements XContentGenerator {
         generator.writeEndArray();
     }
 
-    private boolean isFiltered() {
+    protected boolean isFiltered() {
         return filter != null;
     }
 
-    private JsonGenerator getLowLevelGenerator() {
+    protected boolean inRoot() {
         if (isFiltered()) {
-            JsonGenerator delegate = filter.getDelegate();
-            if (delegate instanceof JsonGeneratorDelegate) {
-                // In case of combined inclusion and exclusion filters, we have one and only one another delegating level
-                delegate = ((JsonGeneratorDelegate) delegate).getDelegate();
-                assert delegate instanceof JsonGeneratorDelegate == false;
-            }
-            return delegate;
+            JsonStreamContext context = filter.getFilterContext();
+            return ((context != null) && (context.inRoot() && context.getCurrentName() == null));
         }
-        return generator;
-    }
-
-    private boolean inRoot() {
-        JsonStreamContext context = generator.getOutputContext();
-        return ((context != null) && (context.inRoot() && context.getCurrentName() == null));
+        return false;
     }
 
     @Override
     public void writeStartObject() throws IOException {
-        if (inRoot()) {
-            // Use the low level generator to write the startObject so that the root
-            // start object is always written even if a filtered generator is used
-            getLowLevelGenerator().writeStartObject();
+        if (isFiltered() && inRoot()) {
+            // Bypass generator to always write the root start object
+            filter.getDelegate().writeStartObject();
             return;
         }
         generator.writeStartObject();
@@ -175,10 +145,9 @@ public class JsonXContentGenerator implements XContentGenerator {
 
     @Override
     public void writeEndObject() throws IOException {
-        if (inRoot()) {
-            // Use the low level generator to write the startObject so that the root
-            // start object is always written even if a filtered generator is used
-            getLowLevelGenerator().writeEndObject();
+        if (isFiltered() && inRoot()) {
+            // Bypass generator to always write the root end object
+            filter.getDelegate().writeEndObject();
             return;
         }
         generator.writeEndObject();
@@ -302,9 +271,7 @@ public class JsonXContentGenerator implements XContentGenerator {
     public void writeEndRaw() {
         assert base != null : "JsonGenerator should be of instance GeneratorBase but was: " + generator.getClass();
         if (base != null) {
-            JsonStreamContext context = base.getOutputContext();
-            assert (context instanceof JsonWriteContext) : "Expected an instance of JsonWriteContext but was: " + context.getClass();
-            ((JsonWriteContext) context).writeValue();
+            base.getOutputContext().writeValue();
         }
     }
 
@@ -420,8 +387,7 @@ public class JsonXContentGenerator implements XContentGenerator {
         }
         if (writeLineFeedAtEnd) {
             flush();
-            // Bypass generator to always write the line feed
-            getLowLevelGenerator().writeRaw(LF);
+            generator.writeRaw(LF);
         }
         generator.close();
     }

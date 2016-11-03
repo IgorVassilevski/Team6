@@ -20,7 +20,6 @@
 package org.elasticsearch.ttl;
 
 import org.elasticsearch.Version;
-import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingResponse;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
@@ -106,14 +105,14 @@ public class SimpleTTLIT extends ESIntegTestCase {
         long now = System.currentTimeMillis();
         IndexResponse indexResponse = client().prepareIndex("test", "type1", "1").setSource("field1", "value1")
                 .setTimestamp(String.valueOf(now)).setTTL(providedTTLValue).setRefreshPolicy(IMMEDIATE).get();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertThat(indexResponse.isCreated(), is(true));
         indexResponse = client().prepareIndex("test", "type1", "with_routing").setSource("field1", "value1")
                 .setTimestamp(String.valueOf(now)).setTTL(providedTTLValue).setRouting("routing").setRefreshPolicy(IMMEDIATE).get();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertThat(indexResponse.isCreated(), is(true));
         indexResponse = client().prepareIndex("test", "type1", "no_ttl").setSource("field1", "value1").get();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertThat(indexResponse.isCreated(), is(true));
         indexResponse = client().prepareIndex("test", "type2", "default_ttl").setSource("field1", "value1").get();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertThat(indexResponse.isCreated(), is(true));
 
         // realtime get check
         long currentTime = System.currentTimeMillis();
@@ -259,7 +258,7 @@ public class SimpleTTLIT extends ESIntegTestCase {
         long thirdTtl = aLongTime * 1;
         IndexResponse indexResponse = client().prepareIndex("test", "type1", "1").setSource("field1", "value1")
                 .setTTL(firstTtl).setRefreshPolicy(IMMEDIATE).get();
-        assertTrue(indexResponse.getResult() == DocWriteResponse.Result.CREATED);
+        assertTrue(indexResponse.isCreated());
         assertThat(getTtl("type1", 1), both(lessThanOrEqualTo(firstTtl)).and(greaterThan(secondTtl)));
 
         // Updating with the default detect_noop without a change to the document doesn't change the ttl.
@@ -287,7 +286,7 @@ public class SimpleTTLIT extends ESIntegTestCase {
     }
 
     private long getTtl(String type, Object id) {
-        GetResponse getResponse = client().prepareGet("test", type, id.toString()).setFields("_ttl").execute()
+        GetResponse getResponse = client().prepareGet("test", type, id.toString()).setFields("_ttl").setRealtime(true).execute()
                 .actionGet();
         return ((Number) getResponse.getField("_ttl").getValue()).longValue();
     }

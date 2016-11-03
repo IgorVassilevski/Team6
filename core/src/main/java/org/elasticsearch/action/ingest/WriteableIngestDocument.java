@@ -41,14 +41,15 @@ final class WriteableIngestDocument implements Writeable, ToXContent {
 
     WriteableIngestDocument(StreamInput in) throws IOException {
         Map<String, Object> sourceAndMetadata = in.readMap();
-        Map<String, Object> ingestMetadata = in.readMap();
+        @SuppressWarnings("unchecked")
+        Map<String, String> ingestMetadata = (Map<String, String>) in.readGenericValue();
         this.ingestDocument = new IngestDocument(sourceAndMetadata, ingestMetadata);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeMap(ingestDocument.getSourceAndMetadata());
-        out.writeMap(ingestDocument.getIngestMetadata());
+        out.writeGenericValue(ingestDocument.getIngestMetadata());
     }
 
     IngestDocument getIngestDocument() {
@@ -65,7 +66,11 @@ final class WriteableIngestDocument implements Writeable, ToXContent {
             }
         }
         builder.field("_source", ingestDocument.getSourceAndMetadata());
-        builder.field("_ingest", ingestDocument.getIngestMetadata());
+        builder.startObject("_ingest");
+        for (Map.Entry<String, String> ingestMetadata : ingestDocument.getIngestMetadata().entrySet()) {
+            builder.field(ingestMetadata.getKey(), ingestMetadata.getValue());
+        }
+        builder.endObject();
         builder.endObject();
         return builder;
     }

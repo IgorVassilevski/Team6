@@ -19,8 +19,6 @@
 
 package org.elasticsearch.transport;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.cluster.node.liveness.TransportLivenessAction;
 import org.elasticsearch.cluster.ClusterName;
@@ -31,6 +29,7 @@ import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.metrics.MeanMetric;
 import org.elasticsearch.common.regex.Regex;
@@ -109,7 +108,7 @@ public class TransportService extends AbstractLifecycleComponent {
         listSetting("transport.tracer.exclude", Arrays.asList("internal:discovery/zen/fd*", TransportLivenessAction.NAME),
             Function.identity(), Property.Dynamic, Property.NodeScope);
 
-    private final Logger tracerLog;
+    private final ESLogger tracerLog;
 
     volatile String[] tracerLogInclude;
     volatile String[] tracelLogExclude;
@@ -206,19 +205,11 @@ public class TransportService extends AbstractLifecycleComponent {
                         @Override
                         public void onRejection(Exception e) {
                             // if we get rejected during node shutdown we don't wanna bubble it up
-                            logger.debug(
-                                (Supplier<?>) () -> new ParameterizedMessage(
-                                    "failed to notify response handler on rejection, action: {}",
-                                    holderToNotify.action()),
-                                e);
+                            logger.debug("failed to notify response handler on rejection, action: {}", e, holderToNotify.action());
                         }
                         @Override
                         public void onFailure(Exception e) {
-                            logger.warn(
-                                (Supplier<?>) () -> new ParameterizedMessage(
-                                    "failed to notify response handler on exception, action: {}",
-                                    holderToNotify.action()),
-                                e);
+                            logger.warn("failed to notify response handler on exception, action: {}", e, holderToNotify.action());
                         }
                         @Override
                         public void doRun() {
@@ -492,19 +483,11 @@ public class TransportService extends AbstractLifecycleComponent {
                     @Override
                     public void onRejection(Exception e) {
                         // if we get rejected during node shutdown we don't wanna bubble it up
-                        logger.debug(
-                            (Supplier<?>) () -> new ParameterizedMessage(
-                                "failed to notify response handler on rejection, action: {}",
-                                holderToNotify.action()),
-                            e);
+                        logger.debug("failed to notify response handler on rejection, action: {}", e, holderToNotify.action());
                     }
                     @Override
                     public void onFailure(Exception e) {
-                        logger.warn(
-                            (Supplier<?>) () -> new ParameterizedMessage(
-                                "failed to notify response handler on exception, action: {}",
-                                holderToNotify.action()),
-                            e);
+                        logger.warn("failed to notify response handler on exception, action: {}", e, holderToNotify.action());
                     }
                     @Override
                     protected void doRun() throws Exception {
@@ -545,9 +528,7 @@ public class TransportService extends AbstractLifecycleComponent {
                             channel.sendResponse(e);
                         } catch (Exception inner) {
                             inner.addSuppressed(e);
-                            logger.warn(
-                                (Supplier<?>) () -> new ParameterizedMessage(
-                                    "failed to notify channel of error message for action [{}]", action), inner);
+                            logger.warn("failed to notify channel of error message for action [{}]", inner, action);
                         }
                     }
                 });
@@ -558,9 +539,7 @@ public class TransportService extends AbstractLifecycleComponent {
                 channel.sendResponse(e);
             } catch (Exception inner) {
                 inner.addSuppressed(e);
-                logger.warn(
-                    (Supplier<?>) () -> new ParameterizedMessage(
-                        "failed to notify channel of error message for action [{}]", action), inner);
+                logger.warn("failed to notify channel of error message for action [{}]", inner, action);
             }
         }
 
@@ -646,12 +625,12 @@ public class TransportService extends AbstractLifecycleComponent {
         final MeanMetric txMetric = new MeanMetric();
 
         @Override
-        public void addBytesReceived(long size) {
+        public void received(long size) {
             rxMetric.inc(size);
         }
 
         @Override
-        public void addBytesSent(long size) {
+        public void sent(long size) {
             txMetric.inc(size);
         }
 
@@ -682,9 +661,7 @@ public class TransportService extends AbstractLifecycleComponent {
         }
 
         protected void traceResponseSent(long requestId, String action, Exception e) {
-            tracerLog.trace(
-                (org.apache.logging.log4j.util.Supplier<?>)
-                    () -> new ParameterizedMessage("[{}][{}] sent error response", requestId, action), e);
+            tracerLog.trace("[{}][{}] sent error response", e, requestId, action);
         }
 
         @Override
@@ -964,14 +941,14 @@ public class TransportService extends AbstractLifecycleComponent {
     }
 
     static class DirectResponseChannel implements TransportChannel {
-        final Logger logger;
+        final ESLogger logger;
         final DiscoveryNode localNode;
         private final String action;
         private final long requestId;
         final TransportServiceAdapter adapter;
         final ThreadPool threadPool;
 
-        public DirectResponseChannel(Logger logger, DiscoveryNode localNode, String action, long requestId,
+        public DirectResponseChannel(ESLogger logger, DiscoveryNode localNode, String action, long requestId,
                                      TransportServiceAdapter adapter, ThreadPool threadPool) {
             this.logger = logger;
             this.localNode = localNode;
@@ -1057,9 +1034,7 @@ public class TransportService extends AbstractLifecycleComponent {
             try {
                 handler.handleException(rtx);
             } catch (Exception e) {
-                logger.error(
-                    (Supplier<?>) () -> new ParameterizedMessage(
-                        "failed to handle exception for action [{}], handler [{}]", action, handler), e);
+                logger.error("failed to handle exception for action [{}], handler [{}]", e, action, handler);
             }
         }
 

@@ -19,12 +19,10 @@
 
 package org.elasticsearch.test.loggerusage;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.common.SuppressLoggerChecks;
-import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.test.loggerusage.ESLoggerUsageChecker.WrongLoggerUsage;
+import org.elasticsearch.test.ESTestCase;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,12 +37,6 @@ import static org.hamcrest.Matchers.notNullValue;
 
 public class ESLoggerUsageTests extends ESTestCase {
 
-    // needed to avoid the test suite from failing for having no tests
-    public void testSoThatTestsDoNotFail() {
-
-    }
-
-    @AwaitsFix(bugUrl = "https://github.com/elastic/elasticsearch/issues/20243")
     public void testLoggerUsageChecks() throws IOException {
         for (Method method : getClass().getMethods()) {
             if (method.getDeclaringClass().equals(getClass())) {
@@ -54,9 +46,9 @@ public class ESLoggerUsageTests extends ESTestCase {
                     List<WrongLoggerUsage> errors = new ArrayList<>();
                     ESLoggerUsageChecker.check(errors::add, classInputStream, Predicate.isEqual(method.getName()));
                     if (method.getName().startsWith("checkFail")) {
-                        assertFalse("Expected " + method.getName() + " to have wrong Logger usage", errors.isEmpty());
+                        assertFalse("Expected " + method.getName() + " to have wrong ESLogger usage", errors.isEmpty());
                     } else {
-                        assertTrue("Method " + method.getName() + " has unexpected Logger usage errors: " + errors, errors.isEmpty());
+                        assertTrue("Method " + method.getName() + " has unexpected ESLogger usage errors: " + errors, errors.isEmpty());
                     }
                 } else {
                     assertTrue("only allow methods starting with test or check in this class", method.getName().startsWith("test"));
@@ -65,12 +57,11 @@ public class ESLoggerUsageTests extends ESTestCase {
         }
     }
 
-    @AwaitsFix(bugUrl = "https://github.com/elastic/elasticsearch/issues/20243")
     public void testLoggerUsageCheckerCompatibilityWithESLogger() throws NoSuchMethodException {
-        assertThat(ESLoggerUsageChecker.LOGGER_CLASS, equalTo(Logger.class.getName()));
+        assertThat(ESLoggerUsageChecker.LOGGER_CLASS, equalTo(ESLogger.class.getName()));
         assertThat(ESLoggerUsageChecker.THROWABLE_CLASS, equalTo(Throwable.class.getName()));
         int varargsMethodCount = 0;
-        for (Method method : Logger.class.getMethods()) {
+        for (Method method : ESLogger.class.getMethods()) {
             if (method.isVarArgs()) {
                 // check that logger usage checks all varargs methods
                 assertThat(ESLoggerUsageChecker.LOGGER_METHODS, hasItem(method.getName()));
@@ -83,8 +74,8 @@ public class ESLoggerUsageTests extends ESTestCase {
 
         // check that signature is same as we expect in the usage checker
         for (String methodName : ESLoggerUsageChecker.LOGGER_METHODS) {
-            assertThat(Logger.class.getMethod(methodName, String.class, Object[].class), notNullValue());
-            assertThat(Logger.class.getMethod(methodName, String.class, Throwable.class, Object[].class), notNullValue());
+            assertThat(ESLogger.class.getMethod(methodName, String.class, Object[].class), notNullValue());
+            assertThat(ESLogger.class.getMethod(methodName, String.class, Throwable.class, Object[].class), notNullValue());
         }
     }
 
@@ -123,7 +114,7 @@ public class ESLoggerUsageTests extends ESTestCase {
     }
 
     public void checkOrderOfExceptionArgument1() {
-        logger.info((Supplier<?>) () -> new ParameterizedMessage("Hello {}", "world"), new Exception());
+        logger.info("Hello {}", new Exception(), "world");
     }
 
     public void checkFailOrderOfExceptionArgument1() {
@@ -131,7 +122,7 @@ public class ESLoggerUsageTests extends ESTestCase {
     }
 
     public void checkOrderOfExceptionArgument2() {
-        logger.info((Supplier<?>) () -> new ParameterizedMessage("Hello {}, {}", "world", 42), new Exception());
+        logger.info("Hello {}, {}", new Exception(), "world", 42);
     }
 
     public void checkFailOrderOfExceptionArgument2() {
@@ -143,7 +134,7 @@ public class ESLoggerUsageTests extends ESTestCase {
     }
 
     public void checkFailNonConstantMessageWithArguments(boolean b) {
-        logger.info((Supplier<?>) () -> new ParameterizedMessage(Boolean.toString(b), 42), new Exception());
+        logger.info(Boolean.toString(b), new Exception(), 42);
     }
 
     public void checkComplexUsage(boolean b) {
@@ -175,5 +166,4 @@ public class ESLoggerUsageTests extends ESTestCase {
         }
         logger.info(message, args);
     }
-
 }

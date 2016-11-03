@@ -357,14 +357,14 @@ public class DiscoveryNodes extends AbstractDiffable<DiscoveryNodes> implements 
         Builder builder = new Builder().masterNodeId(masterNodeId).localNodeId(localNodeId);
         for (DiscoveryNode node : this) {
             if (newNodes.contains(node.getId())) {
-                builder.add(node);
+                builder.put(node);
             }
         }
         return builder.build();
     }
 
     public DiscoveryNodes newNode(DiscoveryNode node) {
-        return new Builder(this).add(node).build();
+        return new Builder(this).put(node).build();
     }
 
     /**
@@ -554,8 +554,8 @@ public class DiscoveryNodes extends AbstractDiffable<DiscoveryNodes> implements 
                 node = localNode;
             }
             // some one already built this and validated it's OK, skip the n2 scans
-            assert builder.validateAdd(node) == null : "building disco nodes from network doesn't pass preflight: "
-                + builder.validateAdd(node);
+            assert builder.validatePut(node) == null : "building disco nodes from network doesn't pass preflight: "
+                + builder.validatePut(node);
             builder.putUnsafe(node);
         }
         return builder.build();
@@ -592,25 +592,15 @@ public class DiscoveryNodes extends AbstractDiffable<DiscoveryNodes> implements 
 
         /**
          * adds a disco node to the builder. Will throw an {@link IllegalArgumentException} if
-         * the supplied node doesn't pass the pre-flight checks performed by {@link #validateAdd(DiscoveryNode)}
+         * the supplied node doesn't pass the pre-flight checks performed by {@link #validatePut(DiscoveryNode)}
          */
-        public Builder add(DiscoveryNode node) {
-            final String preflight = validateAdd(node);
+        public Builder put(DiscoveryNode node) {
+            final String preflight = validatePut(node);
             if (preflight != null) {
                 throw new IllegalArgumentException(preflight);
             }
             putUnsafe(node);
             return this;
-        }
-
-        /**
-         * Get a node by its id
-         *
-         * @param nodeId id of the wanted node
-         * @return wanted node if it exists. Otherwise <code>null</code>
-         */
-        @Nullable public DiscoveryNode get(String nodeId) {
-            return nodes.get(nodeId);
         }
 
         private void putUnsafe(DiscoveryNode node) {
@@ -645,10 +635,10 @@ public class DiscoveryNodes extends AbstractDiffable<DiscoveryNodes> implements 
          *
          * @return null if all is OK or an error message explaining why a node can not be added.
          *
-         * Note: if this method returns a non-null value, calling {@link #add(DiscoveryNode)} will fail with an
+         * Note: if this method returns a non-null value, calling {@link #put(DiscoveryNode)} will fail with an
          * exception
          */
-        private String validateAdd(DiscoveryNode node) {
+        private String validatePut(DiscoveryNode node) {
             for (ObjectCursor<DiscoveryNode> cursor : nodes.values()) {
                 final DiscoveryNode existingNode = cursor.value;
                 if (node.getAddress().equals(existingNode.getAddress()) &&
@@ -656,9 +646,9 @@ public class DiscoveryNodes extends AbstractDiffable<DiscoveryNodes> implements 
                     return "can't add node " + node + ", found existing node " + existingNode + " with same address";
                 }
                 if (node.getId().equals(existingNode.getId()) &&
-                    node.equals(existingNode) == false) {
+                    node.getAddress().equals(existingNode.getAddress()) == false) {
                     return "can't add node " + node + ", found existing node " + existingNode
-                        + " with the same id but is a different node instance";
+                        + " with the same id, but a different address";
                 }
             }
             return null;

@@ -37,9 +37,8 @@ public class SnippetsTask extends DefaultTask {
     private static final String CATCH = /catch:\s*((?:\/[^\/]+\/)|[^ \]]+)/
     private static final String SKIP = /skip:([^\]]+)/
     private static final String SETUP = /setup:([^ \]]+)/
-    private static final String WARNING = /warning:(.+)/
     private static final String TEST_SYNTAX =
-        /(?:$CATCH|$SUBSTITUTION|$SKIP|(continued)|$SETUP|$WARNING) ?/
+        /(?:$CATCH|$SUBSTITUTION|$SKIP|(continued)|$SETUP) ?/
 
     /**
      * Action to take on each snippet. Called with a single parameter, an
@@ -114,38 +113,23 @@ public class SnippetsTask extends DefaultTask {
                     return
                 }
                 if (line ==~ /\/\/\s*AUTOSENSE\s*/) {
-                    throw new InvalidUserDataException("$file:$lineNumber: "
-                        + "AUTOSENSE has been replaced by CONSOLE.")
+                    throw new InvalidUserDataException("AUTOSENSE has been " +
+                            "replaced by CONSOLE. Use that instead at " +
+                            "$file:$lineNumber")
                 }
                 if (line ==~ /\/\/\s*CONSOLE\s*/) {
                     if (snippet == null) {
-                        throw new InvalidUserDataException("$file:$lineNumber: "
-                            + "CONSOLE not paired with a snippet")
-                    }
-                    if (snippet.console != null) {
-                        throw new InvalidUserDataException("$file:$lineNumber: "
-                            + "Can't be both CONSOLE and NOTCONSOLE")
+                        throw new InvalidUserDataException("CONSOLE not " +
+                            "paired with a snippet at $file:$lineNumber")
                     }
                     snippet.console = true
-                    return
-                }
-                if (line ==~ /\/\/\s*NOTCONSOLE\s*/) {
-                    if (snippet == null) {
-                        throw new InvalidUserDataException("$file:$lineNumber: "
-                            + "NOTCONSOLE not paired with a snippet")
-                    }
-                    if (snippet.console != null) {
-                        throw new InvalidUserDataException("$file:$lineNumber: "
-                            + "Can't be both CONSOLE and NOTCONSOLE")
-                    }
-                    snippet.console = false
                     return
                 }
                 matcher = line =~ /\/\/\s*TEST(\[(.+)\])?\s*/
                 if (matcher.matches()) {
                     if (snippet == null) {
-                        throw new InvalidUserDataException("$file:$lineNumber: "
-                            + "TEST not paired with a snippet at ")
+                        throw new InvalidUserDataException("TEST not " +
+                            "paired with a snippet at $file:$lineNumber")
                     }
                     snippet.test = true
                     if (matcher.group(2) != null) {
@@ -174,10 +158,6 @@ public class SnippetsTask extends DefaultTask {
                                 snippet.setup = it.group(6)
                                 return
                             }
-                            if (it.group(7) != null) {
-                                snippet.warnings.add(it.group(7))
-                                return
-                            }
                             throw new InvalidUserDataException(
                                     "Invalid test marker: $line")
                         }
@@ -187,8 +167,8 @@ public class SnippetsTask extends DefaultTask {
                 matcher = line =~ /\/\/\s*TESTRESPONSE(\[(.+)\])?\s*/
                 if (matcher.matches()) {
                     if (snippet == null) {
-                        throw new InvalidUserDataException("$file:$lineNumber: "
-                            + "TESTRESPONSE not paired with a snippet")
+                        throw new InvalidUserDataException("TESTRESPONSE not " +
+                            "paired with a snippet at $file:$lineNumber")
                     }
                     snippet.testResponse = true
                     if (matcher.group(2) != null) {
@@ -241,7 +221,7 @@ public class SnippetsTask extends DefaultTask {
         int end = NOT_FINISHED
         String contents
 
-        Boolean console = null
+        boolean console = false
         boolean test = false
         boolean testResponse = false
         boolean testSetup = false
@@ -250,7 +230,6 @@ public class SnippetsTask extends DefaultTask {
         String language = null
         String catchPart = null
         String setup = null
-        List warnings = new ArrayList()
 
         @Override
         public String toString() {
@@ -258,8 +237,8 @@ public class SnippetsTask extends DefaultTask {
             if (language != null) {
                 result += "($language)"
             }
-            if (console != null) {
-                result += console ? '// CONSOLE' : '// NOTCONSOLE'
+            if (console) {
+                result += '// CONSOLE'
             }
             if (test) {
                 result += '// TEST'
@@ -274,9 +253,6 @@ public class SnippetsTask extends DefaultTask {
                 }
                 if (setup) {
                     result += "[setup:$setup]"
-                }
-                for (String warning in warnings) {
-                    result += "[warning:$warning]"
                 }
             }
             if (testResponse) {

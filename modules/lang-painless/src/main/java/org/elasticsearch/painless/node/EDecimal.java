@@ -33,23 +33,19 @@ import java.util.Set;
  */
 public final class EDecimal extends AExpression {
 
-    private final String value;
+    final String value;
 
     public EDecimal(Location location, String value) {
         super(location);
 
         this.value = Objects.requireNonNull(value);
     }
-
+    
     @Override
     void extractVariables(Set<String> variables) {}
 
     @Override
     void analyze(Locals locals) {
-        if (!read) {
-            throw createError(new IllegalArgumentException("Must read from constant [" + value + "]."));
-        }
-
         if (value.endsWith("f") || value.endsWith("F")) {
             try {
                 constant = Float.parseFloat(value.substring(0, value.length() - 1));

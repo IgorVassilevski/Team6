@@ -20,6 +20,7 @@
 package org.elasticsearch.common.network;
 
 import org.elasticsearch.action.support.replication.ReplicationTask;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.allocation.command.AllocateEmptyPrimaryAllocationCommand;
 import org.elasticsearch.cluster.routing.allocation.command.AllocateReplicaAllocationCommand;
 import org.elasticsearch.cluster.routing.allocation.command.AllocateStalePrimaryAllocationCommand;
@@ -31,7 +32,6 @@ import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.inject.AbstractModule;
 import org.elasticsearch.common.inject.util.Providers;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
-import org.elasticsearch.common.io.stream.NamedWriteableRegistry.Entry;
 import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
@@ -45,9 +45,6 @@ import org.elasticsearch.transport.Transport;
 import org.elasticsearch.transport.TransportService;
 import org.elasticsearch.transport.local.LocalTransport;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * A module to handle registering and binding all network related classes.
  */
@@ -57,12 +54,9 @@ public class NetworkModule extends AbstractModule {
     public static final String TRANSPORT_SERVICE_TYPE_KEY = "transport.service.type";
     public static final String HTTP_TYPE_KEY = "http.type";
     public static final String LOCAL_TRANSPORT = "local";
-    public static final String HTTP_TYPE_DEFAULT_KEY = "http.type.default";
-    public static final String TRANSPORT_TYPE_DEFAULT_KEY = "transport.type.default";
 
-    public static final Setting<String> TRANSPORT_DEFAULT_TYPE_SETTING = Setting.simpleString(TRANSPORT_TYPE_DEFAULT_KEY,
-            Property.NodeScope);
-    public static final Setting<String> HTTP_DEFAULT_TYPE_SETTING = Setting.simpleString(HTTP_TYPE_DEFAULT_KEY, Property.NodeScope);
+    public static final Setting<String> TRANSPORT_DEFAULT_TYPE_SETTING = Setting.simpleString("transport.type.default", Property.NodeScope);
+    public static final Setting<String> HTTP_DEFAULT_TYPE_SETTING = Setting.simpleString("http.type.default", Property.NodeScope);
     public static final Setting<String> HTTP_TYPE_SETTING = Setting.simpleString(HTTP_TYPE_KEY, Property.NodeScope);
     public static final Setting<Boolean> HTTP_ENABLED = Setting.boolSetting("http.enabled", true, Property.NodeScope);
     public static final Setting<String> TRANSPORT_SERVICE_TYPE_SETTING =
@@ -77,22 +71,25 @@ public class NetworkModule extends AbstractModule {
     private final ExtensionPoint.SelectedType<TransportService> transportServiceTypes = new ExtensionPoint.SelectedType<>("transport_service", TransportService.class);
     private final ExtensionPoint.SelectedType<Transport> transportTypes = new ExtensionPoint.SelectedType<>("transport", Transport.class);
     private final ExtensionPoint.SelectedType<HttpServerTransport> httpTransportTypes = new ExtensionPoint.SelectedType<>("http_transport", HttpServerTransport.class);
-    private final List<NamedWriteableRegistry.Entry> namedWriteables = new ArrayList<>();
+    private final NamedWriteableRegistry namedWriteableRegistry;
 
     /**
      * Creates a network module that custom networking classes can be plugged into.
+     *
      * @param networkService A constructed network service object to bind.
      * @param settings The settings for the node
      * @param transportClient True if only transport classes should be allowed to be registered, false otherwise.
+     * @param namedWriteableRegistry registry for named writeables for use during streaming
      */
-    public NetworkModule(NetworkService networkService, Settings settings, boolean transportClient) {
+    public NetworkModule(NetworkService networkService, Settings settings, boolean transportClient, NamedWriteableRegistry namedWriteableRegistry) {
         this.networkService = networkService;
         this.settings = settings;
         this.transportClient = transportClient;
+        this.namedWriteableRegistry = namedWriteableRegistry;
         registerTransportService("default", TransportService.class);
         registerTransport(LOCAL_TRANSPORT, LocalTransport.class);
-        namedWriteables.add(new NamedWriteableRegistry.Entry(Task.Status.class, ReplicationTask.Status.NAME, ReplicationTask.Status::new));
-        namedWriteables.add(new NamedWriteableRegistry.Entry(Task.Status.class, RawTaskStatus.NAME, RawTaskStatus::new));
+        registerTaskStatus(ReplicationTask.Status.NAME, ReplicationTask.Status::new);
+        registerTaskStatus(RawTaskStatus.NAME, RawTaskStatus::new);
         registerBuiltinAllocationCommands();
     }
 
@@ -119,6 +116,10 @@ public class NetworkModule extends AbstractModule {
         httpTransportTypes.registerExtension(name, clazz);
     }
 
+    public void registerTaskStatus(String name, Writeable.Reader<? extends Task.Status> reader) {
+        namedWriteableRegistry.register(Task.Status.class, name, reader);
+    }
+
     /**
      * Register an allocation command.
      * <p>
@@ -132,7 +133,7 @@ public class NetworkModule extends AbstractModule {
     private <T extends AllocationCommand> void registerAllocationCommand(Writeable.Reader<T> reader, AllocationCommand.Parser<T> parser,
             ParseField commandName) {
         allocationCommandRegistry.register(parser, commandName);
-        namedWriteables.add(new Entry(AllocationCommand.class, commandName.getPreferredName(), reader));
+        namedWriteableRegistry.register(AllocationCommand.class, commandName.getPreferredName(), reader);
     }
 
     /**
@@ -142,13 +143,10 @@ public class NetworkModule extends AbstractModule {
         return allocationCommandRegistry;
     }
 
-    public List<Entry> getNamedWriteables() {
-        return namedWriteables;
-    }
-
     @Override
     protected void configure() {
         bind(NetworkService.class).toInstance(networkService);
+        bind(NamedWriteableRegistry.class).toInstance(namedWriteableRegistry);
         transportServiceTypes.bindType(binder(), settings, TRANSPORT_SERVICE_TYPE_KEY, "default");
         transportTypes.bindType(binder(), settings, TRANSPORT_TYPE_KEY, TRANSPORT_DEFAULT_TYPE_SETTING.get(settings));
 

@@ -22,17 +22,15 @@ package org.elasticsearch.index.reindex.remote;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.test.ESTestCase;
 
-import static java.util.Collections.emptyMap;
-
 public class RemoteInfoTests extends ESTestCase {
     public void testToString() {
-        RemoteInfo info = new RemoteInfo("http", "testhost", 12344, new BytesArray("testquery"), null, null, emptyMap());
+        RemoteInfo info = new RemoteInfo("http", "testhost", 12344, new BytesArray("testquery"), null, null);
         assertEquals("host=testhost port=12344 query=testquery", info.toString());
-        info = new RemoteInfo("http", "testhost", 12344, new BytesArray("testquery"), "testuser", null, emptyMap());
+        info = new RemoteInfo("http", "testhost", 12344, new BytesArray("testquery"), "testuser", null);
         assertEquals("host=testhost port=12344 query=testquery username=testuser", info.toString());
-        info = new RemoteInfo("http", "testhost", 12344, new BytesArray("testquery"), "testuser", "testpass", emptyMap());
+        info = new RemoteInfo("http", "testhost", 12344, new BytesArray("testquery"), "testuser", "testpass");
         assertEquals("host=testhost port=12344 query=testquery username=testuser password=<<>>", info.toString());
-        info = new RemoteInfo("https", "testhost", 12344, new BytesArray("testquery"), "testuser", "testpass", emptyMap());
+        info = new RemoteInfo("https", "testhost", 12344, new BytesArray("testquery"), "testuser", "testpass");
         assertEquals("scheme=https host=testhost port=12344 query=testquery username=testuser password=<<>>", info.toString());
     }
 }

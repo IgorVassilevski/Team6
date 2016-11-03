@@ -21,9 +21,8 @@ package org.elasticsearch.index.reindex;
 
 import org.elasticsearch.action.Action;
 import org.elasticsearch.action.ActionRequestBuilder;
+import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.action.support.ActiveShardCount;
-import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.client.ElasticsearchClient;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilder;
@@ -99,11 +98,10 @@ public abstract class AbstractBulkByScrollRequestBuilder<
     }
 
     /**
-     * The number of shard copies that must be active before proceeding with the write.
-     * See {@link ReplicationRequest#waitForActiveShards(ActiveShardCount)} for details.
+     * Consistency level for write requests.
      */
-    public Self waitForActiveShards(ActiveShardCount activeShardCount) {
-        request.setWaitForActiveShards(activeShardCount);
+    public Self consistency(WriteConsistencyLevel consistency) {
+        request.setConsistency(consistency);
         return self();
     }
 
@@ -135,10 +133,10 @@ public abstract class AbstractBulkByScrollRequestBuilder<
     }
 
     /**
-     * Should this task store its result after it has finished?
+     * Should this task persist its result after it has finished?
      */
-    public Self setShouldStoreResult(boolean shouldStoreResult) {
-        request.setShouldStoreResult(shouldStoreResult);
+    public Self setShouldPersistResult(boolean shouldPersistResult) {
+        request.setShouldPersistResult(shouldPersistResult);
         return self();
     }
 }

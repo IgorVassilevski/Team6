@@ -19,8 +19,6 @@
 
 package org.elasticsearch.repositories;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.cluster.AckedClusterStateUpdateTask;
 import org.elasticsearch.cluster.ClusterChangedEvent;
@@ -142,7 +140,7 @@ public class RepositoriesService extends AbstractComponent implements ClusterSta
 
             @Override
             public void onFailure(String source, Exception e) {
-                logger.warn((Supplier<?>) () -> new ParameterizedMessage("failed to create repository [{}]", request.name), e);
+                logger.warn("failed to create repository [{}]", e, request.name);
                 super.onFailure(source, e);
             }
 
@@ -216,7 +214,7 @@ public class RepositoriesService extends AbstractComponent implements ClusterSta
                             try {
                                 repository.endVerification(verificationToken);
                             } catch (Exception e) {
-                                logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] failed to finish repository verification", repositoryName), e);
+                                logger.warn("[{}] failed to finish repository verification", e, repositoryName);
                                 listener.onFailure(e);
                                 return;
                             }
@@ -233,7 +231,7 @@ public class RepositoriesService extends AbstractComponent implements ClusterSta
                         repository.endVerification(verificationToken);
                     } catch (Exception inner) {
                         inner.addSuppressed(e);
-                        logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] failed to finish repository verification", repositoryName), inner);
+                        logger.warn("[{}] failed to finish repository verification", inner, repositoryName);
                     }
                     listener.onFailure(e);
                 }
@@ -295,14 +293,14 @@ public class RepositoriesService extends AbstractComponent implements ClusterSta
                             } catch (RepositoryException ex) {
                                 // TODO: this catch is bogus, it means the old repo is already closed,
                                 // but we have nothing to replace it
-                                logger.warn((Supplier<?>) () -> new ParameterizedMessage("failed to change repository [{}]", repositoryMetaData.name()), ex);
+                                logger.warn("failed to change repository [{}]", ex, repositoryMetaData.name());
                             }
                         }
                     } else {
                         try {
                             repository = createRepository(repositoryMetaData);
                         } catch (RepositoryException ex) {
-                            logger.warn((Supplier<?>) () -> new ParameterizedMessage("failed to create repository [{}]", repositoryMetaData.name()), ex);
+                            logger.warn("failed to create repository [{}]", ex, repositoryMetaData.name());
                         }
                     }
                     if (repository != null) {
@@ -384,7 +382,7 @@ public class RepositoriesService extends AbstractComponent implements ClusterSta
             repository.start();
             return repository;
         } catch (Exception e) {
-            logger.warn((Supplier<?>) () -> new ParameterizedMessage("failed to create repository [{}][{}]", repositoryMetaData.type(), repositoryMetaData.name()), e);
+            logger.warn("failed to create repository [{}][{}]", e, repositoryMetaData.type(), repositoryMetaData.name());
             throw new RepositoryException(repositoryMetaData.name(), "failed to create repository", e);
         }
     }

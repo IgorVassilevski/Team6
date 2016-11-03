@@ -18,6 +18,10 @@
  */
 package org.elasticsearch.test;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.Query;
@@ -33,10 +37,9 @@ import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.fielddata.IndexFieldDataService;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
-import org.elasticsearch.index.mapper.ObjectMapper;
+import org.elasticsearch.index.mapper.object.ObjectMapper;
 import org.elasticsearch.index.query.ParsedQuery;
 import org.elasticsearch.index.query.QueryShardContext;
-import org.elasticsearch.search.fetch.StoredFieldsContext;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.similarity.SimilarityService;
 import org.elasticsearch.script.ScriptService;
@@ -47,9 +50,9 @@ import org.elasticsearch.search.fetch.FetchPhase;
 import org.elasticsearch.search.fetch.FetchSearchResult;
 import org.elasticsearch.search.fetch.FetchSubPhase;
 import org.elasticsearch.search.fetch.FetchSubPhaseContext;
-import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
-import org.elasticsearch.search.fetch.subphase.ScriptFieldsContext;
-import org.elasticsearch.search.fetch.subphase.highlight.SearchContextHighlight;
+import org.elasticsearch.search.fetch.script.ScriptFieldsContext;
+import org.elasticsearch.search.fetch.source.FetchSourceContext;
+import org.elasticsearch.search.highlight.SearchContextHighlight;
 import org.elasticsearch.search.internal.ContextIndexSearcher;
 import org.elasticsearch.search.internal.ScrollContext;
 import org.elasticsearch.search.internal.SearchContext;
@@ -61,10 +64,6 @@ import org.elasticsearch.search.rescore.RescoreSearchContext;
 import org.elasticsearch.search.sort.SortAndFormats;
 import org.elasticsearch.search.suggest.SuggestionSearchContext;
 import org.elasticsearch.threadpool.ThreadPool;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 public class TestSearchContext extends SearchContext {
 
@@ -431,28 +430,17 @@ public class TestSearchContext extends SearchContext {
     }
 
     @Override
-    public boolean hasStoredFields() {
+    public boolean hasFieldNames() {
         return false;
     }
 
     @Override
-    public boolean hasStoredFieldsContext() {
-        return false;
-    }
-
-    @Override
-    public boolean storedFieldsRequested() {
-        return false;
-    }
-
-    @Override
-    public StoredFieldsContext storedFieldsContext() {
+    public List<String> fieldNames() {
         return null;
     }
 
     @Override
-    public SearchContext storedFieldsContext(StoredFieldsContext storedFieldsContext) {
-        return null;
+    public void emptyFieldNames() {
     }
 
     @Override

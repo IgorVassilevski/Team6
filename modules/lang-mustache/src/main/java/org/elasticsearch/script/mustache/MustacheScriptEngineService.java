@@ -20,8 +20,6 @@ package org.elasticsearch.script.mustache;
 
 import com.github.mustachejava.Mustache;
 import com.github.mustachejava.MustacheFactory;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.SpecialPermission;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.component.AbstractComponent;
@@ -167,7 +165,7 @@ public final class MustacheScriptEngineService extends AbstractComponent impleme
                     return null;
                 });
             } catch (Exception e) {
-                logger.error((Supplier<?>) () -> new ParameterizedMessage("Error running {}", template), e);
+                logger.error("Error running {}", e, template);
                 throw new GeneralScriptException("Error running " + template, e);
             }
             return result.bytes();

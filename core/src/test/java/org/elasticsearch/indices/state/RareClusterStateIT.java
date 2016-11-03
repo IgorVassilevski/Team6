@@ -58,7 +58,6 @@ import org.elasticsearch.test.junit.annotations.TestLogging;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -97,7 +96,7 @@ public class RareClusterStateIT extends ESIntegTestCase {
         ClusterState current = clusterService().state();
         GatewayAllocator allocator = internalCluster().getInstance(GatewayAllocator.class);
 
-        AllocationDeciders allocationDeciders = new AllocationDeciders(Settings.EMPTY, Collections.emptyList());
+        AllocationDeciders allocationDeciders = new AllocationDeciders(Settings.EMPTY, new AllocationDecider[0]);
         RoutingNodes routingNodes = new RoutingNodes(
                 ClusterState.builder(current)
                         .routingTable(RoutingTable.builder(current.routingTable()).remove("a").addAsRecovery(current.metaData().index("a")).build())
@@ -126,7 +125,7 @@ public class RareClusterStateIT extends ESIntegTestCase {
             public ClusterState execute(ClusterState currentState) throws Exception {
                 // inject a node
                 ClusterState.Builder builder = ClusterState.builder(currentState);
-                builder.nodes(DiscoveryNodes.builder(currentState.nodes()).add(new DiscoveryNode("_non_existent",
+                builder.nodes(DiscoveryNodes.builder(currentState.nodes()).put(new DiscoveryNode("_non_existent",
                         LocalTransportAddress.buildUnique(), emptyMap(), emptySet(), Version.CURRENT)));
 
                 // open index
@@ -155,11 +154,12 @@ public class RareClusterStateIT extends ESIntegTestCase {
         clusterService.submitStateUpdateTask("test-remove-injected-node", new ClusterStateUpdateTask() {
             @Override
             public ClusterState execute(ClusterState currentState) throws Exception {
+                // inject a node
                 ClusterState.Builder builder = ClusterState.builder(currentState);
                 builder.nodes(DiscoveryNodes.builder(currentState.nodes()).remove("_non_existent"));
 
                 currentState = builder.build();
-                RoutingAllocation.Result result = allocationService.deassociateDeadNodes(currentState, true, "reroute");
+                RoutingAllocation.Result result = allocationService.reroute(currentState, "reroute");
                 return ClusterState.builder(currentState).routingResult(result).build();
 
             }

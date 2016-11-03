@@ -30,10 +30,10 @@ import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.index.query.QueryParseContext;
+import org.elasticsearch.search.suggest.SuggestUtils;
 import org.elasticsearch.search.suggest.Suggester;
 import org.elasticsearch.search.suggest.SuggestionBuilder;
 import org.elasticsearch.search.suggest.SuggestionSearchContext.SuggestionContext;
-import org.elasticsearch.search.suggest.phrase.DirectCandidateGenerator;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,7 +48,7 @@ public final class TermSuggester extends Suggester<TermSuggestionContext> {
     @Override
     public TermSuggestion innerExecute(String name, TermSuggestionContext suggestion, IndexSearcher searcher, CharsRefBuilder spare)
             throws IOException {
-        DirectSpellChecker directSpellChecker = suggestion.getDirectSpellCheckerSettings().createDirectSpellChecker();
+        DirectSpellChecker directSpellChecker = SuggestUtils.getDirectSpellChecker(suggestion.getDirectSpellCheckerSettings());
         final IndexReader indexReader = searcher.getIndexReader();
         TermSuggestion response = new TermSuggestion(
                 name, suggestion.getSize(), suggestion.getDirectSpellCheckerSettings().sort()
@@ -70,11 +70,10 @@ public final class TermSuggester extends Suggester<TermSuggestionContext> {
         return response;
     }
 
-    private static List<Token> queryTerms(SuggestionContext suggestion, CharsRefBuilder spare) throws IOException {
+    private List<Token> queryTerms(SuggestionContext suggestion, CharsRefBuilder spare) throws IOException {
         final List<Token> result = new ArrayList<>();
         final String field = suggestion.getField();
-        DirectCandidateGenerator.analyze(suggestion.getAnalyzer(), suggestion.getText(), field,
-                new DirectCandidateGenerator.TokenConsumer() {
+        SuggestUtils.analyze(suggestion.getAnalyzer(), suggestion.getText(), field, new SuggestUtils.TokenConsumer() {
             @Override
             public void nextToken() {
                 Term term = new Term(field, BytesRef.deepCopyOf(fillBytesRef(new BytesRefBuilder())));

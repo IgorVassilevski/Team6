@@ -127,7 +127,7 @@ experimental[The format of the additional detail information is experimental and
 GET _analyze
 {
   "tokenizer" : "standard",
-  "filter" : ["snowball"],
+  "token_filter" : ["snowball"],
   "text" : "detailed output",
   "explain" : true,
   "attributes" : ["keyword"] <1>
@@ -135,6 +135,8 @@ GET _analyze
 --------------------------------------------------
 // CONSOLE
 <1> Set "keyword" to output "keyword" attribute only
+
+coming[2.0.0, body based parameters were added in 2.0.0]
 
 The request returns the following result:
 
@@ -181,5 +183,4 @@ The request returns the following result:
   }
 }
 --------------------------------------------------
-// TESTRESPONSE
 <1> Output only "keyword" attribute, since specify "attributes" in the request.

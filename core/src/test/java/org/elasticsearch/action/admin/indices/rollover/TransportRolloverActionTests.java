@@ -35,13 +35,11 @@ import org.elasticsearch.index.shard.DocsStats;
 import org.elasticsearch.test.ESTestCase;
 
 import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 import static org.elasticsearch.action.admin.indices.rollover.TransportRolloverAction.evaluateConditions;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.not;
 
 public class TransportRolloverActionTests extends ESTestCase {
 
@@ -98,19 +96,19 @@ public class TransportRolloverActionTests extends ESTestCase {
         final IndicesAliasesClusterStateUpdateRequest updateRequest =
             TransportRolloverAction.prepareRolloverAliasesUpdateRequest(sourceIndex, targetIndex, rolloverRequest);
 
-        List<AliasAction> actions = updateRequest.actions();
-        assertThat(actions, hasSize(2));
+        final AliasAction[] actions = updateRequest.actions();
+        assertThat(actions.length, equalTo(2));
         boolean foundAdd = false;
         boolean foundRemove = false;
         for (AliasAction action : actions) {
-            if (action.getIndex().equals(targetIndex)) {
-                assertEquals(sourceAlias, ((AliasAction.Add) action).getAlias());
+            if (action.actionType() == AliasAction.Type.ADD) {
                 foundAdd = true;
-            } else if (action.getIndex().equals(sourceIndex)) {
-                assertEquals(sourceAlias, ((AliasAction.Remove) action).getAlias());
+                assertThat(action.index(), equalTo(targetIndex));
+                assertThat(action.alias(), equalTo(sourceAlias));
+            } else if (action.actionType() == AliasAction.Type.REMOVE) {
                 foundRemove = true;
-            } else {
-                throw new AssertionError("Unknow index [" + action.getIndex() + "]");
+                assertThat(action.index(), equalTo(sourceIndex));
+                assertThat(action.alias(), equalTo(sourceAlias));
             }
         }
         assertTrue(foundAdd);
@@ -160,9 +158,9 @@ public class TransportRolloverActionTests extends ESTestCase {
         final String indexPrefix = randomAsciiOfLength(10);
         String indexEndingInNumbers = indexPrefix + "-" + num;
         assertThat(TransportRolloverAction.generateRolloverIndexName(indexEndingInNumbers),
-            equalTo(indexPrefix + "-" + String.format(Locale.ROOT, "%06d", num + 1)));
-        assertThat(TransportRolloverAction.generateRolloverIndexName("index-name-1"), equalTo("index-name-000002"));
-        assertThat(TransportRolloverAction.generateRolloverIndexName("index-name-2"), equalTo("index-name-000003"));
+            equalTo(indexPrefix + "-" + (num + 1)));
+        assertThat(TransportRolloverAction.generateRolloverIndexName("index-name-1"), equalTo("index-name-2"));
+        assertThat(TransportRolloverAction.generateRolloverIndexName("index-name-2"), equalTo("index-name-3"));
     }
 
     public void testCreateIndexRequest() throws Exception {

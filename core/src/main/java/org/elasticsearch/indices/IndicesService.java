@@ -20,9 +20,6 @@
 package org.elasticsearch.indices;
 
 import com.carrotsearch.hppc.cursors.ObjectCursor;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.util.CollectionUtil;
@@ -39,7 +36,6 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
-import org.elasticsearch.cluster.routing.RecoverySource;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.Nullable;
@@ -47,11 +43,13 @@ import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.FileSystemUtils;
 import org.elasticsearch.common.io.stream.NamedWriteableAwareStreamInput;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.lease.Releasable;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.IndexScopedSettings;
 import org.elasticsearch.common.settings.Setting;
@@ -64,7 +62,6 @@ import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.iterable.Iterables;
 import org.elasticsearch.env.NodeEnvironment;
 import org.elasticsearch.env.ShardLock;
-import org.elasticsearch.env.ShardLockObtainFailedException;
 import org.elasticsearch.gateway.MetaDataStateFormat;
 import org.elasticsearch.gateway.MetaStateService;
 import org.elasticsearch.index.Index;
@@ -99,8 +96,8 @@ import org.elasticsearch.indices.cluster.IndicesClusterStateService;
 import org.elasticsearch.indices.fielddata.cache.IndicesFieldDataCache;
 import org.elasticsearch.indices.mapper.MapperRegistry;
 import org.elasticsearch.indices.query.IndicesQueriesRegistry;
-import org.elasticsearch.indices.recovery.PeerRecoveryTargetService;
 import org.elasticsearch.indices.recovery.RecoveryState;
+import org.elasticsearch.indices.recovery.RecoveryTargetService;
 import org.elasticsearch.plugins.PluginsService;
 import org.elasticsearch.repositories.RepositoriesService;
 import org.elasticsearch.search.internal.SearchContext;
@@ -170,6 +167,7 @@ public class IndicesService extends AbstractLifecycleComponent
         threadPool.schedule(this.cleanInterval, ThreadPool.Names.SAME, this.cacheCleaner);
     }
 
+    @Inject
     public IndicesService(Settings settings, PluginsService pluginsService, NodeEnvironment nodeEnv,
                           ClusterSettings clusterSettings, AnalysisRegistry analysisRegistry,
                           IndicesQueriesRegistry indicesQueriesRegistry, IndexNameExpressionResolver indexNameExpressionResolver,
@@ -220,7 +218,7 @@ public class IndicesService extends AbstractLifecycleComponent
                 try {
                     removeIndex(index, "shutdown", false);
                 } catch (Exception e) {
-                    logger.warn((Supplier<?>) () -> new ParameterizedMessage("failed to remove index on stop [{}]", index), e);
+                    logger.warn("failed to remove index on stop [{}]", e, index);
                 } finally {
                     latch.countDown();
                 }
@@ -298,7 +296,7 @@ public class IndicesService extends AbstractLifecycleComponent
                     }
                 } catch (IllegalIndexShardStateException e) {
                     // we can safely ignore illegal state on ones that are closing for example
-                    logger.trace((Supplier<?>) () -> new ParameterizedMessage("{} ignoring shard stats", indexShard.shardId()), e);
+                    logger.trace("{} ignoring shard stats", e, indexShard.shardId());
                 }
             }
         }
@@ -441,16 +439,16 @@ public class IndicesService extends AbstractLifecycleComponent
     }
 
     @Override
-    public IndexShard createShard(ShardRouting shardRouting, RecoveryState recoveryState, PeerRecoveryTargetService recoveryTargetService,
-                                  PeerRecoveryTargetService.RecoveryListener recoveryListener, RepositoriesService repositoriesService,
-                                  NodeServicesProvider nodeServicesProvider, Callback<IndexShard.ShardFailure> onShardFailure) throws IOException {
+    public IndexShard createShard(ShardRouting shardRouting, RecoveryState recoveryState, RecoveryTargetService recoveryTargetService,
+                RecoveryTargetService.RecoveryListener recoveryListener, RepositoriesService repositoriesService,
+                NodeServicesProvider nodeServicesProvider, Callback<IndexShard.ShardFailure> onShardFailure) throws IOException {
         ensureChangesAllowed();
         IndexService indexService = indexService(shardRouting.index());
         IndexShard indexShard = indexService.createShard(shardRouting);
         indexShard.addShardFailureCallback(onShardFailure);
         indexShard.startRecovery(recoveryState, recoveryTargetService, recoveryListener, repositoriesService,
             (type, mapping) -> {
-                assert recoveryState.getRecoverySource().getType() == RecoverySource.Type.LOCAL_SHARDS:
+                assert recoveryState.getType() == RecoveryState.Type.LOCAL_SHARDS :
                     "mapping update consumer only required by local shards recovery";
                 try {
                     nodeServicesProvider.getClient().admin().indices().preparePutMapping()
@@ -476,7 +474,7 @@ public class IndicesService extends AbstractLifecycleComponent
         try {
             removeIndex(index, reason, false);
         } catch (Exception e) {
-            logger.warn((Supplier<?>) () -> new ParameterizedMessage("failed to remove index ({})", reason), e);
+            logger.warn("failed to remove index ({})", e, reason);
         }
     }
 
@@ -567,7 +565,7 @@ public class IndicesService extends AbstractLifecycleComponent
         try {
             removeIndex(index, reason, true);
         } catch (Exception e) {
-            logger.warn((Supplier<?>) () -> new ParameterizedMessage("failed to delete index ({})", reason), e);
+            logger.warn("failed to delete index ({})", e, reason);
         }
     }
 
@@ -587,7 +585,7 @@ public class IndicesService extends AbstractLifecycleComponent
                 }
                 deleteIndexStore(reason, metaData, clusterState);
             } catch (IOException e) {
-                logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] failed to delete unassigned index (reason [{}])", metaData.getIndex(), reason), e);
+                logger.warn("[{}] failed to delete unassigned index (reason [{}])", e, metaData.getIndex(), reason);
             }
         }
     }
@@ -639,9 +637,9 @@ public class IndicesService extends AbstractLifecycleComponent
             }
             success = true;
         } catch (LockObtainFailedException ex) {
-            logger.debug((Supplier<?>) () -> new ParameterizedMessage("{} failed to delete index store - at least one shards is still locked", index), ex);
+            logger.debug("{} failed to delete index store - at least one shards is still locked", ex, index);
         } catch (Exception ex) {
-            logger.warn((Supplier<?>) () -> new ParameterizedMessage("{} failed to delete index", index), ex);
+            logger.warn("{} failed to delete index", ex, index);
         } finally {
             if (success == false) {
                 addPendingDelete(index, indexSettings);
@@ -678,8 +676,7 @@ public class IndicesService extends AbstractLifecycleComponent
      * @param clusterState . This is required to access the indexes settings etc.
      * @throws IOException if an IOException occurs
      */
-    public void deleteShardStore(String reason, ShardId shardId, ClusterState clusterState)
-            throws IOException, ShardLockObtainFailedException {
+    public void deleteShardStore(String reason, ShardId shardId, ClusterState clusterState) throws IOException {
         final IndexMetaData metaData = clusterState.getMetaData().indices().get(shardId.getIndexName());
 
         final IndexSettings indexSettings = buildIndexSettings(metaData);
@@ -748,7 +745,7 @@ public class IndicesService extends AbstractLifecycleComponent
             try {
                 metaData = metaStateService.loadIndexState(index);
             } catch (IOException e) {
-                logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] failed to load state file from a stale deleted index, folders will be left on disk", index), e);
+                logger.warn("[{}] failed to load state file from a stale deleted index, folders will be left on disk", e, index);
                 return null;
             }
             final IndexSettings indexSettings = buildIndexSettings(metaData);
@@ -757,7 +754,7 @@ public class IndicesService extends AbstractLifecycleComponent
             } catch (IOException e) {
                 // we just warn about the exception here because if deleteIndexStoreIfDeletionAllowed
                 // throws an exception, it gets added to the list of pending deletes to be tried again
-                logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] failed to delete index on disk", metaData.getIndex()), e);
+                logger.warn("[{}] failed to delete index on disk", e, metaData.getIndex());
             }
             return metaData;
         }
@@ -894,8 +891,7 @@ public class IndicesService extends AbstractLifecycleComponent
      * @param timeout the timeout used for processing pending deletes
      */
     @Override
-    public void processPendingDeletes(Index index, IndexSettings indexSettings, TimeValue timeout)
-            throws IOException, InterruptedException, ShardLockObtainFailedException {
+    public void processPendingDeletes(Index index, IndexSettings indexSettings, TimeValue timeout) throws IOException, InterruptedException {
         logger.debug("{} processing pending deletes", index);
         final long startTimeNS = System.nanoTime();
         final List<ShardLock> shardLocks = nodeEnv.lockAllForIndex(index, indexSettings, timeout.millis());
@@ -929,7 +925,7 @@ public class IndicesService extends AbstractLifecycleComponent
                                 nodeEnv.deleteIndexDirectoryUnderLock(index, indexSettings);
                                 iterator.remove();
                             } catch (IOException ex) {
-                                logger.debug((Supplier<?>) () -> new ParameterizedMessage("{} retry pending delete", index), ex);
+                                logger.debug("{} retry pending delete", ex, index);
                             }
                         } else {
                             assert delete.shardId != -1;
@@ -939,7 +935,7 @@ public class IndicesService extends AbstractLifecycleComponent
                                     deleteShardStore("pending delete", shardLock, delete.settings);
                                     iterator.remove();
                                 } catch (IOException ex) {
-                                    logger.debug((Supplier<?>) () -> new ParameterizedMessage("{} retry pending delete", shardLock.getShardId()), ex);
+                                    logger.debug("{} retry pending delete", ex, shardLock.getShardId());
                                 }
                             } else {
                                 logger.warn("{} no shard lock for pending delete", delete.shardId);
@@ -1002,13 +998,13 @@ public class IndicesService extends AbstractLifecycleComponent
     private static final class CacheCleaner implements Runnable, Releasable {
 
         private final IndicesFieldDataCache cache;
-        private final Logger logger;
+        private final ESLogger logger;
         private final ThreadPool threadPool;
         private final TimeValue interval;
         private final AtomicBoolean closed = new AtomicBoolean(false);
         private final IndicesRequestCache requestCache;
 
-        public CacheCleaner(IndicesFieldDataCache cache, IndicesRequestCache requestCache, Logger logger, ThreadPool threadPool, TimeValue interval) {
+        public CacheCleaner(IndicesFieldDataCache cache, IndicesRequestCache requestCache, ESLogger logger, ThreadPool threadPool, TimeValue interval) {
             this.cache = cache;
             this.requestCache = requestCache;
             this.logger = logger;

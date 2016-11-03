@@ -21,6 +21,7 @@ package org.elasticsearch.search.suggest.phrase;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.search.suggest.SuggestUtils;
 import org.elasticsearch.search.suggest.phrase.DirectCandidateGenerator.Candidate;
 
 import java.io.IOException;
@@ -40,15 +41,15 @@ final class LaplaceScorer extends WordScorer {
 
     @Override
     protected double scoreBigram(Candidate word, Candidate w_1) throws IOException {
-        join(separator, spare, w_1.term, word.term);
+        SuggestUtils.join(separator, spare, w_1.term, word.term);
         return (alpha + frequency(spare.get())) / (alpha +  w_1.frequency + vocabluarySize);
     }
 
     @Override
     protected double scoreTrigram(Candidate word, Candidate w_1, Candidate w_2) throws IOException {
-        join(separator, spare, w_2.term, w_1.term, word.term);
+        SuggestUtils.join(separator, spare, w_2.term, w_1.term, word.term);
         long trigramCount = frequency(spare.get());
-        join(separator, spare, w_1.term, word.term);
+        SuggestUtils.join(separator, spare, w_1.term, word.term);
         return (alpha + trigramCount) / (alpha  +  frequency(spare.get()) + vocabluarySize);
     }
 

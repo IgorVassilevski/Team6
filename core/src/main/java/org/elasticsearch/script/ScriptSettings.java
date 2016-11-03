@@ -19,9 +19,11 @@
 
 package org.elasticsearch.script;
 
+import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.script.ScriptService;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,10 +31,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class ScriptSettings {
 
-    public static final String DEFAULT_LANG = "painless";
+    public static final String DEFAULT_LANG = "groovy";
 
     private static final Map<ScriptService.ScriptType, Setting<Boolean>> SCRIPT_TYPE_SETTING_MAP;
 
@@ -59,7 +62,7 @@ public class ScriptSettings {
         this.scriptLanguageSettings = Collections.unmodifiableList(scriptLanguageSettings);
 
         this.defaultScriptLanguageSetting = new Setting<>("script.default_lang", DEFAULT_LANG, setting -> {
-            if (!DEFAULT_LANG.equals(setting) && !scriptEngineRegistry.getRegisteredLanguages().containsKey(setting)) {
+            if (!"groovy".equals(setting) && !scriptEngineRegistry.getRegisteredLanguages().containsKey(setting)) {
                 throw new IllegalArgumentException("unregistered default language [" + setting + "]");
             }
             return setting;
@@ -97,25 +100,9 @@ public class ScriptSettings {
                 }
                 final boolean defaultIfNothingSet = defaultLangAndType;
 
-                Function<Settings, String> defaultLangAndTypeFn = settings -> {
-                    final Setting<Boolean> globalTypeSetting = scriptTypeSettingMap.get(scriptType);
-                    final Setting<Boolean> langAndTypeSetting = Setting.boolSetting(ScriptModes.getGlobalKey(language, scriptType),
-                            defaultIfNothingSet, Property.NodeScope);
-
-                    if (langAndTypeSetting.exists(settings)) {
-                        // fine-grained e.g. script.engine.groovy.inline
-                        return langAndTypeSetting.get(settings).toString();
-                    } else if (globalTypeSetting.exists(settings)) {
-                        // global type - script.inline
-                        return globalTypeSetting.get(settings).toString();
-                    } else {
-                        return Boolean.toString(defaultIfNothingSet);
-                    }
-                };
-
                 // Setting for something like "script.engine.groovy.inline"
                 final Setting<Boolean> langAndTypeSetting = Setting.boolSetting(ScriptModes.getGlobalKey(language, scriptType),
-                        defaultLangAndTypeFn, Property.NodeScope);
+                        defaultLangAndType, Property.NodeScope);
                 scriptModeSettings.add(langAndTypeSetting);
 
                 for (ScriptContext scriptContext : scriptContextRegistry.scriptContexts()) {

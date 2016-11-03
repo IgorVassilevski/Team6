@@ -23,15 +23,11 @@ import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.PointRangeQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
-import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.lucene.search.MatchNoDocsQuery;
 import org.elasticsearch.common.lucene.search.MultiPhrasePrefixQuery;
 import org.elasticsearch.test.AbstractQueryTestCase;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
 import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.Matchers.containsString;
@@ -74,20 +70,6 @@ public class MatchPhrasePrefixQueryBuilderTests extends AbstractQueryTestCase<Ma
     }
 
     @Override
-    protected Map<String, MatchPhrasePrefixQueryBuilder> getAlternateVersions() {
-        Map<String, MatchPhrasePrefixQueryBuilder> alternateVersions = new HashMap<>();
-        MatchPhrasePrefixQueryBuilder matchPhrasePrefixQuery = new MatchPhrasePrefixQueryBuilder(randomAsciiOfLengthBetween(1, 10),
-                randomAsciiOfLengthBetween(1, 10));
-        String contentString = "{\n" +
-                "    \"match_phrase_prefix\" : {\n" +
-                "        \"" + matchPhrasePrefixQuery.fieldName() + "\" : \"" + matchPhrasePrefixQuery.value() + "\"\n" +
-                "    }\n" +
-                "}";
-        alternateVersions.put(contentString, matchPhrasePrefixQuery);
-        return alternateVersions;
-    }
-
-    @Override
     protected void doAssertLuceneQuery(MatchPhrasePrefixQueryBuilder queryBuilder, Query query, QueryShardContext context)
             throws IOException {
         assertThat(query, notNullValue());
@@ -97,22 +79,39 @@ public class MatchPhrasePrefixQueryBuilderTests extends AbstractQueryTestCase<Ma
     }
 
     public void testIllegalValues() {
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> new MatchPhrasePrefixQueryBuilder(null, "value"));
-        assertEquals("[match_phrase_prefix] requires fieldName", e.getMessage());
+        try {
+            new MatchPhrasePrefixQueryBuilder(null, "value");
+            fail("value must not be non-null");
+        } catch (IllegalArgumentException ex) {
+            // expected
+        }
 
-        e = expectThrows(IllegalArgumentException.class, () -> new MatchPhrasePrefixQueryBuilder("fieldName", null));
-        assertEquals("[match_phrase_prefix] requires query value", e.getMessage());
+        try {
+            new MatchPhrasePrefixQueryBuilder("fieldName", null);
+            fail("value must not be non-null");
+        } catch (IllegalArgumentException ex) {
+            // expected
+        }
 
         MatchPhrasePrefixQueryBuilder matchQuery = new MatchPhrasePrefixQueryBuilder("fieldName", "text");
-        e = expectThrows(IllegalArgumentException.class, () -> matchQuery.maxExpansions(-1));
+
+        try {
+            matchQuery.maxExpansions(-1);
+            fail("must not be positive");
+        } catch (IllegalArgumentException ex) {
+            // expected
+        }
     }
 
     public void testBadAnalyzer() throws IOException {
         MatchPhrasePrefixQueryBuilder matchQuery = new MatchPhrasePrefixQueryBuilder("fieldName", "text");
         matchQuery.analyzer("bogusAnalyzer");
-
-        QueryShardException e = expectThrows(QueryShardException.class, () -> matchQuery.toQuery(createShardContext()));
-        assertThat(e.getMessage(), containsString("analyzer [bogusAnalyzer] not found"));
+        try {
+            matchQuery.toQuery(createShardContext());
+            fail("Expected QueryShardException");
+        } catch (QueryShardException e) {
+            assertThat(e.getMessage(), containsString("analyzer [bogusAnalyzer] not found"));
+        }
     }
 
     public void testPhrasePrefixMatchQuery() throws IOException {
@@ -155,30 +154,5 @@ public class MatchPhrasePrefixQueryBuilderTests extends AbstractQueryTestCase<Ma
                 "}";
         qb = (MatchPhrasePrefixQueryBuilder) parseQuery(json3);
         checkGeneratedJson(expected, qb);
-    }
-
-
-    public void testParseFailsWithMultipleFields() throws IOException {
-        String json = "{\n" +
-                "  \"match_phrase_prefix\" : {\n" +
-                "    \"message1\" : {\n" +
-                "      \"query\" : \"this is a test\"\n" +
-                "    },\n" +
-                "    \"message2\" : {\n" +
-                "      \"query\" : \"this is a test\"\n" +
-                "    }\n" +
-                "  }\n" +
-                "}";
-        ParsingException e = expectThrows(ParsingException.class, () -> parseQuery(json));
-        assertEquals("[match_phrase_prefix] query doesn't support multiple fields, found [message1] and [message2]", e.getMessage());
-
-        String shortJson = "{\n" +
-                "  \"match_phrase_prefix\" : {\n" +
-                "    \"message1\" : \"this is a test\",\n" +
-                "    \"message2\" : \"this is a test\"\n" +
-                "  }\n" +
-                "}";
-        e = expectThrows(ParsingException.class, () -> parseQuery(shortJson));
-        assertEquals("[match_phrase_prefix] query doesn't support multiple fields, found [message1] and [message2]", e.getMessage());
     }
 }

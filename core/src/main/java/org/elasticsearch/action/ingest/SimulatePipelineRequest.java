@@ -81,7 +81,7 @@ public class SimulatePipelineRequest extends ActionRequest<SimulatePipelineReque
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
-        id = in.readOptionalString();
+        id = in.readString();
         verbose = in.readBoolean();
         source = in.readBytesReference();
     }
@@ -89,7 +89,7 @@ public class SimulatePipelineRequest extends ActionRequest<SimulatePipelineReque
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeOptionalString(id);
+        out.writeString(id);
         out.writeBoolean(verbose);
         out.writeBytesReference(source);
     }

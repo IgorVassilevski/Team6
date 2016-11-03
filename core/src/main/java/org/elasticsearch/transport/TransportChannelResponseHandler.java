@@ -19,8 +19,7 @@
 
 package org.elasticsearch.transport;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.threadpool.ThreadPool;
 
 import java.io.IOException;
@@ -31,12 +30,12 @@ import java.util.function.Supplier;
  */
 public class TransportChannelResponseHandler<T extends TransportResponse> implements TransportResponseHandler<T> {
 
-    private final Logger logger;
+    private final ESLogger logger;
     private final TransportChannel channel;
     private final String extraInfoOnError;
     private final Supplier<T> responseSupplier;
 
-    public TransportChannelResponseHandler(Logger logger, TransportChannel channel, String extraInfoOnError,
+    public TransportChannelResponseHandler(ESLogger logger, TransportChannel channel, String extraInfoOnError,
                                            Supplier<T> responseSupplier) {
         this.logger = logger;
         this.channel = channel;
@@ -63,12 +62,7 @@ public class TransportChannelResponseHandler<T extends TransportResponse> implem
         try {
             channel.sendResponse(exp);
         } catch (IOException e) {
-            logger.debug(
-                (org.apache.logging.log4j.util.Supplier<?>)
-                    () -> new ParameterizedMessage(
-                        "failed to send failure {}",
-                        extraInfoOnError == null ? "" : "(" + extraInfoOnError + ")"),
-                e);
+            logger.debug("failed to send failure {}", e, extraInfoOnError == null ? "" : "(" + extraInfoOnError + ")");
         }
     }
 

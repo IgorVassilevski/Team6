@@ -19,8 +19,6 @@
 
 package org.elasticsearch.action.admin.indices.mapping.put;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.master.TransportMasterNodeAction;
@@ -94,12 +92,12 @@ public class TransportPutMappingAction extends TransportMasterNodeAction<PutMapp
 
                 @Override
                 public void onFailure(Exception t) {
-                    logger.debug((Supplier<?>) () -> new ParameterizedMessage("failed to put mappings on indices [{}], type [{}]", concreteIndices, request.type()), t);
+                    logger.debug("failed to put mappings on indices [{}], type [{}]", t, concreteIndices, request.type());
                     listener.onFailure(t);
                 }
             });
         } catch (IndexNotFoundException ex) {
-            logger.debug((Supplier<?>) () -> new ParameterizedMessage("failed to put mappings on indices [{}], type [{}]", request.indices(), request.type()), ex);
+            logger.debug("failed to put mappings on indices [{}], type [{}]", ex, request.indices(), request.type());
             throw ex;
         }
     }

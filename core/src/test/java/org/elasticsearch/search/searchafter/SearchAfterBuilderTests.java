@@ -45,6 +45,7 @@ import static org.hamcrest.Matchers.equalTo;
 
 public class SearchAfterBuilderTests extends ESTestCase {
     private static final int NUMBER_OF_TESTBUILDERS = 20;
+    private static NamedWriteableRegistry namedWriteableRegistry;
     private static IndicesQueriesRegistry indicesQueriesRegistry;
 
     /**
@@ -52,6 +53,7 @@ public class SearchAfterBuilderTests extends ESTestCase {
      */
     @BeforeClass
     public static void init() {
+        namedWriteableRegistry = new NamedWriteableRegistry();
         indicesQueriesRegistry = new IndicesQueriesRegistry();
         QueryParser<MatchAllQueryBuilder> parser = MatchAllQueryBuilder::fromXContent;
         indicesQueriesRegistry.register(parser, MatchAllQueryBuilder.NAME);
@@ -59,6 +61,7 @@ public class SearchAfterBuilderTests extends ESTestCase {
 
     @AfterClass
     public static void afterClass() throws Exception {
+        namedWriteableRegistry = null;
         indicesQueriesRegistry = null;
     }
 
@@ -161,7 +164,7 @@ public class SearchAfterBuilderTests extends ESTestCase {
     private static SearchAfterBuilder serializedCopy(SearchAfterBuilder original) throws IOException {
         try (BytesStreamOutput output = new BytesStreamOutput()) {
             original.writeTo(output);
-            try (StreamInput in = output.bytes().streamInput()) {
+            try (StreamInput in = new NamedWriteableAwareStreamInput(output.bytes().streamInput(), namedWriteableRegistry)) {
                 return new SearchAfterBuilder(in);
             }
         }

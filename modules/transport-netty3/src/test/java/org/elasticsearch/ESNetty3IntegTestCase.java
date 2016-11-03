@@ -25,7 +25,6 @@ import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.transport.Netty3Plugin;
 import org.elasticsearch.transport.netty3.Netty3Transport;
 
-import java.util.Arrays;
 import java.util.Collection;
 
 @ESIntegTestCase.SuppressLocalMode
@@ -48,26 +47,26 @@ public abstract class ESNetty3IntegTestCase extends ESIntegTestCase {
         if (randomBoolean()) {
             builder.put(Netty3Transport.WORKER_COUNT.getKey(), random().nextInt(3) + 1);
         }
-        builder.put(NetworkModule.TRANSPORT_TYPE_KEY, Netty3Plugin.NETTY_TRANSPORT_NAME);
-        builder.put(NetworkModule.HTTP_TYPE_KEY, Netty3Plugin.NETTY_HTTP_TRANSPORT_NAME);
+        builder.put(NetworkModule.TRANSPORT_TYPE_KEY, "netty3");
+        builder.put(NetworkModule.HTTP_TYPE_KEY, "netty3");
         return builder.build();
     }
 
     @Override
     protected Settings transportClientSettings() {
         Settings.Builder builder = Settings.builder().put(super.transportClientSettings());
-        builder.put(NetworkModule.TRANSPORT_TYPE_KEY, Netty3Plugin.NETTY_TRANSPORT_NAME);
+        builder.put(NetworkModule.TRANSPORT_TYPE_KEY, "netty3");
         return  builder.build();
     }
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(Netty3Plugin.class);
+        return pluginList(Netty3Plugin.class);
     }
 
     @Override
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
-        return Arrays.asList(Netty3Plugin.class);
+        return pluginList(Netty3Plugin.class);
     }
 
 }

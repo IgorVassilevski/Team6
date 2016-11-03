@@ -270,6 +270,11 @@ public class S3Repository extends BlobStoreRepository {
         String endpoint = getValue(metadata.settings(), settings, Repository.ENDPOINT_SETTING, Repositories.ENDPOINT_SETTING);
         Protocol protocol = getValue(metadata.settings(), settings, Repository.PROTOCOL_SETTING, Repositories.PROTOCOL_SETTING);
         String region = getValue(metadata.settings(), settings, Repository.REGION_SETTING, Repositories.REGION_SETTING);
+        // If no region is defined either in region, repositories.s3.region, cloud.aws.s3.region or cloud.aws.region
+        // we fallback to Default bucket - null
+        if (Strings.isEmpty(region)) {
+            region = null;
+        }
 
         boolean serverSideEncryption = getValue(metadata.settings(), settings, Repository.SERVER_SIDE_ENCRYPTION_SETTING, Repositories.SERVER_SIDE_ENCRYPTION_SETTING);
         ByteSizeValue bufferSize = getValue(metadata.settings(), settings, Repository.BUFFER_SIZE_SETTING, Repositories.BUFFER_SIZE_SETTING);
@@ -301,8 +306,11 @@ public class S3Repository extends BlobStoreRepository {
             bucket, region, endpoint, protocol, chunkSize, serverSideEncryption, bufferSize, maxRetries, useThrottleRetries, cannedACL,
             storageClass, pathStyleAccess);
 
+        String key = getValue(metadata.settings(), settings, Repository.KEY_SETTING, Repositories.KEY_SETTING);
+        String secret = getValue(metadata.settings(), settings, Repository.SECRET_SETTING, Repositories.SECRET_SETTING);
+
         blobStore = new S3BlobStore(settings,
-            s3Service.client(metadata.settings(), endpoint, protocol, region, maxRetries, useThrottleRetries, pathStyleAccess),
+            s3Service.client(endpoint, protocol, region, key, secret, maxRetries, useThrottleRetries, pathStyleAccess),
                 bucket, region, serverSideEncryption, bufferSize, maxRetries, cannedACL, storageClass);
 
         String basePath = getValue(metadata.settings(), settings, Repository.BASE_PATH_SETTING, Repositories.BASE_PATH_SETTING);

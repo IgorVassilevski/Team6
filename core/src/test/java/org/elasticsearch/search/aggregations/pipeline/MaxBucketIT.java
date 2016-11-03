@@ -22,6 +22,7 @@ package org.elasticsearch.search.aggregations.pipeline;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
+import org.elasticsearch.search.aggregations.bucket.histogram.ExtendedBounds;
 import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
 import org.elasticsearch.search.aggregations.bucket.histogram.Histogram.Bucket;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
@@ -98,7 +99,7 @@ public class MaxBucketIT extends ESIntegTestCase {
     public void testDocCountTopLevel() throws Exception {
         SearchResponse response = client().prepareSearch("idx")
                 .addAggregation(histogram("histo").field(SINGLE_VALUED_FIELD_NAME).interval(interval)
-                        .extendedBounds(minRandomValue, maxRandomValue))
+                        .extendedBounds(new ExtendedBounds((long) minRandomValue, (long) maxRandomValue)))
                 .addAggregation(maxBucket("max_bucket", "histo>_count")).execute().actionGet();
 
         assertSearchResponse(response);
@@ -141,7 +142,7 @@ public class MaxBucketIT extends ESIntegTestCase {
                                 .order(Order.term(true))
                                 .subAggregation(
                                         histogram("histo").field(SINGLE_VALUED_FIELD_NAME).interval(interval)
-                                .extendedBounds(minRandomValue, maxRandomValue))
+                                .extendedBounds(new ExtendedBounds((long) minRandomValue, (long) maxRandomValue)))
                                 .subAggregation(maxBucket("max_bucket", "histo>_count"))).execute().actionGet();
 
         assertSearchResponse(response);
@@ -233,7 +234,7 @@ public class MaxBucketIT extends ESIntegTestCase {
                                 .order(Order.term(true))
                                 .subAggregation(
                                         histogram("histo").field(SINGLE_VALUED_FIELD_NAME).interval(interval)
-                                .extendedBounds(minRandomValue, maxRandomValue)
+                                .extendedBounds(new ExtendedBounds((long) minRandomValue, (long) maxRandomValue))
                                                 .subAggregation(sum("sum").field(SINGLE_VALUED_FIELD_NAME)))
                                 .subAggregation(maxBucket("max_bucket", "histo>sum"))).execute().actionGet();
 
@@ -289,7 +290,7 @@ public class MaxBucketIT extends ESIntegTestCase {
                         filter("filter", termQuery("tag", "tag0"))
                                 .subAggregation(
                                         histogram("histo").field(SINGLE_VALUED_FIELD_NAME).interval(interval)
-                                .extendedBounds(minRandomValue, maxRandomValue)
+                                .extendedBounds(new ExtendedBounds((long) minRandomValue, (long) maxRandomValue))
                                                 .subAggregation(sum("sum").field(SINGLE_VALUED_FIELD_NAME)))
                                 .subAggregation(maxBucket("max_bucket", "histo>sum"))).execute().actionGet();
 
@@ -338,7 +339,7 @@ public class MaxBucketIT extends ESIntegTestCase {
                                 .order(Order.term(true))
                                 .subAggregation(
                                         histogram("histo").field(SINGLE_VALUED_FIELD_NAME).interval(interval)
-                                .extendedBounds(minRandomValue, maxRandomValue)
+                                .extendedBounds(new ExtendedBounds((long) minRandomValue, (long) maxRandomValue))
                                                 .subAggregation(sum("sum").field(SINGLE_VALUED_FIELD_NAME)))
                                 .subAggregation(maxBucket("max_bucket", "histo>sum").gapPolicy(GapPolicy.INSERT_ZEROS)))
                 .execute().actionGet();
@@ -416,7 +417,7 @@ public class MaxBucketIT extends ESIntegTestCase {
                                 .order(Order.term(true))
                                 .subAggregation(
                                         histogram("histo").field(SINGLE_VALUED_FIELD_NAME).interval(interval)
-                                .extendedBounds(minRandomValue, maxRandomValue))
+                                .extendedBounds(new ExtendedBounds((long) minRandomValue, (long) maxRandomValue)))
                                 .subAggregation(maxBucket("max_histo_bucket", "histo>_count")))
                 .addAggregation(maxBucket("max_terms_bucket", "terms>max_histo_bucket")).execute().actionGet();
 

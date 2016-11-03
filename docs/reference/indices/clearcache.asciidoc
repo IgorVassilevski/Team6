@@ -6,10 +6,8 @@ associated with one or more indices.
 
 [source,js]
 --------------------------------------------------
-POST /twitter/_cache/clear
+$ curl -XPOST 'http://localhost:9200/twitter/_cache/clear'
 --------------------------------------------------
-// CONSOLE
-// TEST[setup:twitter]
 
 The API, by default, will clear all caches. Specific caches can be cleaned
 explicitly by setting `query`, `fielddata` or `request`.
@@ -26,9 +24,8 @@ call, or even on `_all` the indices.
 
 [source,js]
 --------------------------------------------------
-POST /kimchy,elasticsearch/_cache/clear
+$ curl -XPOST 'http://localhost:9200/kimchy,elasticsearch/_cache/clear'
 
-POST /_cache/clear
+$ curl -XPOST 'http://localhost:9200/_cache/clear'
 --------------------------------------------------
-// CONSOLE
-// TEST[s/^/PUT kimchy\nPUT elasticsearch\n/]
+

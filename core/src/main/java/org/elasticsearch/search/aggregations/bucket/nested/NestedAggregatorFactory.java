@@ -19,7 +19,7 @@
 
 package org.elasticsearch.search.aggregations.bucket.nested;
 
-import org.elasticsearch.index.mapper.ObjectMapper;
+import org.elasticsearch.index.mapper.object.ObjectMapper;
 import org.elasticsearch.search.aggregations.AggregationExecutionException;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
@@ -36,15 +36,12 @@ import java.util.Map;
 
 public class NestedAggregatorFactory extends AggregatorFactory<NestedAggregatorFactory> {
 
-    private final ObjectMapper parentObjectMapper;
-    private final ObjectMapper childObjectMapper;
+    private final String path;
 
-    public NestedAggregatorFactory(String name, Type type, ObjectMapper parentObjectMapper, ObjectMapper childObjectMapper,
-                                   AggregationContext context, AggregatorFactory<?> parent, AggregatorFactories.Builder subFactories,
-                                   Map<String, Object> metaData) throws IOException {
+    public NestedAggregatorFactory(String name, Type type, String path, AggregationContext context, AggregatorFactory<?> parent,
+            AggregatorFactories.Builder subFactories, Map<String, Object> metaData) throws IOException {
         super(name, type, context, parent, subFactories, metaData);
-        this.parentObjectMapper = parentObjectMapper;
-        this.childObjectMapper = childObjectMapper;
+        this.path = path;
     }
 
     @Override
@@ -53,10 +50,14 @@ public class NestedAggregatorFactory extends AggregatorFactory<NestedAggregatorF
         if (collectsFromSingleBucket == false) {
             return asMultiBucketAggregator(this, context, parent);
         }
-        if (childObjectMapper == null) {
+        ObjectMapper objectMapper = context.searchContext().getObjectMapper(path);
+        if (objectMapper == null) {
             return new Unmapped(name, context, parent, pipelineAggregators, metaData);
         }
-        return new NestedAggregator(name, factories, parentObjectMapper, childObjectMapper, context, parent, pipelineAggregators, metaData);
+        if (!objectMapper.nested().isNested()) {
+            throw new AggregationExecutionException("[nested] nested path [" + path + "] is not nested");
+        }
+        return new NestedAggregator(name, factories, objectMapper, context, parent, pipelineAggregators, metaData);
     }
 
     private static final class Unmapped extends NonCollectingAggregator {

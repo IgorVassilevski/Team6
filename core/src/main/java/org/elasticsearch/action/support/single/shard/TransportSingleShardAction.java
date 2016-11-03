@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.support.single.shard;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.NoShardAvailableActionException;
@@ -40,10 +39,10 @@ import org.elasticsearch.common.logging.LoggerMessageFormat;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.TransportChannel;
 import org.elasticsearch.transport.TransportException;
 import org.elasticsearch.transport.TransportRequestHandler;
-import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.TransportService;
 
 import java.util.function.Supplier;
@@ -188,9 +187,7 @@ public abstract class TransportSingleShardAction<Request extends SingleShardRequ
 
         private void onFailure(ShardRouting shardRouting, Exception e) {
             if (logger.isTraceEnabled() && e != null) {
-                logger.trace(
-                    (org.apache.logging.log4j.util.Supplier<?>)
-                        () -> new ParameterizedMessage("{}: failed to execute [{}]", shardRouting, internalRequest.request()), e);
+                logger.trace("{}: failed to execute [{}]", e, shardRouting, internalRequest.request());
             }
             perform(e);
         }
@@ -208,9 +205,7 @@ public abstract class TransportSingleShardAction<Request extends SingleShardRequ
                     failure = new NoShardAvailableActionException(null, LoggerMessageFormat.format("No shard available for [{}]", internalRequest.request()), failure);
                 } else {
                     if (logger.isDebugEnabled()) {
-                        logger.debug(
-                            (org.apache.logging.log4j.util.Supplier<?>)
-                                () -> new ParameterizedMessage("{}: failed to execute [{}]", null, internalRequest.request()), failure);
+                        logger.debug("{}: failed to execute [{}]", failure, null, internalRequest.request());
                     }
                 }
                 listener.onFailure(failure);

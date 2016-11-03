@@ -68,7 +68,7 @@ public class GroovyScriptTests extends ESIntegTestCase {
     }
 
     public void assertScript(String scriptString) {
-        Script script = new Script(scriptString, ScriptType.INLINE, GroovyScriptEngineService.NAME, null);
+        Script script = new Script(scriptString, ScriptType.INLINE, "groovy", null);
         SearchResponse resp = client().prepareSearch("test")
                 .setSource(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()).sort(SortBuilders.
                         scriptSort(script, ScriptSortType.NUMBER)))
@@ -99,8 +99,7 @@ public class GroovyScriptTests extends ESIntegTestCase {
 
         try {
             client().prepareSearch("test")
-                    .setQuery(constantScoreQuery(scriptQuery(
-                            new Script("null.foo", ScriptType.INLINE, GroovyScriptEngineService.NAME, null)))).get();
+                    .setQuery(constantScoreQuery(scriptQuery(new Script("null.foo", ScriptType.INLINE, "groovy", null)))).get();
             fail("should have thrown an exception");
         } catch (SearchPhaseExecutionException e) {
             assertThat(e.toString() + "should not contained NotSerializableTransportException",
@@ -119,9 +118,8 @@ public class GroovyScriptTests extends ESIntegTestCase {
         refresh();
 
         // doc[] access
-        SearchResponse resp = client().prepareSearch("test").setQuery(functionScoreQuery(scriptFunction(
-                new Script("doc['bar'].value", ScriptType.INLINE, GroovyScriptEngineService.NAME, null)))
-                        .boostMode(CombineFunction.REPLACE)).get();
+        SearchResponse resp = client().prepareSearch("test").setQuery(functionScoreQuery(scriptFunction(new Script("doc['bar'].value", ScriptType.INLINE, "groovy", null)))
+            .boostMode(CombineFunction.REPLACE)).get();
 
         assertNoFailures(resp);
         assertOrderedSearchHits(resp, "3", "2", "1");
@@ -135,7 +133,7 @@ public class GroovyScriptTests extends ESIntegTestCase {
 
         // _score can be accessed
         SearchResponse resp = client().prepareSearch("test").setQuery(functionScoreQuery(matchQuery("foo", "dog"),
-                scriptFunction(new Script("_score", ScriptType.INLINE, GroovyScriptEngineService.NAME, null)))
+                scriptFunction(new Script("_score", ScriptType.INLINE, "groovy", null)))
             .boostMode(CombineFunction.REPLACE)).get();
         assertNoFailures(resp);
         assertSearchHits(resp, "3", "1");
@@ -146,9 +144,9 @@ public class GroovyScriptTests extends ESIntegTestCase {
         resp = client()
                 .prepareSearch("test")
                 .setQuery(
-                        functionScoreQuery(matchQuery("foo", "dog"), scriptFunction(
-                                new Script("_score > 0.0 ? _score : 0", ScriptType.INLINE, GroovyScriptEngineService.NAME, null)))
-                                        .boostMode(CombineFunction.REPLACE)).get();
+                        functionScoreQuery(matchQuery("foo", "dog"),
+                                scriptFunction(new Script("_score > 0.0 ? _score : 0", ScriptType.INLINE, "groovy", null))).boostMode(
+                                CombineFunction.REPLACE)).get();
         assertNoFailures(resp);
         assertSearchHits(resp, "3", "1");
     }

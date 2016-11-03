@@ -19,8 +19,8 @@
 
 package org.elasticsearch.common.lucene;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.util.InfoStream;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 
 /** An InfoStream (for Lucene's IndexWriter) that redirects
@@ -30,12 +30,12 @@ public final class LoggerInfoStream extends InfoStream {
     /** Used for component-specific logging: */
 
     /** Logger for everything */
-    private final Logger logger;
+    private final ESLogger logger;
 
     /** Logger for IndexFileDeleter */
-    private final Logger ifdLogger;
+    private final ESLogger ifdLogger;
 
-    public LoggerInfoStream(Logger parentLogger) {
+    public LoggerInfoStream(ESLogger parentLogger) {
         logger = Loggers.getLogger(parentLogger, ".lucene.iw");
         ifdLogger = Loggers.getLogger(parentLogger, ".lucene.iw.ifd");
     }
@@ -52,7 +52,7 @@ public final class LoggerInfoStream extends InfoStream {
         return getLogger(component).isTraceEnabled() && component.equals("TP") == false;
     }
 
-    private Logger getLogger(String component) {
+    private ESLogger getLogger(String component) {
         if (component.equals("IFD")) {
             return ifdLogger;
         } else {

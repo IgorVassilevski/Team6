@@ -19,7 +19,6 @@ package org.elasticsearch.action.support.master;
  * under the License.
  */
 
-import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.discovery.DiscoverySettings;
@@ -27,9 +26,8 @@ import org.elasticsearch.discovery.zen.elect.ElectMasterService;
 import org.elasticsearch.discovery.zen.fd.FaultDetection;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.disruption.NetworkDisruption;
-import org.elasticsearch.test.disruption.NetworkDisruption.NetworkDisconnect;
-import org.elasticsearch.test.disruption.NetworkDisruption.TwoPartitions;
+import org.elasticsearch.test.disruption.NetworkDisconnectPartition;
+import org.elasticsearch.test.disruption.NetworkPartition;
 import org.elasticsearch.test.transport.MockTransportService;
 
 import java.util.Arrays;
@@ -99,7 +97,7 @@ public class IndexingMasterFailoverIT extends ESIntegTestCase {
                 for (int i = 0; i < 10; i++) {
                     // index data with mapping changes
                     IndexResponse response = client(dataNode).prepareIndex("myindex", "mytype").setSource("field_" + i, "val").get();
-                    assertEquals(DocWriteResponse.Result.CREATED, response.getResult());
+                    assertThat(response.isCreated(), equalTo(true));
                 }
             }
         });
@@ -113,9 +111,7 @@ public class IndexingMasterFailoverIT extends ESIntegTestCase {
         Set<String> otherNodes = new HashSet<>(Arrays.asList(internalCluster().getNodeNames()));
         otherNodes.remove(master);
 
-        NetworkDisruption partition = new NetworkDisruption(
-            new TwoPartitions(Collections.singleton(master), otherNodes),
-            new NetworkDisconnect());
+        NetworkPartition partition = new NetworkDisconnectPartition(Collections.singleton(master), otherNodes, random());
         internalCluster().setDisruptionScheme(partition);
 
         logger.info("--> disrupting network");

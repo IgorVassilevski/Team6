@@ -25,8 +25,6 @@ import com.fasterxml.jackson.core.filter.FilteringGeneratorDelegate;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.test.ESTestCase;
 
-import java.util.Collections;
-
 import static org.hamcrest.Matchers.equalTo;
 
 public class FilterPathGeneratorFilteringTests extends ESTestCase {
@@ -137,7 +135,7 @@ public class FilterPathGeneratorFilteringTests extends ESTestCase {
     private void assertResult(String input, String filter, boolean inclusive, String expected) throws Exception {
         try (BytesStreamOutput os = new BytesStreamOutput()) {
             try (FilteringGeneratorDelegate generator = new FilteringGeneratorDelegate(JSON_FACTORY.createGenerator(os),
-                    new FilterPathBasedFilter(Collections.singleton(filter), inclusive), true, true)) {
+                    new FilterPathBasedFilter(new String[] { filter }, inclusive), true, true)) {
                 try (JsonParser parser = JSON_FACTORY.createParser(replaceQuotes(input))) {
                     while (parser.nextToken() != null) {
                         generator.copyCurrentStructure(parser);

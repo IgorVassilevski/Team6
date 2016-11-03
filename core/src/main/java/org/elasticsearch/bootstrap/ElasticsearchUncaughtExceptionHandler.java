@@ -19,15 +19,12 @@
 
 package org.elasticsearch.bootstrap;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.apache.lucene.index.MergePolicy;
 import org.elasticsearch.common.SuppressForbidden;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 
 import java.io.IOError;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -77,30 +74,21 @@ class ElasticsearchUncaughtExceptionHandler implements Thread.UncaughtExceptionH
 
     // visible for testing
     void onFatalUncaught(final String threadName, final Throwable t) {
-        final Logger logger = Loggers.getLogger(ElasticsearchUncaughtExceptionHandler.class, loggingPrefixSupplier.get());
-        logger.error(
-            (org.apache.logging.log4j.util.Supplier<?>)
-                () -> new ParameterizedMessage("fatal error in thread [{}], exiting", threadName), t);
+        final ESLogger logger = Loggers.getLogger(ElasticsearchUncaughtExceptionHandler.class, loggingPrefixSupplier.get());
+        logger.error("fatal error in thread [{}], exiting", t, threadName);
     }
 
     // visible for testing
     void onNonFatalUncaught(final String threadName, final Throwable t) {
-        final Logger logger = Loggers.getLogger(ElasticsearchUncaughtExceptionHandler.class, loggingPrefixSupplier.get());
-        logger.warn((org.apache.logging.log4j.util.Supplier<?>)
-            () -> new ParameterizedMessage("uncaught exception in thread [{}]", threadName), t);
+        final ESLogger logger = Loggers.getLogger(ElasticsearchUncaughtExceptionHandler.class, loggingPrefixSupplier.get());
+        logger.warn("uncaught exception in thread [{}]", t, threadName);
     }
 
     // visible for testing
+    @SuppressForbidden(reason = "halt")
     void halt(int status) {
-        AccessController.doPrivileged(new PrivilegedAction<Void>() {
-            @SuppressForbidden(reason = "halt")
-            @Override
-            public Void run() {
-                // we halt to prevent shutdown hooks from running
-                Runtime.getRuntime().halt(status);
-                return null;
-            }
-        });
+        // we halt to prevent shutdown hooks from running
+        Runtime.getRuntime().halt(status);
     }
 
 }

@@ -47,14 +47,9 @@ import org.elasticsearch.index.shard.DocsStats;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import static java.util.Collections.unmodifiableList;
 
 /**
  * Main class to swap the index pointed to by an alias, given some conditions
@@ -160,12 +155,13 @@ public class TransportRolloverAction extends TransportMasterNodeAction<RolloverR
 
     static IndicesAliasesClusterStateUpdateRequest prepareRolloverAliasesUpdateRequest(String oldIndex, String newIndex,
                                                                                        RolloverRequest request) {
-        List<AliasAction> actions = unmodifiableList(Arrays.asList(
-                new AliasAction.Add(newIndex, request.getAlias(), null, null, null),
-                new AliasAction.Remove(oldIndex, request.getAlias())));
-        final IndicesAliasesClusterStateUpdateRequest updateRequest = new IndicesAliasesClusterStateUpdateRequest(actions)
+        final IndicesAliasesClusterStateUpdateRequest updateRequest = new IndicesAliasesClusterStateUpdateRequest()
             .ackTimeout(request.ackTimeout())
             .masterNodeTimeout(request.masterNodeTimeout());
+        AliasAction[] actions = new AliasAction[2];
+        actions[0] = new AliasAction(AliasAction.Type.ADD, newIndex, request.getAlias());
+        actions[1] = new AliasAction(AliasAction.Type.REMOVE, oldIndex, request.getAlias());
+        updateRequest.actions(actions);
         return updateRequest;
     }
 
@@ -175,7 +171,7 @@ public class TransportRolloverAction extends TransportMasterNodeAction<RolloverR
             int numberIndex = sourceIndexName.lastIndexOf("-");
             assert numberIndex != -1 : "no separator '-' found";
             int counter = Integer.parseInt(sourceIndexName.substring(numberIndex + 1));
-            return String.join("-", sourceIndexName.substring(0, numberIndex), String.format(Locale.ROOT, "%06d", ++counter));
+            return String.join("-", sourceIndexName.substring(0, numberIndex), String.valueOf(++counter));
         } else {
             throw new IllegalArgumentException("index name [" + sourceIndexName + "] does not match pattern '^.*-(\\d)+$'");
         }

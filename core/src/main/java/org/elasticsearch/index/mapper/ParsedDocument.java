@@ -20,7 +20,6 @@
 package org.elasticsearch.index.mapper;
 
 import org.apache.lucene.document.Field;
-import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.index.mapper.ParseContext.Document;
 
@@ -33,8 +32,7 @@ public class ParsedDocument {
 
     private final Field version;
 
-    private final String id, type;
-    private final BytesRef uid;
+    private final String uid, id, type;
 
     private final String routing;
 
@@ -50,12 +48,11 @@ public class ParsedDocument {
 
     private String parent;
 
-    public ParsedDocument(Field version, String id, String type, String routing, long timestamp, long ttl, List<Document> documents,
-                          BytesReference source, Mapping dynamicMappingsUpdate) {
+    public ParsedDocument(Field version, String id, String type, String routing, long timestamp, long ttl, List<Document> documents, BytesReference source, Mapping dynamicMappingsUpdate) {
         this.version = version;
         this.id = id;
         this.type = type;
-        this.uid = Uid.createUidAsBytes(type, id);
+        this.uid = Uid.createUid(type, id);
         this.routing = routing;
         this.timestamp = timestamp;
         this.ttl = ttl;
@@ -67,7 +64,7 @@ public class ParsedDocument {
         return version;
     }
 
-    public BytesRef uid() {
+    public String uid() {
         return uid;
     }
 

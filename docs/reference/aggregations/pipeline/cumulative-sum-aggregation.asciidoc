@@ -3,7 +3,7 @@
 
 experimental[]
 
-A parent pipeline aggregation which calculates the cumulative sum of a specified metric in a parent histogram (or date_histogram)
+A parent pipeline aggregation which calculates the cumulative sum of a specified metric in a parent histogram (or date_histogram) 
 aggregation. The specified metric must be numeric and the enclosing histogram must have `min_doc_count` set to `0` (default
 for `histogram` aggregations).
 
@@ -32,9 +32,7 @@ The following snippet calculates the cumulative sum of the total monthly `sales`
 
 [source,js]
 --------------------------------------------------
-POST /sales/_search
 {
-    "size": 0,
     "aggs" : {
         "sales_per_month" : {
             "date_histogram" : {
@@ -57,8 +55,6 @@ POST /sales/_search
     }
 }
 --------------------------------------------------
-// CONSOLE
-// TEST[setup:sales]
 
 <1> `buckets_path` instructs this cumulative sum aggregation to use the output of the `sales` aggregation for the cumulative sum
 
@@ -67,10 +63,6 @@ And the following may be the response:
 [source,js]
 --------------------------------------------------
 {
-   "took": 11,
-   "timed_out": false,
-   "_shards": ...,
-   "hits": ...,
    "aggregations": {
       "sales_per_month": {
          "buckets": [
@@ -79,10 +71,10 @@ And the following may be the response:
                "key": 1420070400000,
                "doc_count": 3,
                "sales": {
-                  "value": 550.0
+                  "value": 550
                },
                "cumulative_sales": {
-                  "value": 550.0
+                  "value": 550
                }
             },
             {
@@ -90,10 +82,10 @@ And the following may be the response:
                "key": 1422748800000,
                "doc_count": 2,
                "sales": {
-                  "value": 60.0
+                  "value": 60
                },
                "cumulative_sales": {
-                  "value": 610.0
+                  "value": 610 
                }
             },
             {
@@ -101,10 +93,10 @@ And the following may be the response:
                "key": 1425168000000,
                "doc_count": 2,
                "sales": {
-                  "value": 375.0
+                  "value": 375
                },
                "cumulative_sales": {
-                  "value": 985.0
+                  "value": 985
                }
             }
          ]
@@ -112,6 +104,3 @@ And the following may be the response:
    }
 }
 --------------------------------------------------
-// TESTRESPONSE[s/"took": 11/"took": $body.took/]
-// TESTRESPONSE[s/"_shards": \.\.\./"_shards": $body._shards/]
-// TESTRESPONSE[s/"hits": \.\.\./"hits": $body.hits/]

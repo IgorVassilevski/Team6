@@ -71,17 +71,20 @@ Example response:
 [source,js]
 --------------------------------------------------
 {
-  "my-pipeline-id" : {
-    "description" : "describe pipeline",
-    "processors" : [
-      {
-        "set" : {
-          "field" : "foo",
-          "value" : "bar"
+  "pipelines": [ {
+    "id": "my-pipeline-id",
+    "config": {
+      "description": "describe pipeline",
+      "processors": [
+        {
+          "set" : {
+            "field": "foo",
+            "value": "bar"
+          }
         }
-      }
-    ]
-  }
+      ]
+    }
+  } ]
 }
 --------------------------------------------------
 // TESTRESPONSE
@@ -771,7 +774,7 @@ on a date or timestamp field in a document by using the <<date-math-index-names,
 The processor sets the `_index` meta field with a date math index name expression based on the provided index name
 prefix, a date or timestamp field in the documents being processed and the provided date rounding.
 
-First, this processor fetches the date or timestamp from a field in the document being processed. Optionally,
+First this processor fetches the date or timestamp from a field in the document being processed. Optionally
 date formatting can be configured on how the field's value should be parsed into a date. Then this date,
 the provided index name prefix and the provided date rounding get formatted into a date math index name expression.
 Also here optionally date formatting can be specified on how the date should be formatted into a date math index name
@@ -782,115 +785,32 @@ date in the `date1` field:
 
 [source,js]
 --------------------------------------------------
-PUT _ingest/pipeline/monthlyindex
+PUT _ingest/pipeline/1
 {
-  "description": "monthly date-time index naming",
   "processors" : [
     {
       "date_index_name" : {
         "field" : "date1",
         "index_name_prefix" : "myindex-",
-        "date_rounding" : "M"
+        "date_rounding" : "m"
       }
     }
   ]
 }
 --------------------------------------------------
-// CONSOLE
-
 
 Using that pipeline for an index request:
 
 [source,js]
 --------------------------------------------------
-PUT /myindex/type/1?pipeline=monthlyindex
+PUT /myindex/type/1?pipeline=1
 {
   "date1" : "2016-04-25T12:02:01.789Z"
 }
 --------------------------------------------------
-// CONSOLE
-// TEST[continued]
 
-[source,js]
---------------------------------------------------
-{
-  "_index" : "myindex-2016-04-01",
-  "_type" : "type",
-  "_id" : "1",
-  "_version" : 1,
-  "result" : "created",
-  "_shards" : {
-    "total" : 2,
-    "successful" : 1,
-    "failed" : 0
-  },
-  "created" : true
-}
---------------------------------------------------
-// TESTRESPONSE
-
-
-The above request will not index this document into the `myindex` index, but into the `myindex-2016-04-01` index because
-it was rounded by month. This is because the date-index-name-processor overrides the `_index` property of the document.
-
-To see the date-math value of the index supplied in the actual index request which resulted in the above document being
-indexed into `myindex-2016-04-01` we can inspect the effects of the processor using a simulate request.
-
-
-[source,js]
---------------------------------------------------
-POST _ingest/pipeline/_simulate
-{
-  "pipeline" :
-  {
-    "description": "monthly date-time index naming",
-    "processors" : [
-      {
-        "date_index_name" : {
-          "field" : "date1",
-          "index_name_prefix" : "myindex-",
-          "date_rounding" : "M"
-        }
-      }
-    ]
-  },
-  "docs": [
-    {
-      "_source": {
-        "date1": "2016-04-25T12:02:01.789Z"
-      }
-    }
-  ]
-}
---------------------------------------------------
-// CONSOLE
-
-and the result:
-
-[source,js]
---------------------------------------------------
-{
-  "docs" : [
-    {
-      "doc" : {
-        "_id" : "_id",
-        "_index" : "<myindex-{2016-04-25||/M{yyyy-MM-dd|UTC}}>",
-        "_type" : "_type",
-        "_source" : {
-          "date1" : "2016-04-25T12:02:01.789Z"
-        },
-        "_ingest" : {
-          "timestamp" : "2016-08-11T12:00:01.222Z"
-        }
-      }
-    }
-  ]
-}
---------------------------------------------------
-// TESTRESPONSE[s/2016-08-11T12:00:01.222Z/$body.docs.0.doc._ingest.timestamp/]
-
-The above example shows that `_index` was set to `<myindex-{2016-04-25||/M{yyyy-MM-dd|UTC}}>`. Elasticsearch
-understands this to mean `2016-04-01` as is explained in the <<date-math-index-names, date math index name documentation>>
+The above request will not index this document into the `myindex` index, but into the `myindex-2016-04-01` index.
+This is because the date is being rounded by month.
 
 [[date-index-name-options]]
 .Date index name options
@@ -939,16 +859,8 @@ because it is likely that the number of elements in an array is unknown. For thi
 processor exists. By specifying the field holding array elements and a processor that
 defines what should happen to each element, array fields can easily be preprocessed.
 
-A processor inside the foreach processor works in the array element context and puts that in the ingest metadata
-under the `_ingest._value` key. If the array element is a json object it holds all immediate fields of that json object.
-and if the nested object is a value is `_ingest._value` just holds that value. Note that if a processor prior to the
-`foreach` processor used `_ingest._value` key then the specified value will not be available to the processor inside
-the `foreach` processor. The `foreach` processor does restore the original value, so that value is available to processors
-after the `foreach` processor.
-
-Note that any other field from the document are accessible and modifiable like with all other processors. This processor
-just puts the current array element being read into `_ingest._value` ingest metadata attribute, so that it may be
-pre-processed.
+A processor inside the foreach processor works in a different context, and the only valid top-level
+field is `_value`, which holds the array element value. Under this field other fields may exist.
 
 If the `foreach` processor fails to process an element inside the array, and no `on_failure` processor has been specified,
 then it aborts the execution and leaves the array unmodified.
@@ -980,7 +892,7 @@ When this `foreach` processor operates on this sample document:
     "field" : "values",
     "processor" : {
       "uppercase" : {
-        "field" : "_ingest._value"
+        "field" : "_value"
       }
     }
   }
@@ -1024,7 +936,7 @@ so the following `foreach` processor is used:
     "field" : "persons",
     "processor" : {
       "remove" : {
-        "field" : "_ingest._value.id"
+        "field" : "_value.id"
       }
     }
   }
@@ -1047,7 +959,9 @@ After preprocessing the result is:
 }
 --------------------------------------------------
 
-The wrapped processor can have a `on_failure` definition.
+As for any processor, you can define `on_failure` processors
+in processors that are wrapped inside the `foreach` processor.
+
 For example, the `id` field may not exist on all person objects.
 Instead of failing the index request, you can use an `on_failure`
 block to send the document to the 'failure_index' index for later inspection:
@@ -1356,23 +1270,20 @@ caching see <<modules-scripting-using-caching, Script Caching>>.
 | `file`                 | no        | -       | The script file to refer to
 | `id`                   | no        | -       | The stored script id to refer to
 | `inline`               | no        | -       | An inline script to be executed
-| `params`               | no        | -       | Script Parameters
 |======
 
 You can access the current ingest document from within the script context by using the `ctx` variable.
 
-The following example sets a new field called `field_a_plus_b_times_c` to be the sum of two existing
-numeric fields `field_a` and `field_b` multiplied by the parameter param_c:
+The following example sets a new field called `field_a_plus_b` to be the sum of two existing
+numeric fields `field_a` and `field_b`:
 
 [source,js]
 --------------------------------------------------
 {
   "script": {
+    "field": "field_a_plus_b",
     "lang": "painless",
-    "inline": "ctx.field_a_plus_b_times_c = (ctx.field_a + ctx.field_b) * params.param_c",
-    "params": {
-      "param_c": 10
-    }
+    "inline": "return ctx.field_a + ctx.field_b"
   }
 }
 --------------------------------------------------

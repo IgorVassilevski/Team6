@@ -19,9 +19,7 @@
 
 package org.elasticsearch.index.reindex;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
 import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.bulk.BackoffPolicy;
@@ -32,6 +30,7 @@ import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.bulk.Retry;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.ParentTaskAssigningClient;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
@@ -64,7 +63,7 @@ import static org.elasticsearch.search.sort.SortBuilders.fieldSort;
  * their tests can use them. Most methods run in the listener thread pool because the are meant to be fast and don't expect to block.
  */
 public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBulkByScrollRequest<Request>> {
-    protected final Logger logger;
+    protected final ESLogger logger;
     protected final BulkByScrollTask task;
     protected final ThreadPool threadPool;
     /**
@@ -79,9 +78,9 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
     private final ParentTaskAssigningClient client;
     private final ActionListener<BulkIndexByScrollResponse> listener;
     private final Retry bulkRetry;
-    private final ScrollableHitSource scrollSource;
+    private final ScrollableHitSource scrollSource; 
 
-    public AbstractAsyncBulkByScrollAction(BulkByScrollTask task, Logger logger, ParentTaskAssigningClient client,
+    public AbstractAsyncBulkByScrollAction(BulkByScrollTask task, ESLogger logger, ParentTaskAssigningClient client,
                                            ThreadPool threadPool, Request mainRequest, ActionListener<BulkIndexByScrollResponse> listener) {
         this.task = task;
         this.logger = logger;
@@ -101,13 +100,7 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
         if (sorts == null || sorts.isEmpty()) {
             mainRequest.getSearchRequest().source().sort(fieldSort("_doc"));
         }
-        mainRequest.getSearchRequest().source().version(needsSourceDocumentVersions());
     }
-
-    /**
-     * Does this operation need the versions of the source documents?
-     */
-    protected abstract boolean needsSourceDocumentVersions();
 
     protected abstract BulkRequest buildBulk(Iterable<? extends ScrollableHitSource.Hit> docs);
 
@@ -215,7 +208,7 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
             return;
         }
         request.timeout(mainRequest.getTimeout());
-        request.waitForActiveShards(mainRequest.getWaitForActiveShards());
+        request.consistencyLevel(mainRequest.getConsistency());
         if (logger.isDebugEnabled()) {
             logger.debug("sending [{}] entry, [{}] bulk request", request.requests().size(),
                     new ByteSizeValue(request.estimatedSizeInBytes()));
@@ -261,7 +254,7 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
                 case "index":
                 case "create":
                     IndexResponse ir = item.getResponse();
-                    if (ir.getResult() == DocWriteResponse.Result.CREATED) {
+                    if (ir.isCreated()) {
                         task.countCreated();
                     } else {
                         task.countUpdated();

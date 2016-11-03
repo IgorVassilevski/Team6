@@ -20,8 +20,6 @@
 package org.elasticsearch.index.translog;
 
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.mockfile.FilterFileChannel;
@@ -44,9 +42,6 @@ import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.index.VersionType;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.translog.Translog.Location;
@@ -90,6 +85,9 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
+/**
+ *
+ */
 @LuceneTestCase.SuppressFileSystems("ExtrasFS")
 public class TranslogTests extends ESTestCase {
 
@@ -344,7 +342,7 @@ public class TranslogTests extends ESTestCase {
         assertThat(stats.estimatedNumberOfOperations(), equalTo(0L));
         assertThat(stats.getTranslogSizeInBytes(), equalTo(firstOperationPosition));
         assertEquals(6, total.estimatedNumberOfOperations());
-        assertEquals(455, total.getTranslogSizeInBytes());
+        assertEquals(431, total.getTranslogSizeInBytes());
 
         BytesStreamOutput out = new BytesStreamOutput();
         total.writeTo(out);
@@ -352,14 +350,11 @@ public class TranslogTests extends ESTestCase {
         copy.readFrom(out.bytes().streamInput());
 
         assertEquals(6, copy.estimatedNumberOfOperations());
-        assertEquals(455, copy.getTranslogSizeInBytes());
-
-        try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
-            builder.startObject();
-            copy.toXContent(builder, ToXContent.EMPTY_PARAMS);
-            builder.endObject();
-            assertEquals("{\"translog\":{\"operations\":6,\"size_in_bytes\":455}}", builder.string());
-        }
+        assertEquals(431, copy.getTranslogSizeInBytes());
+        assertEquals("\"translog\"{\n" +
+            "  \"operations\" : 6,\n" +
+            "  \"size_in_bytes\" : 431\n" +
+            "}", copy.toString().trim());
 
         try {
             new TranslogStats(1, -1);
@@ -668,7 +663,7 @@ public class TranslogTests extends ESTestCase {
 
                 @Override
                 public void onFailure(Exception e) {
-                    logger.error((Supplier<?>) () -> new ParameterizedMessage("--> writer [{}] had an error", threadName), e);
+                    logger.error("--> writer [{}] had an error", e, threadName);
                     errors.add(e);
                 }
             }, threadName);
@@ -683,7 +678,7 @@ public class TranslogTests extends ESTestCase {
 
                 @Override
                 public void onFailure(Exception e) {
-                    logger.error((Supplier<?>) () -> new ParameterizedMessage("--> reader [{}] had an error", threadId), e);
+                    logger.error("--> reader [{}] had an error", e, threadId);
                     errors.add(e);
                     try {
                         closeView();
@@ -807,38 +802,6 @@ public class TranslogTests extends ESTestCase {
             if (randomBoolean()) {
                 translog.sync();
                 assertFalse("translog has been synced already", translog.ensureSynced(location));
-            }
-        }
-    }
-
-    public void testSyncUpToStream() throws IOException {
-        int iters = randomIntBetween(5, 10);
-        for (int i = 0; i < iters; i++) {
-            int translogOperations = randomIntBetween(10, 100);
-            int count = 0;
-            ArrayList<Location> locations = new ArrayList<>();
-            for (int op = 0; op < translogOperations; op++) {
-                if (rarely()) {
-                    translog.commit(); // do this first so that there is at least one pending tlog entry
-                }
-                final Translog.Location location = translog.add(new Translog.Index("test", "" + op, Integer.toString(++count).getBytes(Charset.forName("UTF-8"))));
-                locations.add(location);
-            }
-            Collections.shuffle(locations, random());
-            if (randomBoolean()) {
-                assertTrue("at least one operation pending", translog.syncNeeded());
-                assertTrue("this operation has not been synced", translog.ensureSynced(locations.stream()));
-                assertFalse("the last call to ensureSycned synced all previous ops", translog.syncNeeded()); // we are the last location so everything should be synced
-            } else if (rarely()) {
-                translog.commit();
-                assertFalse("location is from a previous translog - already synced", translog.ensureSynced(locations.stream())); // not syncing now
-                assertFalse("no sync needed since no operations in current translog", translog.syncNeeded());
-            } else {
-                translog.sync();
-                assertFalse("translog has been synced already", translog.ensureSynced(locations.stream()));
-            }
-            for (Location location : locations) {
-                assertFalse("all of the locations should be synced: " + location, translog.ensureSynced(location));
             }
         }
     }
@@ -1165,7 +1128,7 @@ public class TranslogTests extends ESTestCase {
         try (Translog translog = new Translog(config, translogGeneration)) {
             fail("corrupted");
         } catch (IllegalStateException ex) {
-            assertEquals(ex.getMessage(), "Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=3123, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}");
+            assertEquals(ex.getMessage(), "Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=2683, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}");
         }
         Checkpoint.write(FileChannel::open, config.getTranslogPath().resolve(Translog.getCommitCheckpointFileName(read.generation)), read, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
         try (Translog translog = new Translog(config, translogGeneration)) {
@@ -1954,9 +1917,5 @@ public class TranslogTests extends ESTestCase {
         translog.close();
         IOUtils.close(view);
         translog = new Translog(config, generation);
-    }
-
-    public static Translog.Location randomTranslogLocation() {
-        return new Translog.Location(randomLong(), randomLong(), randomInt());
     }
 }

@@ -73,7 +73,7 @@ public class NodeConnectionsServiceTests extends ESTestCase {
     private ClusterState clusterStateFromNodes(List<DiscoveryNode> nodes) {
         final DiscoveryNodes.Builder builder = DiscoveryNodes.builder();
         for (DiscoveryNode node : nodes) {
-            builder.add(node);
+            builder.put(node);
         }
         return ClusterState.builder(new ClusterName("test")).nodes(builder).build();
     }

@@ -19,10 +19,14 @@
 
 package org.elasticsearch.repositories;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.carrotsearch.hppc.ObjectContainer;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
@@ -40,12 +44,6 @@ import org.elasticsearch.transport.TransportRequest;
 import org.elasticsearch.transport.TransportRequestHandler;
 import org.elasticsearch.transport.TransportResponse;
 import org.elasticsearch.transport.TransportService;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class VerifyNodeRepositoryAction  extends AbstractComponent {
     public static final String ACTION_NAME = "internal:admin/repository/verify";
@@ -85,7 +83,7 @@ public class VerifyNodeRepositoryAction  extends AbstractComponent {
                 try {
                     doVerify(repository, verificationToken, localNode);
                 } catch (Exception e) {
-                    logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] failed to verify repository", repository), e);
+                    logger.warn("[{}] failed to verify repository", e, repository);
                     errors.add(new VerificationFailure(node.getId(), e));
                 }
                 if (counter.decrementAndGet() == 0) {
@@ -156,7 +154,7 @@ public class VerifyNodeRepositoryAction  extends AbstractComponent {
             try {
                 doVerify(request.repository, request.verificationToken, localNode);
             } catch (Exception ex) {
-                logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] failed to verify repository", request.repository), ex);
+                logger.warn("[{}] failed to verify repository", ex, request.repository);
                 throw ex;
             }
             channel.sendResponse(TransportResponse.Empty.INSTANCE);

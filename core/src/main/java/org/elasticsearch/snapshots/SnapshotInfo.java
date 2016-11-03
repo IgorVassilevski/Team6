@@ -458,7 +458,7 @@ public final class SnapshotInfo implements Comparable<SnapshotInfo>, ToXContent,
         }
         if (uuid == null) {
             // the old format where there wasn't a UUID
-            uuid = name;
+            uuid = SnapshotId.UNASSIGNED_UUID;
         }
         return new SnapshotInfo(new SnapshotId(name, uuid),
                                 indices,

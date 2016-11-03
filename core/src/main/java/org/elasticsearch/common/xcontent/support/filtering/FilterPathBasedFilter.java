@@ -24,7 +24,6 @@ import org.elasticsearch.common.util.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 public class FilterPathBasedFilter extends TokenFilter {
 
@@ -54,7 +53,7 @@ public class FilterPathBasedFilter extends TokenFilter {
         this.filters = filters;
     }
 
-    public FilterPathBasedFilter(Set<String> filters, boolean inclusive) {
+    public FilterPathBasedFilter(String[] filters, boolean inclusive) {
         this(FilterPath.compile(filters), inclusive);
     }
 
@@ -104,6 +103,11 @@ public class FilterPathBasedFilter extends TokenFilter {
 
     @Override
     protected boolean _includeScalar() {
+        for (FilterPath filter : filters) {
+            if (filter.matches()) {
+                return inclusive;
+            }
+        }
         return !inclusive;
     }
 }

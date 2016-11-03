@@ -28,12 +28,7 @@ import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ExceptionsHelper;
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.cluster.routing.allocation.DiskThresholdSettings;
 import org.elasticsearch.discovery.DiscoveryModule;
-import org.elasticsearch.client.RestClientBuilder;
-import org.elasticsearch.env.NodeEnvironment;
-import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.transport.MockTcpTransportPlugin;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ShardOperationFailedException;
@@ -73,6 +68,7 @@ import org.elasticsearch.cluster.routing.IndexRoutingTable;
 import org.elasticsearch.cluster.routing.IndexShardRoutingTable;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.UnassignedInfo;
+import org.elasticsearch.cluster.routing.allocation.decider.DiskThresholdDecider;
 import org.elasticsearch.cluster.routing.allocation.decider.EnableAllocationDecider;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.Nullable;
@@ -873,7 +869,7 @@ public abstract class ESIntegTestCase extends ESTestCase {
      */
     public ClusterHealthStatus ensureGreen(TimeValue timeout, String... indices) {
         ClusterHealthResponse actionGet = client().admin().cluster()
-                .health(Requests.clusterHealthRequest(indices).timeout(timeout).waitForGreenStatus().waitForEvents(Priority.LANGUID).waitForNoRelocatingShards(true)).actionGet();
+                .health(Requests.clusterHealthRequest(indices).timeout(timeout).waitForGreenStatus().waitForEvents(Priority.LANGUID).waitForRelocatingShards(0)).actionGet();
         if (actionGet.isTimedOut()) {
             logger.info("ensureGreen timed out, cluster state:\n{}\n{}", client().admin().cluster().prepareState().get().getState().prettyPrint(), client().admin().cluster().preparePendingClusterTasks().get().prettyPrint());
             fail("timed out waiting for green state");
@@ -895,7 +891,7 @@ public abstract class ESIntegTestCase extends ESTestCase {
      * using the cluster health API.
      */
     public ClusterHealthStatus waitForRelocation(ClusterHealthStatus status) {
-        ClusterHealthRequest request = Requests.clusterHealthRequest().waitForNoRelocatingShards(true);
+        ClusterHealthRequest request = Requests.clusterHealthRequest().waitForRelocatingShards(0);
         if (status != null) {
             request.waitForStatus(status);
         }
@@ -997,7 +993,7 @@ public abstract class ESIntegTestCase extends ESTestCase {
      */
     public ClusterHealthStatus ensureYellow(String... indices) {
         ClusterHealthResponse actionGet = client().admin().cluster()
-                .health(Requests.clusterHealthRequest(indices).waitForNoRelocatingShards(true).waitForYellowStatus().waitForEvents(Priority.LANGUID)).actionGet();
+                .health(Requests.clusterHealthRequest(indices).waitForRelocatingShards(0).waitForYellowStatus().waitForEvents(Priority.LANGUID)).actionGet();
         if (actionGet.isTimedOut()) {
             logger.info("ensureYellow timed out, cluster state:\n{}\n{}", client().admin().cluster().prepareState().get().getState().prettyPrint(), client().admin().cluster().preparePendingClusterTasks().get().prettyPrint());
             assertThat("timed out waiting for yellow", actionGet.isTimedOut(), equalTo(false));
@@ -1106,7 +1102,7 @@ public abstract class ESIntegTestCase extends ESTestCase {
                 .setWaitForNodes(Integer.toString(nodeCount))
                 .setTimeout(timeValue)
                 .setLocal(local)
-                .setWaitForNoRelocatingShards(true)
+                .setWaitForRelocatingShards(0)
                 .get();
         if (clusterHealthResponse.isTimedOut()) {
             ClusterStateResponse stateResponse = client(viaNode).admin().cluster().prepareState().get();
@@ -1383,9 +1379,8 @@ public abstract class ESIntegTestCase extends ESTestCase {
         if (!bogusIds.isEmpty()) {
             // delete the bogus types again - it might trigger merges or at least holes in the segments and enforces deleted docs!
             for (Tuple<String, String> doc : bogusIds) {
-                assertEquals("failed to delete a dummy doc [" + doc.v1() + "][" + doc.v2() + "]",
-                    DocWriteResponse.Result.DELETED,
-                    client().prepareDelete(doc.v1(), RANDOM_BOGUS_TYPE, doc.v2()).get().getResult());
+                assertTrue("failed to delete a dummy doc [" + doc.v1() + "][" + doc.v2() + "]",
+                    client().prepareDelete(doc.v1(), RANDOM_BOGUS_TYPE, doc.v2()).get().isFound());
             }
         }
         if (forceRefresh) {
@@ -1631,12 +1626,10 @@ public abstract class ESIntegTestCase extends ESTestCase {
      */
     protected Settings nodeSettings(int nodeOrdinal) {
         Settings.Builder builder = Settings.builder()
-                .put(NodeEnvironment.MAX_LOCAL_STORAGE_NODES_SETTING.getKey(), Integer.MAX_VALUE)
                 // Default the watermarks to absurdly low to prevent the tests
                 // from failing on nodes without enough disk space
-                .put(DiskThresholdSettings.CLUSTER_ROUTING_ALLOCATION_LOW_DISK_WATERMARK_SETTING.getKey(), "1b")
-                .put(DiskThresholdSettings.CLUSTER_ROUTING_ALLOCATION_HIGH_DISK_WATERMARK_SETTING.getKey(), "1b")
-                .put(ScriptService.SCRIPT_MAX_COMPILATIONS_PER_MINUTE.getKey(), 1000)
+                .put(DiskThresholdDecider.CLUSTER_ROUTING_ALLOCATION_LOW_DISK_WATERMARK_SETTING.getKey(), "1b")
+                .put(DiskThresholdDecider.CLUSTER_ROUTING_ALLOCATION_HIGH_DISK_WATERMARK_SETTING.getKey(), "1b")
                 .put("script.stored", "true")
                 .put("script.inline", "true")
                 // by default we never cache below 10k docs in a segment,
@@ -1660,6 +1653,13 @@ public abstract class ESIntegTestCase extends ESTestCase {
      */
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
         return Collections.emptyList();
+    }
+
+    /** Helper method to create list of plugins without specifying generic types. */
+    @SafeVarargs
+    @SuppressWarnings("varargs") // due to type erasure, the varargs type is non-reifiable, which causes this warning
+    protected final Collection<Class<? extends Plugin>> pluginList(Class<? extends Plugin>... plugins) {
+        return Arrays.asList(plugins);
     }
 
     /**
@@ -2094,11 +2094,11 @@ public abstract class ESIntegTestCase extends ESTestCase {
         return restClient;
     }
 
-    protected static RestClient createRestClient(RestClientBuilder.HttpClientConfigCallback httpClientConfigCallback) {
+    protected static RestClient createRestClient(RestClient.HttpClientConfigCallback httpClientConfigCallback) {
         return createRestClient(httpClientConfigCallback, "http");
     }
 
-    protected static RestClient createRestClient(RestClientBuilder.HttpClientConfigCallback httpClientConfigCallback, String protocol) {
+    protected static RestClient createRestClient(RestClient.HttpClientConfigCallback httpClientConfigCallback, String protocol) {
         final NodesInfoResponse nodeInfos = client().admin().cluster().prepareNodesInfo().get();
         final List<NodeInfo> nodes = nodeInfos.getNodes();
         assertFalse(nodeInfos.hasFailures());
@@ -2111,7 +2111,7 @@ public abstract class ESIntegTestCase extends ESTestCase {
                 hosts.add(new HttpHost(NetworkAddress.format(address.getAddress()), address.getPort(), protocol));
             }
         }
-        RestClientBuilder builder = RestClient.builder(hosts.toArray(new HttpHost[hosts.size()]));
+        RestClient.Builder builder = RestClient.builder(hosts.toArray(new HttpHost[hosts.size()]));
         if (httpClientConfigCallback != null) {
             builder.setHttpClientConfigCallback(httpClientConfigCallback);
         }

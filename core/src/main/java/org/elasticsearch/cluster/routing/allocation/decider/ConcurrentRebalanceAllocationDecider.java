@@ -21,6 +21,7 @@ package org.elasticsearch.cluster.routing.allocation.decider;
 
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
@@ -47,6 +48,7 @@ public class ConcurrentRebalanceAllocationDecider extends AllocationDecider {
             Property.Dynamic, Property.NodeScope);
     private volatile int clusterConcurrentRebalance;
 
+    @Inject
     public ConcurrentRebalanceAllocationDecider(Settings settings, ClusterSettings clusterSettings) {
         super(settings);
         this.clusterConcurrentRebalance = CLUSTER_ROUTING_ALLOCATION_CLUSTER_CONCURRENT_REBALANCE_SETTING.get(settings);

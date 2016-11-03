@@ -30,7 +30,6 @@ import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.junit.Before;
 
-import java.util.Arrays;
 import java.util.Collection;
 
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
@@ -41,12 +40,12 @@ import static org.hamcrest.Matchers.instanceOf;
 public class CustomQueryParserIT extends ESIntegTestCase {
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(DummyQueryParserPlugin.class);
+        return pluginList(DummyQueryParserPlugin.class);
     }
 
     @Override
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
-        return Arrays.asList(DummyQueryParserPlugin.class);
+        return pluginList(DummyQueryParserPlugin.class);
     }
 
     @Override

@@ -21,6 +21,7 @@ package org.elasticsearch.search.suggest.phrase;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.search.suggest.SuggestUtils;
 import org.elasticsearch.search.suggest.phrase.DirectCandidateGenerator.Candidate;
 
 import java.io.IOException;
@@ -55,7 +56,7 @@ public final class LinearInterpolatingScorer extends WordScorer {
 
     @Override
     protected double scoreBigram(Candidate word, Candidate w_1) throws IOException {
-        join(separator, spare, w_1.term, word.term);
+        SuggestUtils.join(separator, spare, w_1.term, word.term);
         final long count = frequency(spare.get());
         if (count < 1) {
             return unigramLambda * scoreUnigram(word);
@@ -65,12 +66,12 @@ public final class LinearInterpolatingScorer extends WordScorer {
 
     @Override
     protected double scoreTrigram(Candidate w, Candidate w_1, Candidate w_2) throws IOException {
-        join(separator, spare, w.term, w_1.term, w_2.term);
+        SuggestUtils.join(separator, spare, w.term, w_1.term, w_2.term);
         final long count = frequency(spare.get());
         if (count < 1) {
             return scoreBigram(w, w_1);
         }
-        join(separator, spare, w.term, w_1.term);
+        SuggestUtils.join(separator, spare, w.term, w_1.term);
         return trigramLambda * (count / (1.d + frequency(spare.get()))) + scoreBigram(w, w_1);
     }
 

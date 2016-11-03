@@ -78,8 +78,6 @@ public class RunningStats implements Writeable, Cloneable {
     @SuppressWarnings("unchecked")
     public RunningStats(StreamInput in) throws IOException {
         this();
-        // read doc count
-        docCount = (Long)in.readGenericValue();
         // read fieldSum
         fieldSum = (HashMap<String, Double>)in.readGenericValue();
         // counts
@@ -98,8 +96,6 @@ public class RunningStats implements Writeable, Cloneable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        // marshall doc count
-        out.writeGenericValue(docCount);
         // marshall fieldSum
         out.writeGenericValue(fieldSum);
         // counts

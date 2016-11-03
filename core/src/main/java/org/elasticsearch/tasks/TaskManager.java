@@ -19,8 +19,6 @@
 
 package org.elasticsearch.tasks;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.ExceptionsHelper;
@@ -65,7 +63,7 @@ public class TaskManager extends AbstractComponent implements ClusterStateListen
 
     private final Map<TaskId, String> banedParents = new ConcurrentHashMap<>();
 
-    private TaskResultsService taskResultsService;
+    private TaskPersistenceService taskResultsService;
 
     private DiscoveryNodes lastDiscoveryNodes = DiscoveryNodes.EMPTY_NODES;
 
@@ -73,7 +71,7 @@ public class TaskManager extends AbstractComponent implements ClusterStateListen
         super(settings);
     }
 
-    public void setTaskResultsService(TaskResultsService taskResultsService) {
+    public void setTaskResultsService(TaskPersistenceService taskResultsService) {
         assert this.taskResultsService == null;
         this.taskResultsService = taskResultsService;
     }
@@ -157,23 +155,22 @@ public class TaskManager extends AbstractComponent implements ClusterStateListen
     /**
      * Stores the task failure
      */
-    public <Response extends ActionResponse> void storeResult(Task task, Exception error, ActionListener<Response> listener) {
+    public <Response extends ActionResponse> void persistResult(Task task, Exception error, ActionListener<Response> listener) {
         DiscoveryNode localNode = lastDiscoveryNodes.getLocalNode();
         if (localNode == null) {
-            // too early to store anything, shouldn't really be here - just pass the error along
+            // too early to persist anything, shouldn't really be here - just pass the error along
             listener.onFailure(error);
             return;
         }
-        final TaskResult taskResult;
+        final PersistedTaskInfo taskResult;
         try {
             taskResult = task.result(localNode, error);
         } catch (IOException ex) {
-            logger.warn(
-                (Supplier<?>) () -> new ParameterizedMessage("couldn't store error {}", ExceptionsHelper.detailedMessage(error)), ex);
+            logger.warn("couldn't persist error {}", ex, ExceptionsHelper.detailedMessage(error));
             listener.onFailure(ex);
             return;
         }
-        taskResultsService.storeResult(taskResult, new ActionListener<Void>() {
+        taskResultsService.persist(taskResult, new ActionListener<Void>() {
             @Override
             public void onResponse(Void aVoid) {
                 listener.onFailure(error);
@@ -181,8 +178,7 @@ public class TaskManager extends AbstractComponent implements ClusterStateListen
 
             @Override
             public void onFailure(Exception e) {
-                logger.warn(
-                    (Supplier<?>) () -> new ParameterizedMessage("couldn't store error {}", ExceptionsHelper.detailedMessage(error)), e);
+                logger.warn("couldn't persist error {}", e, ExceptionsHelper.detailedMessage(error));
                 listener.onFailure(e);
             }
         });
@@ -191,24 +187,24 @@ public class TaskManager extends AbstractComponent implements ClusterStateListen
     /**
      * Stores the task result
      */
-    public <Response extends ActionResponse> void storeResult(Task task, Response response, ActionListener<Response> listener) {
+    public <Response extends ActionResponse> void persistResult(Task task, Response response, ActionListener<Response> listener) {
         DiscoveryNode localNode = lastDiscoveryNodes.getLocalNode();
         if (localNode == null) {
-            // too early to store anything, shouldn't really be here - just pass the response along
-            logger.warn("couldn't store response {}, the node didn't join the cluster yet", response);
+            // too early to persist anything, shouldn't really be here - just pass the response along
+            logger.warn("couldn't persist response {}, the node didn't join the cluster yet", response);
             listener.onResponse(response);
             return;
         }
-        final TaskResult taskResult;
+        final PersistedTaskInfo taskResult;
         try {
             taskResult = task.result(localNode, response);
         } catch (IOException ex) {
-            logger.warn((Supplier<?>) () -> new ParameterizedMessage("couldn't store response {}", response), ex);
+            logger.warn("couldn't persist response {}", ex, response);
             listener.onFailure(ex);
             return;
         }
 
-        taskResultsService.storeResult(taskResult, new ActionListener<Void>() {
+        taskResultsService.persist(taskResult, new ActionListener<Void>() {
             @Override
             public void onResponse(Void aVoid) {
                 listener.onResponse(response);
@@ -216,7 +212,7 @@ public class TaskManager extends AbstractComponent implements ClusterStateListen
 
             @Override
             public void onFailure(Exception e) {
-                logger.warn((Supplier<?>) () -> new ParameterizedMessage("couldn't store response {}", response), e);
+                logger.warn("couldn't persist response {}", e, response);
                 listener.onFailure(e);
             }
         });

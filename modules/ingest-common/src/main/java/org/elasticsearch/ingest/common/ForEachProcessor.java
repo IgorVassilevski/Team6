@@ -23,13 +23,18 @@ import org.elasticsearch.ingest.AbstractProcessor;
 import org.elasticsearch.ingest.ConfigurationUtils;
 import org.elasticsearch.ingest.IngestDocument;
 import org.elasticsearch.ingest.Processor;
+import org.elasticsearch.ingest.Processor;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.elasticsearch.ingest.ConfigurationUtils.newConfigurationException;
+import static org.elasticsearch.ingest.ConfigurationUtils.readList;
 import static org.elasticsearch.ingest.ConfigurationUtils.readMap;
 import static org.elasticsearch.ingest.ConfigurationUtils.readStringProperty;
 
@@ -54,15 +59,14 @@ public final class ForEachProcessor extends AbstractProcessor {
 
     @Override
     public void execute(IngestDocument ingestDocument) throws Exception {
-        List values = ingestDocument.getFieldValue(field, List.class);
+        List<Object> values = ingestDocument.getFieldValue(field, List.class);
         List<Object> newValues = new ArrayList<>(values.size());
         for (Object value : values) {
-            Object previousValue = ingestDocument.getIngestMetadata().put("_value", value);
-            try {
-                processor.execute(ingestDocument);
-            } finally {
-                newValues.add(ingestDocument.getIngestMetadata().put("_value", previousValue));
-            }
+            Map<String, Object> innerSource = new HashMap<>(ingestDocument.getSourceAndMetadata());
+            innerSource.put("_value", value); // scalar value to access the list item being evaluated
+            IngestDocument innerIngestDocument = new IngestDocument(innerSource, ingestDocument.getIngestMetadata());
+            processor.execute(innerIngestDocument);
+            newValues.add(innerSource.get("_value"));
         }
         ingestDocument.setFieldValue(field, newValues);
     }

@@ -38,7 +38,7 @@ import org.elasticsearch.cluster.routing.allocation.decider.AllocationDeciders;
 import org.elasticsearch.cluster.routing.allocation.decider.Decision;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.env.Environment;
-import org.elasticsearch.cluster.ESAllocationTestCase;
+import org.elasticsearch.test.ESAllocationTestCase;
 import org.elasticsearch.test.gateway.NoopGatewayAllocator;
 
 import java.io.IOException;
@@ -143,7 +143,7 @@ public class DecisionsImpactOnClusterHealthTests extends ESAllocationTestCase {
         // any allocations on it
         final DiscoveryNodes.Builder discoveryNodes = DiscoveryNodes.builder();
         for (int i = 0; i < numShards; i++) {
-            discoveryNodes.add(newNode("node" + i));
+            discoveryNodes.put(newNode("node" + i));
         }
         clusterState = ClusterState.builder(clusterState).nodes(discoveryNodes).build();
 

@@ -19,18 +19,17 @@
 
 package org.elasticsearch.client;
 
+import com.carrotsearch.randomizedtesting.generators.RandomInts;
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
 import org.apache.http.client.config.RequestConfig;
-import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicHeader;
 
 import java.io.IOException;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 public class RestClientBuilderTests extends RestClientTestCase {
@@ -39,8 +38,8 @@ public class RestClientBuilderTests extends RestClientTestCase {
         try {
             RestClient.builder((HttpHost[])null);
             fail("should have failed");
-        } catch(NullPointerException e) {
-            assertEquals("hosts must not be null", e.getMessage());
+        } catch(IllegalArgumentException e) {
+            assertEquals("no hosts provided", e.getMessage());
         }
 
         try {
@@ -51,19 +50,15 @@ public class RestClientBuilderTests extends RestClientTestCase {
         }
 
         try {
-            RestClient.builder(new HttpHost("localhost", 9200), null);
+            RestClient.builder(new HttpHost[]{new HttpHost("localhost", 9200), null}).build();
             fail("should have failed");
         } catch(NullPointerException e) {
             assertEquals("host cannot be null", e.getMessage());
         }
 
-        try (RestClient restClient = RestClient.builder(new HttpHost("localhost", 9200)).build()) {
-            assertNotNull(restClient);
-        }
-
         try {
             RestClient.builder(new HttpHost("localhost", 9200))
-                    .setMaxRetryTimeoutMillis(randomIntBetween(Integer.MIN_VALUE, 0));
+                    .setMaxRetryTimeoutMillis(RandomInts.randomIntBetween(getRandom(), Integer.MIN_VALUE, 0));
             fail("should have failed");
         } catch(IllegalArgumentException e) {
             assertEquals("maxRetryTimeoutMillis must be greater than 0", e.getMessage());
@@ -104,77 +99,39 @@ public class RestClientBuilderTests extends RestClientTestCase {
             assertEquals("requestConfigCallback must not be null", e.getMessage());
         }
 
-        int numNodes = randomIntBetween(1, 5);
+        int numNodes = RandomInts.randomIntBetween(getRandom(), 1, 5);
         HttpHost[] hosts = new HttpHost[numNodes];
         for (int i = 0; i < numNodes; i++) {
             hosts[i] = new HttpHost("localhost", 9200 + i);
         }
-        RestClientBuilder builder = RestClient.builder(hosts);
-        if (randomBoolean()) {
-            builder.setHttpClientConfigCallback(new RestClientBuilder.HttpClientConfigCallback() {
+        RestClient.Builder builder = RestClient.builder(hosts);
+        if (getRandom().nextBoolean()) {
+            builder.setHttpClientConfigCallback(new RestClient.HttpClientConfigCallback() {
                 @Override
-                public HttpAsyncClientBuilder customizeHttpClient(HttpAsyncClientBuilder httpClientBuilder) {
-                    return httpClientBuilder;
+                public void customizeHttpClient(HttpClientBuilder httpClientBuilder) {
                 }
             });
         }
-        if (randomBoolean()) {
-            builder.setRequestConfigCallback(new RestClientBuilder.RequestConfigCallback() {
+        if (getRandom().nextBoolean()) {
+            builder.setRequestConfigCallback(new RestClient.RequestConfigCallback() {
                 @Override
-                public RequestConfig.Builder customizeRequestConfig(RequestConfig.Builder requestConfigBuilder) {
-                    return requestConfigBuilder;
+                public void customizeRequestConfig(RequestConfig.Builder requestConfigBuilder) {
                 }
             });
         }
-        if (randomBoolean()) {
-            int numHeaders = randomIntBetween(1, 5);
+        if (getRandom().nextBoolean()) {
+            int numHeaders = RandomInts.randomIntBetween(getRandom(), 1, 5);
             Header[] headers = new Header[numHeaders];
             for (int i = 0; i < numHeaders; i++) {
                 headers[i] = new BasicHeader("header" + i, "value");
             }
             builder.setDefaultHeaders(headers);
         }
-        if (randomBoolean()) {
-            builder.setMaxRetryTimeoutMillis(randomIntBetween(1, Integer.MAX_VALUE));
-        }
-        if (randomBoolean()) {
-            String pathPrefix = (randomBoolean() ? "/" : "") + randomAsciiOfLengthBetween(2, 5);
-            while (pathPrefix.length() < 20 && randomBoolean()) {
-                pathPrefix += "/" + randomAsciiOfLengthBetween(3, 6);
-            }
-            builder.setPathPrefix(pathPrefix + (randomBoolean() ? "/" : ""));
+        if (getRandom().nextBoolean()) {
+            builder.setMaxRetryTimeoutMillis(RandomInts.randomIntBetween(getRandom(), 1, Integer.MAX_VALUE));
         }
         try (RestClient restClient = builder.build()) {
             assertNotNull(restClient);
         }
     }
-
-    public void testSetPathPrefixNull() {
-        try {
-            RestClient.builder(new HttpHost("localhost", 9200)).setPathPrefix(null);
-            fail("pathPrefix set to null should fail!");
-        } catch (final NullPointerException e) {
-            assertEquals("pathPrefix must not be null", e.getMessage());
-        }
-    }
-
-    public void testSetPathPrefixEmpty() {
-        assertSetPathPrefixThrows("/");
-        assertSetPathPrefixThrows("");
-    }
-
-    public void testSetPathPrefixMalformed() {
-        assertSetPathPrefixThrows("//");
-        assertSetPathPrefixThrows("base/path//");
-    }
-
-    private static void assertSetPathPrefixThrows(final String pathPrefix) {
-        try {
-            RestClient.builder(new HttpHost("localhost", 9200)).setPathPrefix(pathPrefix);
-            fail("path prefix [" + pathPrefix + "] should have failed");
-        } catch (final IllegalArgumentException e) {
-            assertThat(e.getMessage(), containsString(pathPrefix));
-        }
-    }
-
 }

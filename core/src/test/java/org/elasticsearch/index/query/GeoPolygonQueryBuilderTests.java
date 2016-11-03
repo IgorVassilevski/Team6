@@ -20,6 +20,7 @@
 package org.elasticsearch.index.query;
 
 import com.vividsolutions.jts.geom.Coordinate;
+
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.spatial.geopoint.search.GeoPointInPolygonQuery;
@@ -38,7 +39,6 @@ import org.locationtech.spatial4j.shape.jts.JtsGeometry;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static org.elasticsearch.test.StreamsUtils.copyToStringFromClasspath;
@@ -47,11 +47,12 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 
 public class GeoPolygonQueryBuilderTests extends AbstractQueryTestCase<GeoPolygonQueryBuilder> {
     @Override
     protected GeoPolygonQueryBuilder doCreateTestQueryBuilder() {
-        List<GeoPoint> polygon = randomPolygon();
+        List<GeoPoint> polygon = randomPolygon(randomIntBetween(4, 50));
         GeoPolygonQueryBuilder builder = new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, polygon);
         if (randomBoolean()) {
             builder.setValidationMethod(randomFrom(GeoValidationMethod.values()));
@@ -119,12 +120,13 @@ public class GeoPolygonQueryBuilderTests extends AbstractQueryTestCase<GeoPolygo
      * explicitly mapped
      */
     @Override
+    @AwaitsFix(bugUrl = "https://github.com/elastic/elasticsearch/issues/16399")
     public void testToQuery() throws IOException {
         assumeTrue("test runs only when at least a type is registered", getCurrentTypes().length > 0);
         super.testToQuery();
     }
 
-    private static List<GeoPoint> randomPolygon() {
+    public List<GeoPoint> randomPolygon(int numPoints) {
         ShapeBuilder shapeBuilder = null;
         // This is a temporary fix because sometimes the RandomShapeGenerator
         // returns null. This is if there is an error generating the polygon. So
@@ -142,17 +144,25 @@ public class GeoPolygonQueryBuilderTests extends AbstractQueryTestCase<GeoPolygo
     }
 
     public void testNullFieldName() {
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> new GeoPolygonQueryBuilder(null, randomPolygon()));
-        assertEquals("fieldName must not be null", e.getMessage());
+        try {
+            new GeoPolygonQueryBuilder(null, randomPolygon(5));
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), is("fieldName must not be null"));
+        }
     }
 
     public void testEmptyPolygon() {
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class,
-                () -> new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, Collections.emptyList()));
-        assertEquals("polygon must not be null or empty", e.getMessage());
-
-        e = expectThrows(IllegalArgumentException.class, () -> new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, null));
-        assertEquals("polygon must not be null or empty", e.getMessage());
+        try {
+            if (randomBoolean()) {
+                new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, new ArrayList<GeoPoint>());
+            } else {
+                new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, null);
+            }
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), is("polygon must not be null or empty"));
+        }
     }
 
     public void testInvalidClosedPolygon() {
@@ -160,18 +170,24 @@ public class GeoPolygonQueryBuilderTests extends AbstractQueryTestCase<GeoPolygo
         points.add(new GeoPoint(0, 90));
         points.add(new GeoPoint(90, 90));
         points.add(new GeoPoint(0, 90));
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class,
-                () -> new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, points));
-        assertEquals("too few points defined for geo_polygon query", e.getMessage());
+        try {
+            new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, points);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), is("too few points defined for geo_polygon query"));
+        }
     }
 
     public void testInvalidOpenPolygon() {
         List<GeoPoint> points = new ArrayList<>();
         points.add(new GeoPoint(0, 90));
         points.add(new GeoPoint(90, 90));
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class,
-                () -> new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, points));
-        assertEquals("too few points defined for geo_polygon query", e.getMessage());
+        try {
+            new GeoPolygonQueryBuilder(GEO_POINT_FIELD_NAME, points);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), is("too few points defined for geo_polygon query"));
+        }
     }
 
     public void testDeprecatedXContent() throws IOException {
@@ -189,8 +205,12 @@ public class GeoPolygonQueryBuilderTests extends AbstractQueryTestCase<GeoPolygo
         builder.field("normalize", true); // deprecated
         builder.endObject();
         builder.endObject();
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> parseQuery(builder.string()));
-        assertEquals("Deprecated field [normalize] used, replaced by [use validation_method instead]", e.getMessage());
+        try {
+            parseQuery(builder.string());
+            fail("normalize is deprecated");
+        } catch (IllegalArgumentException ex) {
+            assertEquals("Deprecated field [normalize] used, replaced by [use validation_method instead]", ex.getMessage());
+        }
     }
 
     public void testParsingAndToQueryParsingExceptions() throws IOException {
@@ -203,7 +223,12 @@ public class GeoPolygonQueryBuilderTests extends AbstractQueryTestCase<GeoPolygo
         };
         for (String brokenFile : brokenFiles) {
             String query = copyToStringFromClasspath(brokenFile);
-            expectThrows(ParsingException.class, () -> parseQuery(query));
+            try {
+                parseQuery(query);
+                fail("parsing a broken geo_polygon filter didn't fail as expected while parsing: " + brokenFile);
+            } catch (ParsingException e) {
+                // success!
+            }
         }
     }
 
@@ -369,7 +394,7 @@ public class GeoPolygonQueryBuilderTests extends AbstractQueryTestCase<GeoPolygo
     }
 
     public void testIgnoreUnmapped() throws IOException {
-        List<GeoPoint> polygon = randomPolygon();
+        List<GeoPoint> polygon = randomPolygon(randomIntBetween(4, 50));
         final GeoPolygonQueryBuilder queryBuilder = new GeoPolygonQueryBuilder("unmapped", polygon);
         queryBuilder.ignoreUnmapped(true);
         Query query = queryBuilder.toQuery(createShardContext());

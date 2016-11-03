@@ -56,10 +56,24 @@ public class FieldMaskingSpanQueryBuilderTests extends AbstractQueryTestCase<Fie
     }
 
     public void testIllegalArguments() {
-        expectThrows(IllegalArgumentException.class, () -> new FieldMaskingSpanQueryBuilder(null, "maskedField"));
-        SpanQueryBuilder span = new SpanTermQueryBuilder("name", "value");
-        expectThrows(IllegalArgumentException.class, () -> new FieldMaskingSpanQueryBuilder(span, null));
-        expectThrows(IllegalArgumentException.class, () -> new FieldMaskingSpanQueryBuilder(span, ""));
+        try {
+            new FieldMaskingSpanQueryBuilder(null, "maskedField");
+            fail("must be non null");
+        } catch (IllegalArgumentException e) {
+            // okay
+        }
+
+        try {
+            SpanQueryBuilder span = new SpanTermQueryBuilder("name", "value");
+            if (randomBoolean()) {
+                new FieldMaskingSpanQueryBuilder(span, null);
+            } else {
+                new FieldMaskingSpanQueryBuilder(span, "");
+            }
+            fail("must be non null");
+        } catch (IllegalArgumentException e) {
+            // okay
+        }
     }
 
     public void testFromJson() throws IOException {
@@ -79,8 +93,10 @@ public class FieldMaskingSpanQueryBuilderTests extends AbstractQueryTestCase<Fie
                 "    \"_name\" : \"KPI\"\n" +
                 "  }\n" +
                 "}";
+
         FieldMaskingSpanQueryBuilder parsed = (FieldMaskingSpanQueryBuilder) parseQuery(json);
         checkGeneratedJson(json, parsed);
+
         assertEquals(json, 42.0, parsed.boost(), 0.00001);
         assertEquals(json, 0.23, parsed.innerQuery().boost(), 0.00001);
     }

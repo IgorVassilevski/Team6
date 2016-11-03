@@ -21,7 +21,7 @@ PUT index_1/my_type/1
   "text": "Document in index 1"
 }
 
-PUT index_2/my_type/2?refresh=true
+PUT index_2/my_type/2
 {
   "text": "Document in index 2"
 }

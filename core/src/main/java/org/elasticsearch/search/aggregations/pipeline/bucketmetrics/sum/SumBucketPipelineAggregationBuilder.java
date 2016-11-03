@@ -19,6 +19,7 @@
 
 package org.elasticsearch.search.aggregations.pipeline.bucketmetrics.sum;
 
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -34,6 +35,7 @@ import java.util.Map;
 
 public class SumBucketPipelineAggregationBuilder extends BucketMetricsPipelineAggregationBuilder<SumBucketPipelineAggregationBuilder> {
     public static final String NAME = "sum_bucket";
+    public static final ParseField AGGREGATION_NAME_FIELD = new ParseField(NAME);
 
     public SumBucketPipelineAggregationBuilder(String name, String bucketsPath) {
         super(name, NAME, new String[] { bucketsPath });

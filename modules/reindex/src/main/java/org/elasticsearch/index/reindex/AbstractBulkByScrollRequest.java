@@ -21,8 +21,8 @@ package org.elasticsearch.index.reindex;
 
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionRequestValidationException;
+import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.support.ActiveShardCount;
 import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -71,9 +71,9 @@ public abstract class AbstractBulkByScrollRequest<Self extends AbstractBulkByScr
     private TimeValue timeout = ReplicationRequest.DEFAULT_TIMEOUT;
 
     /**
-     * The number of shard copies that must be active before proceeding with the write.
+     * Consistency level for write requests.
      */
-    private ActiveShardCount activeShardCount = ActiveShardCount.DEFAULT;
+    private WriteConsistencyLevel consistency = WriteConsistencyLevel.DEFAULT;
 
     /**
      * Initial delay after a rejection before retrying a bulk request. With the default maxRetries the total backoff for retrying rejections
@@ -94,9 +94,9 @@ public abstract class AbstractBulkByScrollRequest<Self extends AbstractBulkByScr
     private float requestsPerSecond = Float.POSITIVE_INFINITY;
 
     /**
-     * Should this task store its result?
+     * Should this task persist its result?
      */
-    private boolean shouldStoreResult;
+    private boolean shouldPersistResult;
 
     public AbstractBulkByScrollRequest() {
     }
@@ -107,6 +107,7 @@ public abstract class AbstractBulkByScrollRequest<Self extends AbstractBulkByScr
         // Set the defaults which differ from SearchRequest's defaults.
         source.scroll(DEFAULT_SCROLL_TIMEOUT);
         source.source(new SearchSourceBuilder());
+        source.source().version(true);
         source.source().size(DEFAULT_SCROLL_SIZE);
     }
 
@@ -223,28 +224,18 @@ public abstract class AbstractBulkByScrollRequest<Self extends AbstractBulkByScr
     }
 
     /**
-     * The number of shard copies that must be active before proceeding with the write.
+     * Consistency level for write requests.
      */
-    public ActiveShardCount getWaitForActiveShards() {
-        return activeShardCount;
+    public WriteConsistencyLevel getConsistency() {
+        return consistency;
     }
 
     /**
-     * Sets the number of shard copies that must be active before proceeding with the write.
-     * See {@link ReplicationRequest#waitForActiveShards(ActiveShardCount)} for details.
+     * Consistency level for write requests.
      */
-    public Self setWaitForActiveShards(ActiveShardCount activeShardCount) {
-        this.activeShardCount = activeShardCount;
+    public Self setConsistency(WriteConsistencyLevel consistency) {
+        this.consistency = consistency;
         return self();
-    }
-
-    /**
-     * A shortcut for {@link #setWaitForActiveShards(ActiveShardCount)} where the numerical
-     * shard count is passed in, instead of having to first call {@link ActiveShardCount#from(int)}
-     * to get the ActiveShardCount.
-     */
-    public Self setWaitForActiveShards(final int waitForActiveShards) {
-        return setWaitForActiveShards(ActiveShardCount.from(waitForActiveShards));
     }
 
     /**
@@ -301,16 +292,16 @@ public abstract class AbstractBulkByScrollRequest<Self extends AbstractBulkByScr
     }
 
     /**
-     * Should this task store its result after it has finished?
+     * Should this task persist its result after it has finished?
      */
-    public Self setShouldStoreResult(boolean shouldStoreResult) {
-        this.shouldStoreResult = shouldStoreResult;
+    public Self setShouldPersistResult(boolean shouldPersistResult) {
+        this.shouldPersistResult = shouldPersistResult;
         return self();
     }
 
     @Override
-    public boolean getShouldStoreResult() {
-        return shouldStoreResult;
+    public boolean getShouldPersistResult() {
+        return shouldPersistResult;
     }
 
     @Override
@@ -327,7 +318,7 @@ public abstract class AbstractBulkByScrollRequest<Self extends AbstractBulkByScr
         size = in.readVInt();
         refresh = in.readBoolean();
         timeout = new TimeValue(in);
-        activeShardCount = ActiveShardCount.readFrom(in);
+        consistency = WriteConsistencyLevel.fromId(in.readByte());
         retryBackoffInitialTime = new TimeValue(in);
         maxRetries = in.readVInt();
         requestsPerSecond = in.readFloat();
@@ -341,7 +332,7 @@ public abstract class AbstractBulkByScrollRequest<Self extends AbstractBulkByScr
         out.writeVInt(size);
         out.writeBoolean(refresh);
         timeout.writeTo(out);
-        activeShardCount.writeTo(out);
+        out.writeByte(consistency.id());
         retryBackoffInitialTime.writeTo(out);
         out.writeVInt(maxRetries);
         out.writeFloat(requestsPerSecond);

@@ -39,7 +39,6 @@ import org.elasticsearch.test.ESIntegTestCase.Scope;
 import org.elasticsearch.test.hamcrest.ElasticsearchAssertions;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -59,12 +58,12 @@ import static org.hamcrest.Matchers.equalTo;
 public class FunctionScorePluginIT extends ESIntegTestCase {
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(CustomDistanceScorePlugin.class);
+        return pluginList(CustomDistanceScorePlugin.class);
     }
 
     @Override
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
-        return Arrays.asList(CustomDistanceScorePlugin.class);
+        return pluginList(CustomDistanceScorePlugin.class);
     }
 
     public void testPlugin() throws Exception {

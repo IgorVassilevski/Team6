@@ -153,18 +153,18 @@ sync-flushed:
 --------------------------------------------------
 {
    "_shards": {
-      "total": 2,
-      "successful": 2,
+      "total": 10,
+      "successful": 10,
       "failed": 0
    },
    "twitter": {
-      "total": 2,
-      "successful": 2,
+      "total": 10,
+      "successful": 10,
       "failed": 0
    }
 }
 --------------------------------------------------
-// TESTRESPONSE[s/"successful": 2/"successful": 1/]
+// TESTRESPONSE[s/"successful": 10/"successful": 5/]
 
 Here is what it looks like when one shard group failed due to pending operations:
 

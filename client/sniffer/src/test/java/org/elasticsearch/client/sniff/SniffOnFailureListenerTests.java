@@ -45,17 +45,16 @@ public class SniffOnFailureListenerTests extends RestClientTestCase {
             assertEquals("sniffer must not be null", e.getMessage());
         }
 
-        try (RestClient restClient = RestClient.builder(new HttpHost("localhost", 9200)).build()) {
-            try (Sniffer sniffer = Sniffer.builder(restClient).setHostsSniffer(new MockHostsSniffer()).build()) {
+        RestClient restClient = RestClient.builder(new HttpHost("localhost", 9200)).build();
+        try (Sniffer sniffer = Sniffer.builder(restClient, new MockHostsSniffer()).build()) {
+            listener.setSniffer(sniffer);
+            try {
                 listener.setSniffer(sniffer);
-                try {
-                    listener.setSniffer(sniffer);
-                    fail("should have failed");
-                } catch(IllegalStateException e) {
-                    assertEquals("sniffer can only be set once", e.getMessage());
-                }
-                listener.onFailure(new HttpHost("localhost", 9200));
+                fail("should have failed");
+            } catch(IllegalStateException e) {
+                assertEquals("sniffer can only be set once", e.getMessage());
             }
+            listener.onFailure(new HttpHost("localhost", 9200));
         }
     }
 }

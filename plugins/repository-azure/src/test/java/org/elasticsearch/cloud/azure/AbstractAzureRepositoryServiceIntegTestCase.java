@@ -36,7 +36,6 @@ import org.junit.After;
 import org.junit.Before;
 
 import java.net.URISyntaxException;
-import java.util.Arrays;
 import java.util.Collection;
 
 public abstract class AbstractAzureRepositoryServiceIntegTestCase extends AbstractAzureIntegTestCase {
@@ -82,7 +81,7 @@ public abstract class AbstractAzureRepositoryServiceIntegTestCase extends Abstra
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(TestPlugin.class, MockFSIndexStore.TestPlugin.class);
+        return pluginList(TestPlugin.class, MockFSIndexStore.TestPlugin.class);
     }
 
     @Override

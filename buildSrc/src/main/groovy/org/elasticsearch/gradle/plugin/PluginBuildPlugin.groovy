@@ -57,7 +57,7 @@ public class PluginBuildPlugin extends BuildPlugin {
                 // file to a new name, copy the nebula generated pom to the same name,
                 // and generate a different pom for the zip
                 project.signArchives.enabled = false
-                addClientJarPomGeneration(project)
+                addJarPomGeneration(project)
                 addClientJarTask(project)
                 if (isModule == false) {
                     addZipPomGeneration(project)
@@ -97,8 +97,8 @@ public class PluginBuildPlugin extends BuildPlugin {
             // with a full elasticsearch server that includes optional deps
             provided "org.locationtech.spatial4j:spatial4j:${project.versions.spatial4j}"
             provided "com.vividsolutions:jts:${project.versions.jts}"
-            provided "org.apache.logging.log4j:log4j-api:${project.versions.log4j}"
-            provided "org.apache.logging.log4j:log4j-core:${project.versions.log4j}"
+            provided "log4j:log4j:${project.versions.log4j}"
+            provided "log4j:apache-log4j-extras:${project.versions.log4j}"
             provided "net.java.dev.jna:jna:${project.versions.jna}"
         }
     }
@@ -192,14 +192,13 @@ public class PluginBuildPlugin extends BuildPlugin {
     }
 
     /** Adds nebula publishing task to generate a pom file for the plugin. */
-    protected static void addClientJarPomGeneration(Project project) {
+    protected static void addJarPomGeneration(Project project) {
         project.plugins.apply(MavenPublishPlugin.class)
 
         project.publishing {
             publications {
                 jar(MavenPublication) {
                     from project.components.java
-                    artifactId = artifactId + '-client'
                     pom.withXml { XmlProvider xml ->
                         Node root = xml.asNode()
                         root.appendNode('name', project.pluginProperties.extension.name)

@@ -20,13 +20,11 @@
 package org.elasticsearch.script;
 
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.search.lookup.SearchLookup;
 import org.elasticsearch.test.ESTestCase;
 
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.Map;
 
 import static org.hamcrest.Matchers.containsString;
@@ -34,12 +32,12 @@ import static org.hamcrest.Matchers.equalTo;
 
 public class ScriptSettingsTests extends ESTestCase {
 
-    public void testDefaultLanguageIsPainless() {
+    public void testDefaultLanguageIsGroovy() {
         ScriptEngineRegistry scriptEngineRegistry =
                 new ScriptEngineRegistry(Collections.singletonList(new CustomScriptEngineService()));
         ScriptContextRegistry scriptContextRegistry = new ScriptContextRegistry(Collections.emptyList());
         ScriptSettings scriptSettings = new ScriptSettings(scriptEngineRegistry, scriptContextRegistry);
-        assertThat(scriptSettings.getDefaultScriptLanguageSetting().get(Settings.EMPTY), equalTo("painless"));
+        assertThat(scriptSettings.getDefaultScriptLanguageSetting().get(Settings.EMPTY), equalTo("groovy"));
     }
 
     public void testCustomDefaultLanguage() {
@@ -63,22 +61,6 @@ public class ScriptSettingsTests extends ESTestCase {
             fail("should have seen unregistered default language");
         } catch (IllegalArgumentException e) {
             assertThat(e.getMessage(), containsString("unregistered default language [C++]"));
-        }
-    }
-
-    public void testSettingsAreProperlyPropogated() {
-        ScriptEngineRegistry scriptEngineRegistry =
-            new ScriptEngineRegistry(Collections.singletonList(new CustomScriptEngineService()));
-        ScriptContextRegistry scriptContextRegistry = new ScriptContextRegistry(Collections.emptyList());
-        ScriptSettings scriptSettings = new ScriptSettings(scriptEngineRegistry, scriptContextRegistry);
-        boolean enabled = randomBoolean();
-        Settings s = Settings.builder().put("script.inline", enabled).build();
-        for (Iterator<Setting<Boolean>> iter = scriptSettings.getScriptLanguageSettings().iterator(); iter.hasNext();) {
-            Setting<Boolean> setting = iter.next();
-            if (setting.getKey().endsWith(".inline")) {
-                assertThat("inline settings should have propagated", setting.get(s), equalTo(enabled));
-                assertThat(setting.getDefaultRaw(s), equalTo(Boolean.toString(enabled)));
-            }
         }
     }
 

@@ -31,7 +31,7 @@ import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.PipelineAggregationBuilder;
 import org.elasticsearch.search.slice.SliceBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
+import org.elasticsearch.search.highlight.HighlightBuilder;
 import org.elasticsearch.search.rescore.RescoreBuilder;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortOrder;
@@ -250,6 +250,14 @@ public class SearchRequestBuilder extends ActionRequestBuilder<SearchRequest, Se
     }
 
     /**
+     * Sets no fields to be loaded, resulting in only id and type to be returned per field.
+     */
+    public SearchRequestBuilder setNoStoredFields() {
+        sourceBuilder().noStoredFields();
+        return this;
+    }
+
+    /**
      * Indicates whether the response should contain the stored _source for every hit
      */
     public SearchRequestBuilder setFetchSource(boolean fetch) {
@@ -294,6 +302,7 @@ public class SearchRequestBuilder extends ActionRequestBuilder<SearchRequest, Se
 
     /**
      * Adds a stored field to load and return (note, it must be stored) as part of the search request.
+     * If none are specified, the source of the document will be return.
      */
     public SearchRequestBuilder addStoredField(String field) {
         sourceBuilder().storedField(field);
@@ -371,8 +380,9 @@ public class SearchRequestBuilder extends ActionRequestBuilder<SearchRequest, Se
     }
 
     /**
-     * Adds stored fields to load and return (note, it must be stored) as part of the search request.
-     * To disable the stored fields entirely (source and metadata fields) use {@code storedField("_none_")}.
+     * Sets the stored fields to load and return as part of the search request. If none
+     * are specified, the source of the document will be returned.
+     *
      * @deprecated Use {@link SearchRequestBuilder#storedFields(String...)} instead.
      */
     @Deprecated
@@ -382,8 +392,8 @@ public class SearchRequestBuilder extends ActionRequestBuilder<SearchRequest, Se
     }
 
     /**
-     * Adds stored fields to load and return (note, it must be stored) as part of the search request.
-     * To disable the stored fields entirely (source and metadata fields) use {@code storedField("_none_")}.
+     * Sets the fields to load and return as part of the search request. If none
+     * are specified, the source of the document will be returned.
      */
     public SearchRequestBuilder storedFields(String... fields) {
         sourceBuilder().storedFields(Arrays.asList(fields));

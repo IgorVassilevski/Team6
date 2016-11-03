@@ -98,7 +98,11 @@ public class TermQueryBuilder extends BaseTermQueryBuilder<TermQueryBuilder> {
             } else if (parseContext.isDeprecatedSetting(currentFieldName)) {
                 // skip
             } else if (token == XContentParser.Token.START_OBJECT) {
-                throwParsingExceptionOnMultipleFields(NAME, parser.getTokenLocation(), fieldName, currentFieldName);
+                // also support a format of "term" : {"field_name" : { ... }}
+                if (fieldName != null) {
+                    throw new ParsingException(parser.getTokenLocation(),
+                            "[term] query does not support different field names, use [bool] query instead");
+                }
                 fieldName = currentFieldName;
                 while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
                     if (token == XContentParser.Token.FIELD_NAME) {
@@ -119,7 +123,10 @@ public class TermQueryBuilder extends BaseTermQueryBuilder<TermQueryBuilder> {
                     }
                 }
             } else if (token.isValue()) {
-                throwParsingExceptionOnMultipleFields(NAME, parser.getTokenLocation(), fieldName, parser.currentName());
+                if (fieldName != null) {
+                    throw new ParsingException(parser.getTokenLocation(),
+                            "[term] query does not support different field names, use [bool] query instead");
+                }
                 fieldName = currentFieldName;
                 value = parser.objectBytes();
             } else if (token == XContentParser.Token.START_ARRAY) {

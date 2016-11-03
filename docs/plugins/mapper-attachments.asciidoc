@@ -19,7 +19,6 @@ This plugin can be installed using the plugin manager:
 ----------------------------------------------------------------
 sudo bin/elasticsearch-plugin install mapper-attachments
 ----------------------------------------------------------------
-// NOTCONSOLE
 
 The plugin must be installed on every node in the cluster, and each node must
 be restarted after installation.
@@ -34,7 +33,6 @@ The plugin can be removed with the following command:
 ----------------------------------------------------------------
 sudo bin/elasticsearch-plugin remove mapper-attachments
 ----------------------------------------------------------------
-// NOTCONSOLE
 
 The node must be stopped before removing the plugin.
 
@@ -45,7 +43,7 @@ Create a property mapping using the new type `attachment`:
 
 [source,js]
 --------------------------
-PUT /trying-out-mapper-attachments
+POST /trying-out-mapper-attachments
 {
   "mappings": {
     "person": {
@@ -198,14 +196,14 @@ PUT /test
         "file" : {
           "type" : "attachment",
           "fields" : {
-            "content" : {"index" : true},
-            "title" : {"store" : true},
-            "date" : {"store" : true},
+            "content" : {"index" : "no"},
+            "title" : {"store" : "yes"},
+            "date" : {"store" : "yes"},
             "author" : {"analyzer" : "my_analyzer"},
-            "keywords" : {"store" : true},
-            "content_type" : {"store" : true},
-            "content_length" : {"store" : true},
-            "language" : {"store" : true}
+            "keywords" : {"store" : "yes"},
+            "content_type" : {"store" : "yes"},
+            "content_length" : {"store" : "yes"},
+            "language" : {"store" : "yes"}
           }
         }
       }
@@ -272,13 +270,13 @@ Will give you:
    },
    "hits": {
       "total": 1,
-      "max_score": 0.53484553,
+      "max_score": 0.16273327,
       "hits": [
          {
             "_index": "test",
             "_type": "person",
             "_id": "1",
-            "_score": 0.53484553,
+            "_score": 0.16273327,
             "fields": {
                "file.content_type": [
                   "text/plain; charset=ISO-8859-1"
@@ -289,7 +287,6 @@ Will give you:
    }
 }
 --------------------------
-// TESTRESPONSE[s/"took": 2,/"took": $body.took,/]
 
 [[mapper-attachments-indexed-characters]]
 ==== Indexed Characters
@@ -330,7 +327,6 @@ Note that you can force language using `_language` field when sending your actua
 
 [source,js]
 --------------------------
-PUT /test/person/1
 {
     "my_attachment" : {
         "_language" : "en",
@@ -338,7 +334,6 @@ PUT /test/person/1
     }
 }
 --------------------------
-// CONSOLE
 
 [[mapper-attachments-highlighting]]
 ==== Highlighting attachments
@@ -396,19 +391,19 @@ It gives back:
    "took": 9,
    "timed_out": false,
    "_shards": {
-      "total": 5,
-      "successful": 5,
+      "total": 1,
+      "successful": 1,
       "failed": 0
    },
    "hits": {
       "total": 1,
-      "max_score": 0.5446649,
+      "max_score": 0.13561106,
       "hits": [
          {
             "_index": "test",
             "_type": "person",
             "_id": "1",
-            "_score": 0.5446649,
+            "_score": 0.13561106,
             "highlight": {
                "file.content": [
                   "\"God Save the <em>Queen</em>\" (alternatively \"God Save the <em>King</em>\"\n"
@@ -419,4 +414,3 @@ It gives back:
    }
 }
 --------------------------
-// TESTRESPONSE[s/"took": 9,/"took": $body.took,/]

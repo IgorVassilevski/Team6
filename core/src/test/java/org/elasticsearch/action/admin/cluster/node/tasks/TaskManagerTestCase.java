@@ -18,13 +18,6 @@
  */
 package org.elasticsearch.action.admin.cluster.node.tasks;
 
-import java.io.IOException;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
-
 import org.elasticsearch.Version;
 import org.elasticsearch.action.FailedNodeException;
 import org.elasticsearch.action.admin.cluster.node.tasks.cancel.TransportCancelTasksAction;
@@ -56,6 +49,12 @@ import org.elasticsearch.transport.local.LocalTransport;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
@@ -168,7 +167,7 @@ public abstract class TaskManagerTestCase extends ESTestCase {
         public TestNode(String name, ThreadPool threadPool, Settings settings) {
             clusterService = createClusterService(threadPool);
             transportService = new TransportService(settings,
-                    new LocalTransport(settings, threadPool, new NamedWriteableRegistry(Collections.emptyList()),
+                    new LocalTransport(settings, threadPool, new NamedWriteableRegistry(),
                         new NoneCircuitBreakerService()), threadPool) {
                 @Override
                 protected TaskManager createTaskManager() {

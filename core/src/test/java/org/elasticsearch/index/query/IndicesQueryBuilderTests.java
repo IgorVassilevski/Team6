@@ -61,7 +61,12 @@ public class IndicesQueryBuilderTests extends AbstractQueryTestCase<IndicesQuery
     }
 
     public void testIllegalArguments() {
-        expectThrows(IllegalArgumentException.class, () -> new IndicesQueryBuilder(null, "index"));
+        try {
+            new IndicesQueryBuilder(null, "index");
+            fail("cannot be null");
+        } catch (IllegalArgumentException e) {
+            // expected
+        }
 
         expectThrows(IllegalArgumentException.class, () -> new IndicesQueryBuilder(new MatchAllQueryBuilder(), (String[]) null));
         expectThrows(IllegalArgumentException.class, () -> new IndicesQueryBuilder(new MatchAllQueryBuilder(), new String[0]));

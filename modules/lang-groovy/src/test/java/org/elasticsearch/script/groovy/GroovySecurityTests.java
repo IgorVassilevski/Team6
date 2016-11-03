@@ -123,13 +123,6 @@ public class GroovySecurityTests extends ESTestCase {
         }
     }
 
-    public void testGroovyScriptsThatThrowErrors() throws Exception {
-        assertFailure("assert false, \"msg\";", AssertionError.class);
-        assertFailure("def foo=false; assert foo;", AssertionError.class);
-        // Groovy's asserts require org.codehaus.groovy.runtime.InvokerHelper, so they are denied
-        assertFailure("def foo=false; assert foo, \"msg2\";", NoClassDefFoundError.class);
-    }
-
     /** runs a script */
     private void doTest(String script) {
         Map<String, Object> vars = new HashMap<String, Object>();
@@ -153,7 +146,7 @@ public class GroovySecurityTests extends ESTestCase {
         doTest(script);
     }
 
-    /** asserts that a script triggers the given exceptionclass */
+    /** asserts that a script triggers securityexception */
     private void assertFailure(String script, Class<? extends Throwable> exceptionClass) {
         try {
             doTest(script);

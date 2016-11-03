@@ -24,7 +24,6 @@ import org.elasticsearch.transport.Netty3Plugin;
 import org.jboss.netty.handler.codec.http.HttpResponse;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Locale;
 
@@ -36,7 +35,7 @@ public class Netty3PipeliningEnabledIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
-        return Arrays.asList(Netty3Plugin.class);
+        return pluginList(Netty3Plugin.class);
     }
 
     public void testThatNettyHttpServerSupportsPipelining() throws Exception {

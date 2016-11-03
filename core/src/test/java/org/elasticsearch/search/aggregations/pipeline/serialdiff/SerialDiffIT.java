@@ -22,8 +22,9 @@ package org.elasticsearch.search.aggregations.pipeline.serialdiff;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.collect.EvictingQueue;
+import org.elasticsearch.search.aggregations.bucket.histogram.ExtendedBounds;
 import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
-import org.elasticsearch.search.aggregations.bucket.histogram.Histogram.Bucket;
+import org.elasticsearch.search.aggregations.bucket.histogram.InternalHistogram;
 import org.elasticsearch.search.aggregations.pipeline.BucketHelpers;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregationHelperTests;
 import org.elasticsearch.search.aggregations.pipeline.SimpleValue;
@@ -231,7 +232,7 @@ public class SerialDiffIT extends ESIntegTestCase {
                 .prepareSearch("idx").setTypes("type")
                 .addAggregation(
                         histogram("histo").field(INTERVAL_FIELD).interval(interval)
-                                .extendedBounds(0L, (long) (interval * (numBuckets - 1)))
+                                .extendedBounds(new ExtendedBounds(0L, (long) (interval * (numBuckets - 1))))
                                 .subAggregation(metric)
                                 .subAggregation(diff("diff_counts", "_count")
                                         .lag(lag)
@@ -243,10 +244,10 @@ public class SerialDiffIT extends ESIntegTestCase {
 
         assertSearchResponse(response);
 
-        Histogram histo = response.getAggregations().get("histo");
+        InternalHistogram<InternalHistogram.Bucket> histo = response.getAggregations().get("histo");
         assertThat(histo, notNullValue());
         assertThat(histo.getName(), equalTo("histo"));
-        List<? extends Bucket> buckets = histo.getBuckets();
+        List<? extends InternalHistogram.Bucket> buckets = histo.getBuckets();
         assertThat("Size of buckets array is not correct.", buckets.size(), equalTo(mockHisto.size()));
 
         List<Double> expectedCounts = testValues.get(MetricTarget.COUNT.toString());
@@ -278,7 +279,7 @@ public class SerialDiffIT extends ESIntegTestCase {
                 .prepareSearch("idx").setTypes("type")
                 .addAggregation(
                         histogram("histo").field(INTERVAL_FIELD).interval(interval)
-                                .extendedBounds(0L, (long) (interval * (numBuckets - 1)))
+                                .extendedBounds(new ExtendedBounds(0L, (long) (interval * (numBuckets - 1))))
                                 .subAggregation(metric)
                                 .subAggregation(diff("diff_counts", "_count")
                                         .lag(-1)

@@ -19,7 +19,6 @@
 
 package org.elasticsearch.discovery.zen.publish;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.ClusterChangedEvent;
@@ -245,8 +244,7 @@ public class PublishClusterStateAction extends AbstractComponent {
                 bytes = serializeFullClusterState(clusterState, node.getVersion());
                 serializedStates.put(node.getVersion(), bytes);
             } catch (Exception e) {
-                logger.warn(
-                    (org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("failed to serialize cluster_state before publishing it to node {}", node), e);
+                logger.warn("failed to serialize cluster_state before publishing it to node {}", e, node);
                 sendingController.onNodeSendFailed(node, e);
                 return;
             }
@@ -292,14 +290,13 @@ public class PublishClusterStateAction extends AbstractComponent {
                                 logger.debug("resending full cluster state to node {} reason {}", node, exp.getDetailedMessage());
                                 sendFullClusterState(clusterState, serializedStates, node, publishTimeout, sendingController);
                             } else {
-                                logger.debug((org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("failed to send cluster state to {}", node), exp);
+                                logger.debug("failed to send cluster state to {}", exp, node);
                                 sendingController.onNodeSendFailed(node, exp);
                             }
                         }
                     });
         } catch (Exception e) {
-            logger.warn(
-                (org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("error sending cluster state to {}", node), e);
+            logger.warn("error sending cluster state to {}", e, node);
             sendingController.onNodeSendFailed(node, e);
         }
     }
@@ -325,12 +322,12 @@ public class PublishClusterStateAction extends AbstractComponent {
 
                         @Override
                         public void handleException(TransportException exp) {
-                            logger.debug((org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("failed to commit cluster state (uuid [{}], version [{}]) to {}", clusterState.stateUUID(), clusterState.version(), node), exp);
+                            logger.debug("failed to commit cluster state (uuid [{}], version [{}]) to {}", exp, clusterState.stateUUID(), clusterState.version(), node);
                             sendingController.getPublishResponseHandler().onFailure(node, exp);
                         }
                     });
         } catch (Exception t) {
-            logger.warn((org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("error sending cluster state commit (uuid [{}], version [{}]) to {}", clusterState.stateUUID(), clusterState.version(), node), t);
+            logger.warn("error sending cluster state commit (uuid [{}], version [{}]) to {}", t, clusterState.stateUUID(), clusterState.version(), node);
             sendingController.getPublishResponseHandler().onFailure(node, t);
         }
     }
@@ -629,7 +626,7 @@ public class PublishClusterStateAction extends AbstractComponent {
             if (committedOrFailed()) {
                 return committed == false;
             }
-            logger.trace((org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("failed to commit version [{}]. {}", clusterState.version(), details), reason);
+            logger.trace("failed to commit version [{}]. {}", reason, clusterState.version(), details);
             committed = false;
             committedOrFailedLatch.countDown();
             return true;

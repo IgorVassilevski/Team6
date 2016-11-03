@@ -20,15 +20,16 @@ package org.elasticsearch.http;
 
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
-import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.elasticsearch.client.Response;
+import org.elasticsearch.client.RestClient;
 import org.elasticsearch.common.logging.LoggerMessageFormat;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.plugins.Plugin;
+
 import org.hamcrest.Matcher;
 
 import java.io.IOException;
@@ -98,31 +99,35 @@ public class DeprecationHttpIT extends HttpSmokeTestCase {
 
         final String commaSeparatedIndices = Stream.of(indices).collect(Collectors.joining(","));
 
-        final String body = "{\"query\":{\"bool\":{\"filter\":[{\"" + TestDeprecatedQueryBuilder.NAME +  "\":{}}]}}}";
+        final String body =
+            "{\"query\":{\"bool\":{\"filter\":[{\"" + TestDeprecatedQueryBuilder.NAME +  "\":{}}]}}}";
 
         // trigger all index deprecations
-        Response response = getRestClient().performRequest("GET", "/" + commaSeparatedIndices + "/_search",
-                Collections.emptyMap(), new StringEntity(body, ContentType.APPLICATION_JSON));
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(OK.getStatus()));
+        try (Response response = getRestClient().performRequest("GET",
+                                                                "/" + commaSeparatedIndices + "/_search",
+                                                                Collections.emptyMap(),
+                                                                new StringEntity(body, RestClient.JSON_CONTENT_TYPE))) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(OK.getStatus()));
 
-        final List<String> deprecatedWarnings = getWarningHeaders(response.getHeaders());
-        final List<Matcher<String>> headerMatchers = new ArrayList<>(indices.length);
+            final List<String> deprecatedWarnings = getWarningHeaders(response.getHeaders());
+            final List<Matcher<String>> headerMatchers = new ArrayList<>(indices.length);
 
-        for (String index : indices) {
-            headerMatchers.add(containsString(LoggerMessageFormat.format("[{}] index", (Object)index)));
-        }
+            for (String index : indices) {
+                headerMatchers.add(containsString(LoggerMessageFormat.format("[{}] index", (Object)index)));
+            }
 
-        assertThat(deprecatedWarnings, hasSize(headerMatchers.size()));
-        for (Matcher<String> headerMatcher : headerMatchers) {
-            assertThat(deprecatedWarnings, hasItem(headerMatcher));
+            assertThat(deprecatedWarnings, hasSize(headerMatchers.size()));
+            for (Matcher<String> headerMatcher : headerMatchers) {
+                assertThat(deprecatedWarnings, hasItem(headerMatcher));
+            }
         }
     }
 
-    public void testDeprecationWarningsAppearInHeaders() throws Exception {
+    public void testDeprecationWarningsAppearInHeaders() throws IOException {
         doTestDeprecationWarningsAppearInHeaders();
     }
 
-    public void testDeprecationHeadersDoNotGetStuck() throws Exception {
+    public void testDeprecationHeadersDoNotGetStuck() throws IOException {
         doTestDeprecationWarningsAppearInHeaders();
         doTestDeprecationWarningsAppearInHeaders();
         if (rarely()) {
@@ -154,26 +159,29 @@ public class DeprecationHttpIT extends HttpSmokeTestCase {
         Collections.shuffle(settings, random());
 
         // trigger all deprecations
-        Response response = getRestClient().performRequest("GET", "/_test_cluster/deprecated_settings",
-                Collections.emptyMap(), buildSettingsRequest(settings, useDeprecatedField));
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(OK.getStatus()));
+        try (Response response = getRestClient().performRequest("GET",
+                                                                "/_test_cluster/deprecated_settings",
+                                                                Collections.emptyMap(),
+                                                                buildSettingsRequest(settings, useDeprecatedField))) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(OK.getStatus()));
 
-        final List<String> deprecatedWarnings = getWarningHeaders(response.getHeaders());
-        final List<Matcher<String>> headerMatchers = new ArrayList<>(4);
+            final List<String> deprecatedWarnings = getWarningHeaders(response.getHeaders());
+            final List<Matcher<String>> headerMatchers = new ArrayList<>(4);
 
-        headerMatchers.add(equalTo(TestDeprecationHeaderRestAction.DEPRECATED_ENDPOINT));
-        if (useDeprecatedField) {
-            headerMatchers.add(equalTo(TestDeprecationHeaderRestAction.DEPRECATED_USAGE));
-        }
-        for (Setting<?> setting : settings) {
-            if (setting.isDeprecated()) {
-                headerMatchers.add(containsString(LoggerMessageFormat.format("[{}] setting was deprecated", (Object)setting.getKey())));
+            headerMatchers.add(equalTo(TestDeprecationHeaderRestAction.DEPRECATED_ENDPOINT));
+            if (useDeprecatedField) {
+                headerMatchers.add(equalTo(TestDeprecationHeaderRestAction.DEPRECATED_USAGE));
             }
-        }
+            for (Setting<?> setting : settings) {
+                if (setting.isDeprecated()) {
+                    headerMatchers.add(containsString(LoggerMessageFormat.format("[{}] setting was deprecated", (Object)setting.getKey())));
+                }
+            }
 
-        assertThat(deprecatedWarnings, hasSize(headerMatchers.size()));
-        for (Matcher<String> headerMatcher : headerMatchers) {
-            assertThat(deprecatedWarnings, hasItem(headerMatcher));
+            assertThat(deprecatedWarnings, hasSize(headerMatchers.size()));
+            for (Matcher<String> headerMatcher : headerMatchers) {
+                assertThat(deprecatedWarnings, hasItem(headerMatcher));
+            }
         }
     }
 
@@ -200,7 +208,7 @@ public class DeprecationHttpIT extends HttpSmokeTestCase {
 
         builder.endArray().endObject();
 
-        return new StringEntity(builder.string(), ContentType.APPLICATION_JSON);
+        return new StringEntity(builder.string(), RestClient.JSON_CONTENT_TYPE);
     }
 
 }

@@ -19,46 +19,31 @@
 
 package org.elasticsearch.common.logging;
 
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.MessageFactory;
+import org.apache.log4j.Logger;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
 
 import java.util.Locale;
-import java.util.function.Function;
 
 /**
- * Factory to get {@link Logger}s
+ * Factory to get {@link ESLogger}s
  */
 public abstract class ESLoggerFactory {
 
-    public static final Setting<Level> LOG_DEFAULT_LEVEL_SETTING =
-        new Setting<>("logger.level", Level.INFO.name(), Level::valueOf, Property.NodeScope);
-    public static final Setting<Level> LOG_LEVEL_SETTING =
-        Setting.prefixKeySetting("logger.", Level.INFO.name(), Level::valueOf,
+    public static final Setting<LogLevel> LOG_DEFAULT_LEVEL_SETTING =
+        new Setting<>("logger.level", LogLevel.INFO.name(), LogLevel::parse, Property.NodeScope);
+    public static final Setting<LogLevel> LOG_LEVEL_SETTING =
+        Setting.prefixKeySetting("logger.", LogLevel.INFO.name(), LogLevel::parse,
             Property.Dynamic, Property.NodeScope);
 
-    public static Logger getLogger(String prefix, String name) {
+    public static ESLogger getLogger(String prefix, String name) {
+        prefix = prefix == null ? null : prefix.intern();
         name = name.intern();
-        final Logger logger = getLogger(new PrefixMessageFactory(), name);
-        final MessageFactory factory = logger.getMessageFactory();
-        // in some cases, we initialize the logger before we are ready to set the prefix
-        // we can not re-initialize the logger, so the above getLogger might return an existing
-        // instance without the prefix set; thus, we hack around this by resetting the prefix
-        if (prefix != null && factory instanceof PrefixMessageFactory) {
-            ((PrefixMessageFactory) factory).setPrefix(prefix.intern());
-        }
-        return logger;
+        return new ESLogger(prefix, Logger.getLogger(name));
     }
 
-    public static Logger getLogger(MessageFactory messageFactory, String name) {
-        return LogManager.getLogger(name, messageFactory);
-    }
-
-    public static Logger getLogger(String name) {
-        return getLogger((String)null, name);
+    public static ESLogger getLogger(String name) {
+        return getLogger(null, name);
     }
 
     public static DeprecationLogger getDeprecationLogger(String name) {
@@ -69,12 +54,18 @@ public abstract class ESLoggerFactory {
         return new DeprecationLogger(getLogger(prefix, name));
     }
 
-    public static Logger getRootLogger() {
-        return LogManager.getRootLogger();
+    public static ESLogger getRootLogger() {
+        return new ESLogger(null, Logger.getRootLogger());
     }
 
     private ESLoggerFactory() {
         // Utility class can't be built.
     }
 
+    public enum LogLevel {
+        WARN, TRACE, INFO, DEBUG, ERROR;
+        public static LogLevel parse(String level) {
+            return valueOf(level.toUpperCase(Locale.ROOT));
+        }
+    }
 }

@@ -21,9 +21,7 @@ package org.elasticsearch.search.aggregations.bucket;
 /**
  * Helper functions for common Bucketing functions
  */
-public final class BucketUtils {
-
-    private BucketUtils() {}
+public class BucketUtils {
 
     /**
      * Heuristic used to determine the size of shard-side PriorityQueues when
@@ -36,22 +34,16 @@ public final class BucketUtils {
      * @return A suggested default for the size of any shard-side PriorityQueues
      */
     public static int suggestShardSideQueueSize(int finalSize, int numberOfShards) {
-        if (finalSize < 1) {
-            throw new IllegalArgumentException("size must be positive, got " + finalSize);
-        }
-        if (numberOfShards < 1) {
-            throw new IllegalArgumentException("number of shards must be positive, got " + numberOfShards);
-        }
-
+        assert numberOfShards >= 1;
         if (numberOfShards == 1) {
-            // In the case of a single shard, we do not need to over-request
             return finalSize;
         }
-
-        // Request 50% more buckets on the shards in order to improve accuracy
-        // as well as a small constant that should help with small values of 'size'
-        final long shardSampleSize = (long) (finalSize * 1.5 + 10);
-        return (int) Math.min(Integer.MAX_VALUE, shardSampleSize);
+        //Cap the multiplier used for shards to avoid excessive data transfer
+        final long shardSampleSize = (long) finalSize * Math.min(10, numberOfShards);
+        // When finalSize is very small e.g. 1 and there is a low number of
+        // shards then we need to ensure we still gather a reasonable sample of statistics from each
+        // shard (at low cost) to improve the chances of the final result being accurate.
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(10, shardSampleSize));
     }
     
 }

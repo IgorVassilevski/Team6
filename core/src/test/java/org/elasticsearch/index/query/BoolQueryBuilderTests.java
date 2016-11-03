@@ -163,10 +163,30 @@ public class BoolQueryBuilderTests extends AbstractQueryTestCase<BoolQueryBuilde
 
     public void testIllegalArguments() {
         BoolQueryBuilder booleanQuery = new BoolQueryBuilder();
-        expectThrows(IllegalArgumentException.class, () -> booleanQuery.must(null));
-        expectThrows(IllegalArgumentException.class, () -> booleanQuery.mustNot(null));
-        expectThrows(IllegalArgumentException.class, () -> booleanQuery.filter(null));
-        expectThrows(IllegalArgumentException.class, () -> booleanQuery.should(null));
+
+        try {
+            booleanQuery.must(null);
+            fail("cannot be null");
+        } catch (IllegalArgumentException e) {
+        }
+
+        try {
+            booleanQuery.mustNot(null);
+            fail("cannot be null");
+        } catch (IllegalArgumentException e) {
+        }
+
+        try {
+            booleanQuery.filter(null);
+            fail("cannot be null");
+        } catch (IllegalArgumentException e) {
+        }
+
+        try {
+            booleanQuery.should(null);
+            fail("cannot be null");
+        } catch (IllegalArgumentException e) {
+        }
     }
 
     // https://github.com/elastic/elasticsearch/issues/7240

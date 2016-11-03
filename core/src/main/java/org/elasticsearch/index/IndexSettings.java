@@ -18,11 +18,11 @@
  */
 package org.elasticsearch.index;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.index.MergePolicy;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.ParseFieldMatcher;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.common.settings.IndexScopedSettings;
@@ -32,9 +32,8 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.index.mapper.AllFieldMapper;
+import org.elasticsearch.index.mapper.internal.AllFieldMapper;
 import org.elasticsearch.index.translog.Translog;
-import org.elasticsearch.node.Node;
 
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -130,7 +129,7 @@ public final class IndexSettings {
 
     private final Index index;
     private final Version version;
-    private final Logger logger;
+    private final ESLogger logger;
     private final String nodeName;
     private final Settings nodeSettings;
     private final int numberOfShards;
@@ -228,7 +227,7 @@ public final class IndexSettings {
         this.index = indexMetaData.getIndex();
         version = Version.indexCreated(settings);
         logger = Loggers.getLogger(getClass(), settings, index);
-        nodeName = Node.NODE_NAME_SETTING.get(settings);
+        nodeName = settings.get("node.name", "");
         this.indexMetaData = indexMetaData;
         numberOfShards = settings.getAsInt(IndexMetaData.SETTING_NUMBER_OF_SHARDS, null);
         isShadowReplicaIndex = IndexMetaData.isIndexUsingShadowReplicas(settings);

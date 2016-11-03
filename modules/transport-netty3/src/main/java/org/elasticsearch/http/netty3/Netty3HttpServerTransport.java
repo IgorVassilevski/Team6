@@ -21,8 +21,6 @@ package org.elasticsearch.http.netty3;
 
 import com.carrotsearch.hppc.IntHashSet;
 import com.carrotsearch.hppc.IntSet;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.inject.Inject;
@@ -53,7 +51,7 @@ import org.elasticsearch.http.netty3.pipelining.HttpPipeliningHandler;
 import org.elasticsearch.monitor.jvm.JvmInfo;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestRequest;
-import org.elasticsearch.rest.RestUtils;
+import org.elasticsearch.rest.support.RestUtils;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.BindTransportException;
 import org.elasticsearch.transport.netty3.Netty3OpenChannelsHandler;
@@ -83,11 +81,9 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static org.elasticsearch.common.settings.Setting.boolSetting;
 import static org.elasticsearch.common.settings.Setting.byteSizeSetting;
@@ -122,29 +118,29 @@ public class Netty3HttpServerTransport extends AbstractLifecycleComponent implem
 
     public static Setting<ByteSizeValue> SETTING_HTTP_NETTY_MAX_CUMULATION_BUFFER_CAPACITY =
             Setting.byteSizeSetting("http.netty.max_cumulation_buffer_capacity", new ByteSizeValue(-1),
-                Property.NodeScope, Property.Shared);
+                Property.NodeScope);
     public static Setting<Integer> SETTING_HTTP_NETTY_MAX_COMPOSITE_BUFFER_COMPONENTS =
-            Setting.intSetting("http.netty.max_composite_buffer_components", -1, Property.NodeScope, Property.Shared);
+            Setting.intSetting("http.netty.max_composite_buffer_components", -1, Property.NodeScope);
 
     public static final Setting<Integer> SETTING_HTTP_WORKER_COUNT = new Setting<>("http.netty.worker_count",
             (s) -> Integer.toString(EsExecutors.boundedNumberOfProcessors(s) * 2),
-            (s) -> Setting.parseInt(s, 1, "http.netty.worker_count"), Property.NodeScope, Property.Shared);
+            (s) -> Setting.parseInt(s, 1, "http.netty.worker_count"), Property.NodeScope);
 
     public static final Setting<Boolean> SETTING_HTTP_TCP_NO_DELAY =
-        boolSetting("http.tcp_no_delay", NetworkService.TcpSettings.TCP_NO_DELAY, Property.NodeScope, Property.Shared);
+        boolSetting("http.tcp_no_delay", NetworkService.TcpSettings.TCP_NO_DELAY, Property.NodeScope);
     public static final Setting<Boolean> SETTING_HTTP_TCP_KEEP_ALIVE =
-        boolSetting("http.tcp.keep_alive", NetworkService.TcpSettings.TCP_KEEP_ALIVE, Property.NodeScope, Property.Shared);
+        boolSetting("http.tcp.keep_alive", NetworkService.TcpSettings.TCP_KEEP_ALIVE, Property.NodeScope);
     public static final Setting<Boolean> SETTING_HTTP_TCP_BLOCKING_SERVER =
-        boolSetting("http.tcp.blocking_server", NetworkService.TcpSettings.TCP_BLOCKING_SERVER, Property.NodeScope, Property.Shared);
+        boolSetting("http.tcp.blocking_server", NetworkService.TcpSettings.TCP_BLOCKING_SERVER, Property.NodeScope);
     public static final Setting<Boolean> SETTING_HTTP_TCP_REUSE_ADDRESS =
-        boolSetting("http.tcp.reuse_address", NetworkService.TcpSettings.TCP_REUSE_ADDRESS, Property.NodeScope, Property.Shared);
+        boolSetting("http.tcp.reuse_address", NetworkService.TcpSettings.TCP_REUSE_ADDRESS, Property.NodeScope);
 
     public static final Setting<ByteSizeValue> SETTING_HTTP_TCP_SEND_BUFFER_SIZE =
         Setting.byteSizeSetting("http.tcp.send_buffer_size", NetworkService.TcpSettings.TCP_SEND_BUFFER_SIZE,
-            Property.NodeScope, Property.Shared);
+            Property.NodeScope);
     public static final Setting<ByteSizeValue> SETTING_HTTP_TCP_RECEIVE_BUFFER_SIZE =
         Setting.byteSizeSetting("http.tcp.receive_buffer_size", NetworkService.TcpSettings.TCP_RECEIVE_BUFFER_SIZE,
-            Property.NodeScope, Property.Shared);
+            Property.NodeScope);
     public static final Setting<ByteSizeValue> SETTING_HTTP_NETTY_RECEIVE_PREDICTOR_SIZE =
         Setting.byteSizeSetting("transport.netty.receive_predictor_size",
             settings -> {
@@ -287,13 +283,13 @@ public class Netty3HttpServerTransport extends AbstractLifecycleComponent implem
         this.serverOpenChannels = new Netty3OpenChannelsHandler(logger);
         if (blockingServer) {
             serverBootstrap = new ServerBootstrap(new OioServerSocketChannelFactory(
-                Executors.newCachedThreadPool(daemonThreadFactory(settings, HTTP_SERVER_BOSS_THREAD_NAME_PREFIX)),
-                Executors.newCachedThreadPool(daemonThreadFactory(settings, HTTP_SERVER_WORKER_THREAD_NAME_PREFIX))
+                Executors.newCachedThreadPool(daemonThreadFactory(settings, "http_server_boss")),
+                Executors.newCachedThreadPool(daemonThreadFactory(settings, "http_server_worker"))
             ));
         } else {
             serverBootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(
-                Executors.newCachedThreadPool(daemonThreadFactory(settings, HTTP_SERVER_BOSS_THREAD_NAME_PREFIX)),
-                Executors.newCachedThreadPool(daemonThreadFactory(settings, HTTP_SERVER_WORKER_THREAD_NAME_PREFIX)),
+                Executors.newCachedThreadPool(daemonThreadFactory(settings, "http_server_boss")),
+                Executors.newCachedThreadPool(daemonThreadFactory(settings, "http_server_worker")),
                 workerCount));
         }
         serverBootstrap.setPipelineFactory(configureServerChannelPipelineFactory());
@@ -394,10 +390,14 @@ public class Netty3HttpServerTransport extends AbstractLifecycleComponent implem
         if (SETTING_CORS_ALLOW_CREDENTIALS.get(settings)) {
             builder.allowCredentials();
         }
-        Set<String> strMethods = Strings.splitStringByCommaToSet(SETTING_CORS_ALLOW_METHODS.get(settings));
-        return builder.allowedRequestMethods(strMethods.stream().map(HttpMethod::valueOf).collect(Collectors.toSet()))
+        String[] strMethods = settings.getAsArray(SETTING_CORS_ALLOW_METHODS.getKey());
+        HttpMethod[] methods = Arrays.asList(strMethods)
+                                     .stream()
+                                     .map(HttpMethod::valueOf)
+                                     .toArray(size -> new HttpMethod[size]);
+        return builder.allowedRequestMethods(methods)
                       .maxAge(SETTING_CORS_MAX_AGE.get(settings))
-                      .allowedRequestHeaders(Strings.splitStringByCommaToSet(SETTING_CORS_ALLOW_HEADERS.get(settings)))
+                      .allowedRequestHeaders(settings.getAsArray(SETTING_CORS_ALLOW_HEADERS.getKey()))
                       .shortCircuit()
                       .build();
     }
@@ -497,18 +497,10 @@ public class Netty3HttpServerTransport extends AbstractLifecycleComponent implem
                 return;
             }
             if (!NetworkExceptionHelper.isCloseConnectionException(e.getCause())) {
-                logger.warn(
-                    (Supplier<?>) () -> new ParameterizedMessage(
-                        "Caught exception while handling client http traffic, closing connection {}",
-                        ctx.getChannel()),
-                    e.getCause());
+                logger.warn("Caught exception while handling client http traffic, closing connection {}", e.getCause(), ctx.getChannel());
                 ctx.getChannel().close();
             } else {
-                logger.debug(
-                    (Supplier<?>) () -> new ParameterizedMessage(
-                        "Caught exception while handling client http traffic, closing connection {}",
-                        ctx.getChannel()),
-                    e.getCause());
+                logger.debug("Caught exception while handling client http traffic, closing connection {}", e.getCause(), ctx.getChannel());
                 ctx.getChannel().close();
             }
         }

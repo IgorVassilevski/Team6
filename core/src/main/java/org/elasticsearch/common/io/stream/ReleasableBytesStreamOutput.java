@@ -36,13 +36,12 @@ public class ReleasableBytesStreamOutput extends BytesStreamOutput implements Re
         super(BigArrays.PAGE_SIZE_IN_BYTES, bigarrays);
     }
 
-    public ReleasableBytesStreamOutput(int expectedSize, BigArrays bigArrays) {
-        super(expectedSize, bigArrays);
+    public ReleasableBytesStreamOutput(int expectedSize, BigArrays bigarrays) {
+        super(expectedSize, bigarrays);
     }
 
     @Override
     public ReleasablePagedBytesReference bytes() {
-        return new ReleasablePagedBytesReference(bigArrays, bytes, count);
+        return new ReleasablePagedBytesReference(bigarrays, bytes, count);
     }
-
 }

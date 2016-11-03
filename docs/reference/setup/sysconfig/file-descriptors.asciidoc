@@ -18,6 +18,5 @@ using the <<cluster-nodes-stats>> API, with:
 
 [source,js]
 --------------------------------------------------
-GET _nodes/stats/process?filter_path=**.max_file_descriptors
+curl 'localhost:9200/_nodes/stats/process?pretty&filter_path=**.max_file_descriptors'
 --------------------------------------------------
-// CONSOLE

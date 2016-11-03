@@ -19,7 +19,6 @@
 
 package org.elasticsearch.cluster.routing.allocation;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
@@ -27,9 +26,10 @@ import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.RoutingTable;
 import org.elasticsearch.cluster.routing.allocation.decider.ThrottlingAllocationDecider;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.cluster.ESAllocationTestCase;
+import org.elasticsearch.test.ESAllocationTestCase;
 
 import static org.elasticsearch.cluster.routing.ShardRoutingState.INITIALIZING;
 import static org.hamcrest.Matchers.equalTo;
@@ -37,7 +37,7 @@ import static org.hamcrest.Matchers.equalTo;
 /**
  */
 public class PreferPrimaryAllocationTests extends ESAllocationTestCase {
-    private final Logger logger = Loggers.getLogger(PreferPrimaryAllocationTests.class);
+    private final ESLogger logger = Loggers.getLogger(PreferPrimaryAllocationTests.class);
 
     public void testPreferPrimaryAllocationOverReplicas() {
         logger.info("create an allocation with 1 initial recoveries");
@@ -54,30 +54,30 @@ public class PreferPrimaryAllocationTests extends ESAllocationTestCase {
                 .put(IndexMetaData.builder("test2").settings(settings(Version.CURRENT)).numberOfShards(10).numberOfReplicas(0))
                 .build();
 
-        RoutingTable initialRoutingTable = RoutingTable.builder()
+        RoutingTable routingTable = RoutingTable.builder()
                 .addAsNew(metaData.index("test1"))
                 .addAsNew(metaData.index("test2"))
                 .build();
 
-        ClusterState clusterState = ClusterState.builder(org.elasticsearch.cluster.ClusterName.CLUSTER_NAME_SETTING.getDefault(Settings.EMPTY)).metaData(metaData).routingTable(initialRoutingTable).build();
+        ClusterState clusterState = ClusterState.builder(org.elasticsearch.cluster.ClusterName.CLUSTER_NAME_SETTING.getDefault(Settings.EMPTY)).metaData(metaData).routingTable(routingTable).build();
 
         logger.info("adding two nodes and performing rerouting till all are allocated");
-        clusterState = ClusterState.builder(clusterState).nodes(DiscoveryNodes.builder().add(newNode("node1")).add(newNode("node2"))).build();
-        RoutingAllocation.Result routingResult = strategy.reroute(clusterState, "reroute");
-        clusterState = ClusterState.builder(clusterState).routingResult(routingResult).build();
+        clusterState = ClusterState.builder(clusterState).nodes(DiscoveryNodes.builder().put(newNode("node1")).put(newNode("node2"))).build();
+        routingTable = strategy.reroute(clusterState, "reroute").routingTable();
+        clusterState = ClusterState.builder(clusterState).routingTable(routingTable).build();
 
         while (!clusterState.getRoutingNodes().shardsWithState(INITIALIZING).isEmpty()) {
-            routingResult = strategy.applyStartedShards(clusterState, clusterState.getRoutingNodes().shardsWithState(INITIALIZING));
-            clusterState = ClusterState.builder(clusterState).routingResult(routingResult).build();
+            routingTable = strategy.applyStartedShards(clusterState, clusterState.getRoutingNodes().shardsWithState(INITIALIZING)).routingTable();
+            clusterState = ClusterState.builder(clusterState).routingTable(routingTable).build();
         }
 
         logger.info("increasing the number of replicas to 1, and perform a reroute (to get the replicas allocation going)");
-        RoutingTable updatedRoutingTable = RoutingTable.builder(clusterState.routingTable()).updateNumberOfReplicas(1).build();
+        routingTable = RoutingTable.builder(routingTable).updateNumberOfReplicas(1).build();
         metaData = MetaData.builder(clusterState.metaData()).updateNumberOfReplicas(1).build();
-        clusterState = ClusterState.builder(clusterState).routingTable(updatedRoutingTable).metaData(metaData).build();
+        clusterState = ClusterState.builder(clusterState).routingTable(routingTable).metaData(metaData).build();
 
-        routingResult = strategy.reroute(clusterState, "reroute");
-        clusterState = ClusterState.builder(clusterState).routingResult(routingResult).build();
+        routingTable = strategy.reroute(clusterState, "reroute").routingTable();
+        clusterState = ClusterState.builder(clusterState).routingTable(routingTable).build();
 
         logger.info("2 replicas should be initializing now for the existing indices (we throttle to 1)");
         assertThat(clusterState.getRoutingNodes().shardsWithState(INITIALIZING).size(), equalTo(2));
@@ -87,15 +87,15 @@ public class PreferPrimaryAllocationTests extends ESAllocationTestCase {
                 .put(IndexMetaData.builder("new_index").settings(settings(Version.CURRENT)).numberOfShards(4).numberOfReplicas(0))
                 .build();
 
-        updatedRoutingTable = RoutingTable.builder(clusterState.routingTable())
+        routingTable = RoutingTable.builder(clusterState.routingTable())
                 .addAsNew(metaData.index("new_index"))
                 .build();
 
-        clusterState = ClusterState.builder(clusterState).metaData(metaData).routingTable(updatedRoutingTable).build();
+        clusterState = ClusterState.builder(clusterState).metaData(metaData).routingTable(routingTable).build();
 
         logger.info("reroute, verify that primaries for the new index primary shards are allocated");
-        routingResult = strategy.reroute(clusterState, "reroute");
-        clusterState = ClusterState.builder(clusterState).routingResult(routingResult).build();
+        routingTable = strategy.reroute(clusterState, "reroute").routingTable();
+        clusterState = ClusterState.builder(clusterState).routingTable(routingTable).build();
 
         assertThat(clusterState.routingTable().index("new_index").shardsWithState(INITIALIZING).size(), equalTo(2));
     }

@@ -46,7 +46,7 @@ public class StartRecoveryRequestTests extends ESTestCase {
                 new DiscoveryNode("a", new LocalTransportAddress("1"), emptyMap(), emptySet(), targetNodeVersion),
                 new DiscoveryNode("b", new LocalTransportAddress("1"), emptyMap(), emptySet(), targetNodeVersion),
                 Store.MetadataSnapshot.EMPTY,
-                randomBoolean(),
+                RecoveryState.Type.PRIMARY_RELOCATION,
                 1L
         );
         ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
@@ -65,7 +65,7 @@ public class StartRecoveryRequestTests extends ESTestCase {
         assertThat(outRequest.targetNode(), equalTo(inRequest.targetNode()));
         assertThat(outRequest.metadataSnapshot().asMap(), equalTo(inRequest.metadataSnapshot().asMap()));
         assertThat(outRequest.recoveryId(), equalTo(inRequest.recoveryId()));
-        assertThat(outRequest.isPrimaryRelocation(), equalTo(inRequest.isPrimaryRelocation()));
+        assertThat(outRequest.recoveryType(), equalTo(inRequest.recoveryType()));
     }
 
 }

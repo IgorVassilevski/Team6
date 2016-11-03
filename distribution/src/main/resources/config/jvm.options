@@ -59,14 +59,6 @@
 # use our provided JNA always versus the system one
 -Djna.nosys=true
 
-# flags to keep Netty from being unsafe
--Dio.netty.noUnsafe=true
--Dio.netty.noKeySetOptimization=true
-
-# log4j 2
--Dlog4j.shutdownHookEnabled=false
--Dlog4j2.disable.jmx=true
-
 ## heap dumps
 
 # generate a heap dump when an allocation from the Java heap fails

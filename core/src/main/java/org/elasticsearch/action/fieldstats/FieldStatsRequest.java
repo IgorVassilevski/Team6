@@ -90,7 +90,7 @@ public class FieldStatsRequest extends BroadcastRequest<FieldStatsRequest> {
                         break;
                     case START_OBJECT:
                         if ("index_constraints".equals(fieldName)) {
-                            parseIndexConstraints(indexConstraints, parser);
+                            parseIndexContraints(indexConstraints, parser);
                         } else {
                             throw new IllegalArgumentException("unknown field [" + fieldName + "]");
                         }
@@ -117,8 +117,8 @@ public class FieldStatsRequest extends BroadcastRequest<FieldStatsRequest> {
         this.indexConstraints = indexConstraints.toArray(new IndexConstraint[indexConstraints.size()]);
     }
 
-    private static void parseIndexConstraints(List<IndexConstraint> indexConstraints,
-                                       XContentParser parser) throws IOException {
+    private void parseIndexContraints(List<IndexConstraint> indexConstraints,
+                                      XContentParser parser) throws IOException {
         Token token = parser.currentToken();
         assert token == Token.START_OBJECT;
         String field = null;
@@ -213,4 +213,5 @@ public class FieldStatsRequest extends BroadcastRequest<FieldStatsRequest> {
         out.writeString(level);
         out.writeBoolean(useCache);
     }
+
 }

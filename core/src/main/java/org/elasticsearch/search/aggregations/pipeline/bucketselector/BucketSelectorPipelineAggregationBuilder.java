@@ -19,6 +19,7 @@
 
 package org.elasticsearch.search.aggregations.pipeline.bucketselector;
 
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -45,6 +46,7 @@ import static org.elasticsearch.search.aggregations.pipeline.PipelineAggregator.
 
 public class BucketSelectorPipelineAggregationBuilder extends AbstractPipelineAggregationBuilder<BucketSelectorPipelineAggregationBuilder> {
     public static final String NAME = "bucket_selector";
+    public static final ParseField AGGREGATION_NAME_FIELD = new ParseField(NAME);
 
     private final Map<String, String> bucketsPathsMap;
     private Script script;

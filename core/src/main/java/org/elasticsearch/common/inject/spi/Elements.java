@@ -16,7 +16,6 @@
 
 package org.elasticsearch.common.inject.spi;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.inject.AbstractModule;
 import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.Binding;
@@ -41,6 +40,7 @@ import org.elasticsearch.common.inject.internal.PrivateElementsImpl;
 import org.elasticsearch.common.inject.internal.ProviderMethodsModule;
 import org.elasticsearch.common.inject.internal.SourceProvider;
 import org.elasticsearch.common.inject.matcher.Matcher;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 
 import java.lang.annotation.Annotation;
@@ -351,7 +351,7 @@ public final class Elements {
             return builder;
         }
 
-        private static Logger logger = Loggers.getLogger(Elements.class);
+        private static ESLogger logger = Loggers.getLogger(Elements.class);
 
         protected Object getSource() {
             Object ret;

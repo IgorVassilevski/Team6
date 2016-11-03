@@ -280,7 +280,6 @@ public class ClusterState implements ToXContent, Diffable<ClusterState> {
 
     public String prettyPrint() {
         StringBuilder sb = new StringBuilder();
-        sb.append("cluster uuid: ").append(metaData.clusterUUID()).append("\n");
         sb.append("version: ").append(version).append("\n");
         sb.append("state uuid: ").append(stateUUID).append("\n");
         sb.append("from_diff: ").append(wasReadFromDiff).append("\n");
@@ -292,7 +291,7 @@ public class ClusterState implements ToXContent, Diffable<ClusterState> {
             for (int shard = 0; shard < indexMetaData.getNumberOfShards(); shard++) {
                 sb.append(TAB).append(TAB).append(shard).append(": ");
                 sb.append("p_term [").append(indexMetaData.primaryTerm(shard)).append("], ");
-                sb.append("a_ids ").append(indexMetaData.inSyncAllocationIds(shard)).append("\n");
+                sb.append("a_ids ").append(indexMetaData.activeAllocationIds(shard)).append("\n");
             }
         }
         sb.append(blocks().prettyPrint());
@@ -501,8 +500,8 @@ public class ClusterState implements ToXContent, Diffable<ClusterState> {
                 }
                 builder.endObject();
 
-                builder.startObject(IndexMetaData.KEY_IN_SYNC_ALLOCATIONS);
-                for (IntObjectCursor<Set<String>> cursor : indexMetaData.getInSyncAllocationIds()) {
+                builder.startObject(IndexMetaData.KEY_ACTIVE_ALLOCATIONS);
+                for (IntObjectCursor<Set<String>> cursor : indexMetaData.getActiveAllocationIds()) {
                     builder.startArray(String.valueOf(cursor.key));
                     for (String allocationId : cursor.value) {
                         builder.value(allocationId);
@@ -625,10 +624,6 @@ public class ClusterState implements ToXContent, Diffable<ClusterState> {
             return this;
         }
 
-        public DiscoveryNodes nodes() {
-            return nodes;
-        }
-
         public Builder routingResult(RoutingAllocation.Result routingResult) {
             this.routingTable = routingResult.routingTable();
             this.metaData = routingResult.metaData();
@@ -727,6 +722,7 @@ public class ClusterState implements ToXContent, Diffable<ClusterState> {
         public static ClusterState readFrom(StreamInput in, @Nullable DiscoveryNode localNode) throws IOException {
             return PROTO.readFrom(in, localNode);
         }
+
     }
 
     @Override

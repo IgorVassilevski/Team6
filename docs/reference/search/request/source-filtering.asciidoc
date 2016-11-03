@@ -53,16 +53,15 @@ GET /_search
 --------------------------------------------------
 // CONSOLE
 
-Finally, for complete control, you can specify both `includes` and `excludes`
-patterns:
+Finally, for complete control, you can specify both include and exclude patterns:
 
 [source,js]
 --------------------------------------------------
 GET /_search
 {
     "_source": {
-        "includes": [ "obj1.*", "obj2.*" ],
-        "excludes": [ "*.description" ]
+        "include": [ "obj1.*", "obj2.*" ],
+        "exclude": [ "*.description" ]
     },
     "query" : {
         "term" : { "user" : "kimchy" }

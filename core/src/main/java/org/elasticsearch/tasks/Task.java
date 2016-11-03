@@ -135,15 +135,15 @@ public class Task {
 
     public interface Status extends ToXContent, NamedWriteable {}
 
-    public TaskResult result(DiscoveryNode node, Exception error) throws IOException {
-        return new TaskResult(taskInfo(node, true), error);
+    public PersistedTaskInfo result(DiscoveryNode node, Exception error) throws IOException {
+        return new PersistedTaskInfo(taskInfo(node, true), error);
     }
 
-    public TaskResult result(DiscoveryNode node, ActionResponse response) throws IOException {
+    public PersistedTaskInfo result(DiscoveryNode node, ActionResponse response) throws IOException {
         if (response instanceof ToXContent) {
-            return new TaskResult(taskInfo(node, true), (ToXContent) response);
+            return new PersistedTaskInfo(taskInfo(node, true), (ToXContent) response);
         } else {
-            throw new IllegalStateException("response has to implement ToXContent to be able to store the results");
+            throw new IllegalStateException("response has to implement ToXContent for persistence");
         }
     }
 }

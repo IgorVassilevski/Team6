@@ -19,6 +19,8 @@
 
 package org.elasticsearch.index.reindex;
 
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksResponse;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
@@ -27,10 +29,11 @@ import org.elasticsearch.rest.BaseRestHandler;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestController;
 import org.elasticsearch.rest.RestRequest;
+import org.elasticsearch.rest.action.support.RestToXContentListener;
 import org.elasticsearch.tasks.TaskId;
 
 import static org.elasticsearch.rest.RestRequest.Method.POST;
-import static org.elasticsearch.rest.action.admin.cluster.RestListTasksAction.listTasksResponseListener;
+import static org.elasticsearch.rest.action.admin.cluster.node.tasks.RestListTasksAction.nodeSettingListener;
 
 public class RestRethrottleAction extends BaseRestHandler {
     private final ClusterService clusterService;
@@ -53,6 +56,7 @@ public class RestRethrottleAction extends BaseRestHandler {
             throw new IllegalArgumentException("requests_per_second is a required parameter");
         }
         internalRequest.setRequestsPerSecond(requestsPerSecond);
-        client.execute(RethrottleAction.INSTANCE, internalRequest, listTasksResponseListener(clusterService, channel));
+        ActionListener<ListTasksResponse> listener = nodeSettingListener(clusterService, new RestToXContentListener<>(channel));
+        client.execute(RethrottleAction.INSTANCE, internalRequest, listener);
     }
 }

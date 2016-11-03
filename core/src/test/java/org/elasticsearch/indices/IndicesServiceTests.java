@@ -18,9 +18,12 @@
  */
 package org.elasticsearch.indices;
 
+import org.apache.lucene.store.LockObtainFailedException;
 import org.elasticsearch.Version;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.metadata.AliasAction;
 import org.elasticsearch.cluster.metadata.IndexGraveyard;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
@@ -30,7 +33,6 @@ import org.elasticsearch.common.io.FileSystemUtils;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.env.NodeEnvironment;
-import org.elasticsearch.env.ShardLockObtainFailedException;
 import org.elasticsearch.gateway.GatewayMetaState;
 import org.elasticsearch.gateway.LocalAllocateDangledIndices;
 import org.elasticsearch.gateway.MetaStateService;
@@ -170,7 +172,7 @@ public class IndicesServiceTests extends ESSingleNodeTestCase {
         try {
             indicesService.processPendingDeletes(test.index(), test.getIndexSettings(), new TimeValue(0, TimeUnit.MILLISECONDS));
             fail("can't get lock");
-        } catch (ShardLockObtainFailedException ex) {
+        } catch (LockObtainFailedException ex) {
 
         }
         assertTrue(path.exists());
@@ -247,11 +249,14 @@ public class IndicesServiceTests extends ESSingleNodeTestCase {
     public void testDanglingIndicesWithAliasConflict() throws Exception {
         final String indexName = "test-idx1";
         final String alias = "test-alias";
+        final IndicesService indicesService = getIndicesService();
         final ClusterService clusterService = getInstanceFromNode(ClusterService.class);
-        createIndex(indexName);
+        final IndexService test = createIndex(indexName);
 
         // create the alias for the index
-        client().admin().indices().prepareAliases().addAlias(indexName, alias).get();
+        AliasAction action = new AliasAction(AliasAction.Type.ADD, indexName, alias);
+        IndicesAliasesRequest request = new IndicesAliasesRequest().addAliasAction(action);
+        client().admin().indices().aliases(request).actionGet();
         final ClusterState originalState = clusterService.state();
 
         // try to import a dangling index with the same name as the alias, it should fail
@@ -270,7 +275,9 @@ public class IndicesServiceTests extends ESSingleNodeTestCase {
         assertThat(clusterService.state(), equalTo(originalState));
 
         // remove the alias
-        client().admin().indices().prepareAliases().removeAlias(indexName, alias).get();
+        action = new AliasAction(AliasAction.Type.REMOVE, indexName, alias);
+        request = new IndicesAliasesRequest().addAliasAction(action);
+        client().admin().indices().aliases(request).actionGet();
 
         // now try importing a dangling index with the same name as the alias, it should succeed.
         listener = new DanglingListener();

@@ -212,7 +212,7 @@ public class NodeStats extends BaseNodeResponse implements ToXContent {
             indices = NodeIndicesStats.readIndicesStats(in);
         }
         if (in.readBoolean()) {
-            os = new OsStats(in);
+            os = OsStats.readOsStats(in);
         }
         if (in.readBoolean()) {
             process = ProcessStats.readProcessStats(in);

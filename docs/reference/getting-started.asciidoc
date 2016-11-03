@@ -260,8 +260,7 @@ And the response:
 --------------------------------------------------
 curl -XPUT 'localhost:9200/customer?pretty'
 {
-  "acknowledged" : true,
-  "shards_acknowledged": true
+  "acknowledged" : true
 }
 
 curl 'localhost:9200/_cat/indices?v'

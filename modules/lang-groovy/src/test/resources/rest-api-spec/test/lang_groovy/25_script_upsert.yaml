@@ -13,7 +13,6 @@
             script:
               inline: "ctx._source.foo = bar"
               params: { bar: 'xxx' }
-              lang: "groovy"
             upsert: { foo: baz }
 
   - do:
@@ -34,7 +33,6 @@
             script:
               inline: "ctx._source.foo = bar"
               params: { bar: 'xxx' }
-              lang: "groovy"
             upsert: { foo: baz }
 
   - do:
@@ -54,7 +52,6 @@
             script:
               inline: "ctx._source.foo = bar"
               params: { bar: 'xxx' }
-              lang: "groovy"
             upsert: { foo: baz }
             scripted_upsert: true
 

@@ -19,38 +19,51 @@
 
 package org.elasticsearch.plugin.example;
 
+import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.xcontent.XContentParser;
+import org.elasticsearch.common.xcontent.yaml.YamlXContent;
 import org.elasticsearch.env.Environment;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Locale;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.Files.newBufferedReader;
+import static org.elasticsearch.common.io.Streams.copyToString;
 
 /**
  * Example configuration.
  */
 public class ExamplePluginConfiguration {
-
-    private final Settings customSettings;
-
-    public static final Setting<String> TEST_SETTING =
-      new Setting<String>("test", "default_value",
-      (value) -> value, Setting.Property.Dynamic);
+    private String test = "not set in config";
 
     @Inject
     public ExamplePluginConfiguration(Environment env) throws IOException {
         // The directory part of the location matches the artifactId of this plugin
-        Path path = env.configFile().resolve("jvm-example/example.yaml");
-        customSettings = Settings.builder().loadFromPath(path).build();
+        Path configFile = env.configFile().resolve("jvm-example/example.yaml");
+        String contents = copyToString(newBufferedReader(configFile, UTF_8));
+        XContentParser parser = YamlXContent.yamlXContent.createParser(contents);
 
-        // asserts for tests
-        assert customSettings != null;
-        assert TEST_SETTING.get(customSettings) != null;
+        String currentFieldName = null;
+        XContentParser.Token token = parser.nextToken();
+        assert token == XContentParser.Token.START_OBJECT;
+        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
+            if (token == XContentParser.Token.FIELD_NAME) {
+                currentFieldName = parser.currentName();
+            } else if (token.isValue()) {
+                if ("test".equals(currentFieldName)) {
+                    test = parser.text();
+                } else {
+                    throw new ElasticsearchParseException("Unrecognized config key: {}", currentFieldName);
+                }
+            } else {
+                throw new ElasticsearchParseException("Unrecognized config key: {}", currentFieldName);
+            }
+        }
     }
 
     public String getTestConfig() {
-        return TEST_SETTING.get(customSettings);
+        return test;
     }
 }

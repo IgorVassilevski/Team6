@@ -129,7 +129,7 @@ public class MetaDataCreateIndexServiceTests extends ESTestCase {
 
         // create one that won't fail
         ClusterState clusterState = ClusterState.builder(createClusterState("source", numShards, 0,
-            Settings.builder().put("index.blocks.write", true).build())).nodes(DiscoveryNodes.builder().add(newNode("node1")))
+            Settings.builder().put("index.blocks.write", true).build())).nodes(DiscoveryNodes.builder().put(newNode("node1")))
             .build();
         AllocationService service = new AllocationService(Settings.builder().build(), new AllocationDeciders(Settings.EMPTY,
             Collections.singleton(new MaxRetryAllocationDecider(Settings.EMPTY))),
@@ -157,7 +157,7 @@ public class MetaDataCreateIndexServiceTests extends ESTestCase {
                 .put("index.blocks.write", true)
                 .put("index.similarity.default.type", "BM25")
                 .put("index.analysis.analyzer.my_analyzer.tokenizer", "keyword")
-                .build())).nodes(DiscoveryNodes.builder().add(newNode("node1")))
+                .build())).nodes(DiscoveryNodes.builder().put(newNode("node1")))
             .build();
         AllocationService service = new AllocationService(Settings.builder().build(), new AllocationDeciders(Settings.EMPTY,
             Collections.singleton(new MaxRetryAllocationDecider(Settings.EMPTY))),
@@ -191,9 +191,7 @@ public class MetaDataCreateIndexServiceTests extends ESTestCase {
 
         validateIndexName("index#name", "must not contain '#'");
 
-        validateIndexName("_indexname", "must not start with '_', '-', or '+'");
-        validateIndexName("-indexname", "must not start with '_', '-', or '+'");
-        validateIndexName("+indexname", "must not start with '_', '-', or '+'");
+        validateIndexName("_indexname", "must not start with '_'");
 
         validateIndexName("INDEXNAME", "must be lowercase");
 
@@ -203,7 +201,7 @@ public class MetaDataCreateIndexServiceTests extends ESTestCase {
 
     private void validateIndexName(String indexName, String errorMessage) {
         InvalidIndexNameException e = expectThrows(InvalidIndexNameException.class,
-            () -> MetaDataCreateIndexService.validateIndexName(indexName, ClusterState.builder(ClusterName.CLUSTER_NAME_SETTING
+            () -> getCreateIndexService().validateIndexName(indexName, ClusterState.builder(ClusterName.CLUSTER_NAME_SETTING
                 .getDefault(Settings.EMPTY)).build()));
         assertThat(e.getMessage(), endsWith(errorMessage));
     }
@@ -215,6 +213,7 @@ public class MetaDataCreateIndexServiceTests extends ESTestCase {
             null,
             null,
             null,
+            new HashSet<>(),
             null,
             null,
             null,

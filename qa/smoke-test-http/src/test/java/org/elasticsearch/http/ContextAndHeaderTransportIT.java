@@ -51,7 +51,6 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.junit.After;
 import org.junit.Before;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -219,17 +218,20 @@ public class ContextAndHeaderTransportIT extends HttpSmokeTestCase {
         assertRequestsContainHeader(MultiTermVectorsRequest.class);
     }
 
-    public void testThatRelevantHttpHeadersBecomeRequestHeaders() throws IOException {
+    public void testThatRelevantHttpHeadersBecomeRequestHeaders() throws Exception {
         final String IRRELEVANT_HEADER = "SomeIrrelevantHeader";
-        Response response = getRestClient().performRequest("GET", "/" + queryIndex + "/_search",
-                new BasicHeader(CUSTOM_HEADER, randomHeaderValue), new BasicHeader(IRRELEVANT_HEADER, randomHeaderValue));
-        assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
-        List<RequestAndHeaders> searchRequests = getRequests(SearchRequest.class);
-        assertThat(searchRequests, hasSize(greaterThan(0)));
-        for (RequestAndHeaders requestAndHeaders : searchRequests) {
-            assertThat(requestAndHeaders.headers.containsKey(CUSTOM_HEADER), is(true));
-            // was not specified, thus is not included
-            assertThat(requestAndHeaders.headers.containsKey(IRRELEVANT_HEADER), is(false));
+
+        try (Response response = getRestClient().performRequest(
+                "GET", "/" + queryIndex + "/_search",
+                new BasicHeader(CUSTOM_HEADER, randomHeaderValue), new BasicHeader(IRRELEVANT_HEADER, randomHeaderValue))) {
+            assertThat(response.getStatusLine().getStatusCode(), equalTo(200));
+            List<RequestAndHeaders> searchRequests = getRequests(SearchRequest.class);
+            assertThat(searchRequests, hasSize(greaterThan(0)));
+            for (RequestAndHeaders requestAndHeaders : searchRequests) {
+                assertThat(requestAndHeaders.headers.containsKey(CUSTOM_HEADER), is(true));
+                // was not specified, thus is not included
+                assertThat(requestAndHeaders.headers.containsKey(IRRELEVANT_HEADER), is(false));
+            }
         }
     }
 

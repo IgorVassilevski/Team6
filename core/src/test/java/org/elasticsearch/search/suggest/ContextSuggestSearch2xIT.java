@@ -89,7 +89,7 @@ public class ContextSuggestSearch2xIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(InternalSettingsPlugin.class);
+        return pluginList(InternalSettingsPlugin.class);
     }
 
     public void testBasicGeo() throws Exception {

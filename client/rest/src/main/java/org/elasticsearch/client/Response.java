@@ -22,23 +22,26 @@ package org.elasticsearch.client;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
 import org.apache.http.RequestLine;
 import org.apache.http.StatusLine;
+import org.apache.http.client.methods.CloseableHttpResponse;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Objects;
 
 /**
- * Holds an elasticsearch response. It wraps the {@link HttpResponse} returned and associates it with
+ * Holds an elasticsearch response. It wraps the {@link CloseableHttpResponse} response and associates it with
  * its corresponding {@link RequestLine} and {@link HttpHost}.
+ * It must be closed to free any resource held by it, as well as the corresponding connection in the connection pool.
  */
-public class Response {
+public class Response implements Closeable {
 
     private final RequestLine requestLine;
     private final HttpHost host;
-    private final HttpResponse response;
+    private final CloseableHttpResponse response;
 
-    Response(RequestLine requestLine, HttpHost host, HttpResponse response) {
+    Response(RequestLine requestLine, HttpHost host, CloseableHttpResponse response) {
         Objects.requireNonNull(requestLine, "requestLine cannot be null");
         Objects.requireNonNull(host, "node cannot be null");
         Objects.requireNonNull(response, "response cannot be null");
@@ -96,10 +99,6 @@ public class Response {
         return response.getEntity();
     }
 
-    HttpResponse getHttpResponse() {
-        return response;
-    }
-
     @Override
     public String toString() {
         return "Response{" +
@@ -107,5 +106,10 @@ public class Response {
                 ", host=" + host +
                 ", response=" + response.getStatusLine() +
                 '}';
+    }
+
+    @Override
+    public void close() throws IOException {
+        this.response.close();
     }
 }

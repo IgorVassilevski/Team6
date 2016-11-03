@@ -119,12 +119,7 @@ public final class AttachmentProcessor extends AbstractProcessor {
 
             if (properties.contains(Property.CONTENT_LENGTH)) {
                 String contentLength = metadata.get(Metadata.CONTENT_LENGTH);
-                long length;
-                if (Strings.hasLength(contentLength)) {
-                    length = Long.parseLong(contentLength);
-                } else {
-                    length = parsedContent.length();
-                }
+                String length = Strings.hasLength(contentLength) ? contentLength : String.valueOf(parsedContent.length());
                 additionalFields.put(Property.CONTENT_LENGTH.toLowerCase(), length);
             }
         } catch (Exception e) {

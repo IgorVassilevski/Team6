@@ -34,10 +34,6 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
 
@@ -52,9 +48,8 @@ public abstract class AbstractShapeBuilderTestCase<SB extends ShapeBuilder> exte
     @BeforeClass
     public static void init() {
         if (namedWriteableRegistry == null) {
-            List<NamedWriteableRegistry.Entry> shapes = new ArrayList<>();
-            ShapeBuilders.register(shapes);
-            namedWriteableRegistry = new NamedWriteableRegistry(shapes);
+            namedWriteableRegistry = new NamedWriteableRegistry();
+            ShapeBuilders.register(namedWriteableRegistry);
         }
     }
 

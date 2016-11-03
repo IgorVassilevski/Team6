@@ -26,7 +26,6 @@ import org.elasticsearch.test.ESTestCase;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.Collections;
 
 import static org.hamcrest.Matchers.arrayContaining;
 import static org.hamcrest.Matchers.containsString;
@@ -43,7 +42,8 @@ public class Ec2NetworkTests extends ESTestCase {
                 .put("network.host", "_ec2_")
                 .build();
 
-        NetworkService networkService = new NetworkService(nodeSettings, Collections.singletonList(new Ec2NameResolver(nodeSettings)));
+        NetworkService networkService = new NetworkService(nodeSettings);
+        networkService.addCustomNameResolver(new Ec2NameResolver(nodeSettings));
         // TODO we need to replace that with a mock. For now we check the URL we are supposed to reach.
         try {
             networkService.resolveBindHostAddresses(null);
@@ -60,7 +60,8 @@ public class Ec2NetworkTests extends ESTestCase {
                 .put("network.host", "_ec2:publicIp_")
                 .build();
 
-        NetworkService networkService = new NetworkService(nodeSettings, Collections.singletonList(new Ec2NameResolver(nodeSettings)));
+        NetworkService networkService = new NetworkService(nodeSettings);
+        networkService.addCustomNameResolver(new Ec2NameResolver(nodeSettings));
         // TODO we need to replace that with a mock. For now we check the URL we are supposed to reach.
         try {
             networkService.resolveBindHostAddresses(null);
@@ -77,7 +78,8 @@ public class Ec2NetworkTests extends ESTestCase {
                 .put("network.host", "_ec2:privateIp_")
                 .build();
 
-        NetworkService networkService = new NetworkService(nodeSettings, Collections.singletonList(new Ec2NameResolver(nodeSettings)));
+        NetworkService networkService = new NetworkService(nodeSettings);
+        networkService.addCustomNameResolver(new Ec2NameResolver(nodeSettings));
         // TODO we need to replace that with a mock. For now we check the URL we are supposed to reach.
         try {
             networkService.resolveBindHostAddresses(null);
@@ -94,7 +96,8 @@ public class Ec2NetworkTests extends ESTestCase {
                 .put("network.host", "_ec2:privateIpv4_")
                 .build();
 
-        NetworkService networkService = new NetworkService(nodeSettings, Collections.singletonList(new Ec2NameResolver(nodeSettings)));
+        NetworkService networkService = new NetworkService(nodeSettings);
+        networkService.addCustomNameResolver(new Ec2NameResolver(nodeSettings));
         // TODO we need to replace that with a mock. For now we check the URL we are supposed to reach.
         try {
             networkService.resolveBindHostAddresses(null);
@@ -111,7 +114,8 @@ public class Ec2NetworkTests extends ESTestCase {
                 .put("network.host", "_ec2:privateDns_")
                 .build();
 
-        NetworkService networkService = new NetworkService(nodeSettings, Collections.singletonList(new Ec2NameResolver(nodeSettings)));
+        NetworkService networkService = new NetworkService(nodeSettings);
+        networkService.addCustomNameResolver(new Ec2NameResolver(nodeSettings));
         // TODO we need to replace that with a mock. For now we check the URL we are supposed to reach.
         try {
             networkService.resolveBindHostAddresses(null);
@@ -128,7 +132,8 @@ public class Ec2NetworkTests extends ESTestCase {
                 .put("network.host", "_ec2:publicIpv4_")
                 .build();
 
-        NetworkService networkService = new NetworkService(nodeSettings, Collections.singletonList(new Ec2NameResolver(nodeSettings)));
+        NetworkService networkService = new NetworkService(nodeSettings);
+        networkService.addCustomNameResolver(new Ec2NameResolver(nodeSettings));
         // TODO we need to replace that with a mock. For now we check the URL we are supposed to reach.
         try {
             networkService.resolveBindHostAddresses(null);
@@ -145,7 +150,8 @@ public class Ec2NetworkTests extends ESTestCase {
                 .put("network.host", "_ec2:publicDns_")
                 .build();
 
-        NetworkService networkService = new NetworkService(nodeSettings, Collections.singletonList(new Ec2NameResolver(nodeSettings)));
+        NetworkService networkService = new NetworkService(nodeSettings);
+        networkService.addCustomNameResolver(new Ec2NameResolver(nodeSettings));
         // TODO we need to replace that with a mock. For now we check the URL we are supposed to reach.
         try {
             networkService.resolveBindHostAddresses(null);
@@ -163,7 +169,8 @@ public class Ec2NetworkTests extends ESTestCase {
                 .put("network.host", "_local_")
                 .build();
 
-        NetworkService networkService = new NetworkService(nodeSettings, Collections.singletonList(new Ec2NameResolver(nodeSettings)));
+        NetworkService networkService = new NetworkService(nodeSettings);
+        networkService.addCustomNameResolver(new Ec2NameResolver(nodeSettings));
         InetAddress[] addresses = networkService.resolveBindHostAddresses(null);
         assertThat(addresses, arrayContaining(networkService.resolveBindHostAddresses(new String[] { "_local_" })));
     }

@@ -54,9 +54,8 @@ public class SuggestBuilderTests extends WritableTestCase<SuggestBuilder> {
      */
     @BeforeClass
     public static void init() {
-        SearchModule searchModule = new SearchModule(Settings.EMPTY, false, emptyList());
-        namedWriteableRegistry = new NamedWriteableRegistry(searchModule.getNamedWriteables());
-        suggesters = searchModule.getSuggesters();
+        namedWriteableRegistry = new NamedWriteableRegistry();
+        suggesters = new SearchModule(Settings.EMPTY, namedWriteableRegistry, false, emptyList()).getSuggesters();
     }
 
     @AfterClass

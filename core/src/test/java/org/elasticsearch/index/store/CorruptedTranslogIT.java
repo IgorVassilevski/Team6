@@ -68,7 +68,7 @@ import static org.hamcrest.Matchers.notNullValue;
 public class CorruptedTranslogIT extends ESIntegTestCase {
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(MockTransportService.TestPlugin.class, MockEngineFactoryPlugin.class);
+        return pluginList(MockTransportService.TestPlugin.class, MockEngineFactoryPlugin.class);
     }
 
     public void testCorruptTranslogFiles() throws Exception {

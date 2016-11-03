@@ -21,7 +21,6 @@ package org.elasticsearch.gateway;
 
 import com.carrotsearch.hppc.ObjectFloatHashMap;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.FailedNodeException;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterState;
@@ -40,6 +39,9 @@ import org.elasticsearch.indices.IndicesService;
 import java.util.Arrays;
 import java.util.function.Supplier;
 
+/**
+ *
+ */
 public class Gateway extends AbstractComponent implements ClusterStateListener {
 
     private final ClusterService clusterService;
@@ -136,10 +138,7 @@ public class Gateway extends AbstractComponent implements ClusterStateListener {
                             indicesService.verifyIndexMetadata(nodeServicesProvider, electedIndexMetaData, electedIndexMetaData);
                         }
                     } catch (Exception e) {
-                        final Index electedIndex = electedIndexMetaData.getIndex();
-                        logger.warn(
-                            (org.apache.logging.log4j.util.Supplier<?>)
-                                () -> new ParameterizedMessage("recovering index {} failed - recovering as closed", electedIndex), e);
+                        logger.warn("recovering index {} failed - recovering as closed", e, electedIndexMetaData.getIndex());
                         electedIndexMetaData = IndexMetaData.builder(electedIndexMetaData).state(IndexMetaData.State.CLOSE).build();
                     }
 

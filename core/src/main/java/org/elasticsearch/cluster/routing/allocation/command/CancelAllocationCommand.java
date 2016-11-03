@@ -26,6 +26,7 @@ import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.RoutingNodes;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.UnassignedInfo;
+import org.elasticsearch.cluster.routing.allocation.AllocationService;
 import org.elasticsearch.cluster.routing.allocation.RerouteExplanation;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.cluster.routing.allocation.decider.Decision;
@@ -126,9 +127,8 @@ public class CancelAllocationCommand implements AllocationCommand {
         ShardRouting shardRouting = null;
         RoutingNodes routingNodes = allocation.routingNodes();
         RoutingNode routingNode = routingNodes.node(discoNode.getId());
-        IndexMetaData indexMetaData = null;
         if (routingNode != null) {
-            indexMetaData = allocation.metaData().index(index());
+            IndexMetaData indexMetaData = allocation.metaData().index(index());
             if (indexMetaData == null) {
                 throw new IndexNotFoundException(index());
             }
@@ -154,8 +154,8 @@ public class CancelAllocationCommand implements AllocationCommand {
                     discoNode + ", shard is primary and " + shardRouting.state().name().toLowerCase(Locale.ROOT));
             }
         }
-        routingNodes.failShard(Loggers.getLogger(CancelAllocationCommand.class), shardRouting,
-            new UnassignedInfo(UnassignedInfo.Reason.REROUTE_CANCELLED, null), indexMetaData, allocation.changes());
+        AllocationService.cancelShard(Loggers.getLogger(CancelAllocationCommand.class), shardRouting,
+            new UnassignedInfo(UnassignedInfo.Reason.REROUTE_CANCELLED, null), routingNodes);
         return new RerouteExplanation(this, allocation.decision(Decision.YES, "cancel_allocation_command",
                 "shard " + shardId + " on node " + discoNode + " can be cancelled"));
     }

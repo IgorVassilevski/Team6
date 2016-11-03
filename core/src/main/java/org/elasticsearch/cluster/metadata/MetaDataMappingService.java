@@ -20,8 +20,6 @@
 package org.elasticsearch.cluster.metadata;
 
 import com.carrotsearch.hppc.cursors.ObjectCursor;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingClusterStateUpdateRequest;
 import org.elasticsearch.cluster.AckedClusterStateTaskListener;
@@ -195,7 +193,7 @@ public class MetaDataMappingService extends AbstractComponent {
                 }
             }
         } catch (Exception e) {
-            logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] failed to refresh-mapping in cluster state", index), e);
+            logger.warn("[{}] failed to refresh-mapping in cluster state", e, index);
         }
         return dirty;
     }
@@ -209,7 +207,7 @@ public class MetaDataMappingService extends AbstractComponent {
             refreshTask,
             ClusterStateTaskConfig.build(Priority.HIGH),
             refreshExecutor,
-                (source, e) -> logger.warn((Supplier<?>) () -> new ParameterizedMessage("failure during [{}]", source), e)
+            (source, e) -> logger.warn("failure during [{}]", e, source)
         );
     }
 

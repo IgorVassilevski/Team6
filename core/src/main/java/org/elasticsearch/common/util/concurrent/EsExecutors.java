@@ -22,7 +22,6 @@ package org.elasticsearch.common.util.concurrent;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.node.Node;
 
 import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
@@ -84,10 +83,11 @@ public class EsExecutors {
     }
 
     public static String threadName(Settings settings, String namePrefix) {
-        if (Node.NODE_NAME_SETTING.exists(settings)) {
-            return threadName(Node.NODE_NAME_SETTING.get(settings), namePrefix);
-        } else {
+        String nodeName = settings.get("node.name");
+        if (nodeName == null) {
             return threadName("", namePrefix);
+        } else {
+            return threadName(nodeName, namePrefix);
         }
     }
 

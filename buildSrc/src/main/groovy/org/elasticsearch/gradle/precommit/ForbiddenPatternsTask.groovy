@@ -61,9 +61,6 @@ public class ForbiddenPatternsTask extends DefaultTask {
         // add mandatory rules
         patterns.put('nocommit', /nocommit/)
         patterns.put('tab', /\t/)
-        if (System.getProperty('build.snapshot', 'true').equals('false')) {
-            patterns.put('norelease', /norelease/)
-        }
 
         inputs.property("excludes", filesFilter.excludes)
         inputs.property("rules", patterns)

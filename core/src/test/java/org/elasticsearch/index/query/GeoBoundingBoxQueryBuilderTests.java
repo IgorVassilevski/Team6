@@ -31,7 +31,7 @@ import org.elasticsearch.common.ParseFieldMatcher;
 import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.geo.GeoUtils;
 import org.elasticsearch.index.mapper.MappedFieldType;
-import org.elasticsearch.index.search.geo.LegacyInMemoryGeoBoundingBoxQuery;
+import org.elasticsearch.index.search.geo.InMemoryGeoBoundingBoxQuery;
 import org.elasticsearch.test.AbstractQueryTestCase;
 import org.elasticsearch.test.geo.RandomShapeGenerator;
 import org.locationtech.spatial4j.io.GeohashUtils;
@@ -44,6 +44,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 
 public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBoundingBoxQueryBuilder> {
     /** Randomly generate either NaN or one of the two infinity values. */
@@ -103,14 +104,22 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
 
     public void testValidationNullType() {
         GeoBoundingBoxQueryBuilder qb = new GeoBoundingBoxQueryBuilder("teststring");
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> qb.type((GeoExecType) null));
-        assertEquals("Type is not allowed to be null.", e.getMessage());
+        try {
+            qb.type((GeoExecType) null);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), is("Type is not allowed to be null."));
+        }
     }
 
     public void testValidationNullTypeString() {
         GeoBoundingBoxQueryBuilder qb = new GeoBoundingBoxQueryBuilder("teststring");
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> qb.type((String) null));
-        assertEquals("cannot parse type from null string", e.getMessage());
+        try {
+            qb.type((String) null);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), is("cannot parse type from null string"));
+        }
     }
 
     @Override
@@ -121,17 +130,27 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
 
     public void testExceptionOnMissingTypes() throws IOException {
         assumeTrue("test runs only when at least a type is registered", getCurrentTypes().length == 0);
-        QueryShardException e = expectThrows(QueryShardException.class, () -> super.testToQuery());
-        assertEquals("failed to find geo_point field [mapped_geo_point]", e.getMessage());
+        try {
+            super.testToQuery();
+            fail("Expected IllegalArgumentException");
+        } catch (QueryShardException e) {
+            assertThat(e.getMessage(), is("failed to find geo_point field [mapped_geo_point]"));
+        }
     }
 
     public void testBrokenCoordinateCannotBeSet() {
         PointTester[] testers = { new TopTester(), new LeftTester(), new BottomTester(), new RightTester() };
+
         GeoBoundingBoxQueryBuilder builder = createTestQueryBuilder();
         builder.setValidationMethod(GeoValidationMethod.STRICT);
 
         for (PointTester tester : testers) {
-            expectThrows(IllegalArgumentException.class, () -> tester.invalidateCoordinate(builder, true));
+            try {
+                tester.invalidateCoordinate(builder, true);
+                fail("expected exception for broken " + tester.getClass().getName() + " coordinate");
+            } catch (IllegalArgumentException e) {
+                // expected
+            }
         }
     }
 
@@ -196,9 +215,12 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
 
         assumeTrue("top should not be equal to bottom for flip check", top != bottom);
         logger.info("top: {} bottom: {}", top, bottom);
-        builder.setValidationMethod(GeoValidationMethod.STRICT);
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> builder.setCorners(bottom, left, top, right));
-        assertThat(e.getMessage(), containsString("top is below bottom corner:"));
+        try {
+            builder.setValidationMethod(GeoValidationMethod.STRICT).setCorners(bottom, left, top, right);
+            fail("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("top is below bottom corner:"));
+        }
     }
 
     public void testTopBottomCanBeFlippedOnIgnoreMalformed() {
@@ -242,8 +264,7 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
                     }
                 }
             } else {
-                assertTrue("memory queries should result in LegacyInMemoryGeoBoundingBoxQuery",
-                    query instanceof LegacyInMemoryGeoBoundingBoxQuery);
+                assertTrue("memory queries should result in InMemoryGeoBoundingBoxQuery", query instanceof InMemoryGeoBoundingBoxQuery);
             }
         }
     }
@@ -254,8 +275,7 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
     }
 
     @Override
-    protected void doAssertLuceneQuery(GeoBoundingBoxQueryBuilder queryBuilder, Query query, QueryShardContext context)
-        throws IOException {
+    protected void doAssertLuceneQuery(GeoBoundingBoxQueryBuilder queryBuilder, Query query, QueryShardContext context) throws IOException {
         MappedFieldType fieldType = context.fieldMapper(queryBuilder.fieldName());
         if (fieldType == null) {
             assertTrue("Found no indexed geo query.", query instanceof MatchNoDocsQuery);
@@ -264,7 +284,7 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
                 if (queryBuilder.type() == GeoExecType.INDEXED) {
                     assertTrue("Found no indexed geo query.", query instanceof ConstantScoreQuery);
                 } else {
-                    assertTrue("Found no indexed geo query.", query instanceof LegacyInMemoryGeoBoundingBoxQuery);
+                    assertTrue("Found no indexed geo query.", query instanceof InMemoryGeoBoundingBoxQuery);
                 }
             } else {
                 assertTrue("Found no indexed geo query.", query instanceof GeoPointInBBoxQuery);
@@ -423,7 +443,7 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
         QueryShardContext shardContext = createShardContext();
         Query parsedQuery = parseQuery(query).toQuery(shardContext);
         if (shardContext.indexVersionCreated().before(Version.V_2_2_0)) {
-            LegacyInMemoryGeoBoundingBoxQuery filter = (LegacyInMemoryGeoBoundingBoxQuery) parsedQuery;
+            InMemoryGeoBoundingBoxQuery filter = (InMemoryGeoBoundingBoxQuery) parsedQuery;
             assertThat(filter.fieldName(), equalTo(GEO_POINT_FIELD_NAME));
             assertThat(filter.topLeft().lat(), closeTo(40, 1E-5));
             assertThat(filter.topLeft().lon(), closeTo(-70, 1E-5));
@@ -462,7 +482,7 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
         assertEquals(json, 40.01, parsed.bottomRight().getLat(), 0.0001);
         assertEquals(json, 1.0, parsed.boost(), 0.0001);
         assertEquals(json, GeoExecType.MEMORY, parsed.type());
-        String deprecatedJson =
+        json =
                 "{\n" +
                         "  \"geo_bbox\" : {\n" +
                         "    \"pin.location\" : {\n" +
@@ -478,8 +498,12 @@ public class GeoBoundingBoxQueryBuilderTests extends AbstractQueryTestCase<GeoBo
         QueryBuilder parsedGeoBboxShortcut = parseQuery(json, ParseFieldMatcher.EMPTY);
         assertThat(parsedGeoBboxShortcut, equalTo(parsed));
 
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> parseQuery(deprecatedJson));
-        assertEquals("Deprecated field [geo_bbox] used, expected [geo_bounding_box] instead", e.getMessage());
+        try {
+            parseQuery(json);
+            fail("parse query should have failed in strict mode");
+        } catch(IllegalArgumentException e) {
+            assertThat(e.getMessage(), equalTo("Deprecated field [geo_bbox] used, expected [geo_bounding_box] instead"));
+        }
     }
 
     public void testFromJsonCoerceFails() throws IOException {

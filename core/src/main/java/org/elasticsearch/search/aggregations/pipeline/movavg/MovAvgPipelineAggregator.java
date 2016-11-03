@@ -23,16 +23,16 @@ import org.elasticsearch.common.collect.EvictingQueue;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.search.DocValueFormat;
+import org.elasticsearch.search.aggregations.AggregationExecutionException;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregation.ReduceContext;
 import org.elasticsearch.search.aggregations.InternalAggregations;
-import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
-import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation.Bucket;
-import org.elasticsearch.search.aggregations.bucket.histogram.HistogramFactory;
+import org.elasticsearch.search.aggregations.bucket.histogram.InternalHistogram;
 import org.elasticsearch.search.aggregations.pipeline.BucketHelpers.GapPolicy;
 import org.elasticsearch.search.aggregations.pipeline.InternalSimpleValue;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 import org.elasticsearch.search.aggregations.pipeline.movavg.models.MovAvgModel;
+import org.joda.time.DateTime;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -93,14 +93,14 @@ public class MovAvgPipelineAggregator extends PipelineAggregator {
 
     @Override
     public InternalAggregation reduce(InternalAggregation aggregation, ReduceContext reduceContext) {
-        MultiBucketsAggregation histo = (MultiBucketsAggregation) aggregation;
-        List<? extends Bucket> buckets = histo.getBuckets();
-        HistogramFactory factory = (HistogramFactory) histo;
+        InternalHistogram histo = (InternalHistogram) aggregation;
+        List<? extends InternalHistogram.Bucket> buckets = histo.getBuckets();
+        InternalHistogram.Factory<? extends InternalHistogram.Bucket> factory = histo.getFactory();
 
-        List<Bucket> newBuckets = new ArrayList<>();
+        List newBuckets = new ArrayList<>();
         EvictingQueue<Double> values = new EvictingQueue<>(this.window);
 
-        Number lastValidKey = 0;
+        long lastValidKey = 0;
         int lastValidPosition = 0;
         int counter = 0;
 
@@ -110,12 +110,12 @@ public class MovAvgPipelineAggregator extends PipelineAggregator {
             model = minimize(buckets, histo, model);
         }
 
-        for (Bucket bucket : buckets) {
+        for (InternalHistogram.Bucket bucket : buckets) {
             Double thisBucketValue = resolveBucketValue(histo, bucket, bucketsPaths()[0], gapPolicy);
 
             // Default is to reuse existing bucket.  Simplifies the rest of the logic,
             // since we only change newBucket if we can add to it
-            Bucket newBucket = bucket;
+            InternalHistogram.Bucket newBucket = bucket;
 
             if (!(thisBucketValue == null || thisBucketValue.equals(Double.NaN))) {
 
@@ -127,11 +127,18 @@ public class MovAvgPipelineAggregator extends PipelineAggregator {
                         return (InternalAggregation) p;
                     }).collect(Collectors.toList());
                     aggs.add(new InternalSimpleValue(name(), movavg, formatter, new ArrayList<PipelineAggregator>(), metaData()));
-                    newBucket = factory.createBucket(factory.getKey(bucket), bucket.getDocCount(), new InternalAggregations(aggs));
+                    newBucket = factory.createBucket(bucket.getKey(), bucket.getDocCount(), new InternalAggregations(
+                            aggs), bucket.getKeyed(), bucket.getFormatter());
                 }
 
                 if (predict > 0) {
-                    lastValidKey = factory.getKey(bucket);
+                    if (bucket.getKey() instanceof Number) {
+                        lastValidKey  = ((Number) bucket.getKey()).longValue();
+                    } else if (bucket.getKey() instanceof DateTime) {
+                        lastValidKey = ((DateTime) bucket.getKey()).getMillis();
+                    } else {
+                        throw new AggregationExecutionException("Expected key of type Number or DateTime but got [" + lastValidKey + "]");
+                    }
                     lastValidPosition = counter;
                 }
 
@@ -143,14 +150,20 @@ public class MovAvgPipelineAggregator extends PipelineAggregator {
         }
 
         if (buckets.size() > 0 && predict > 0) {
+
+            boolean keyed;
+            DocValueFormat formatter;
+            keyed = buckets.get(0).getKeyed();
+            formatter = buckets.get(0).getFormatter();
+
             double[] predictions = model.predict(values, predict);
             for (int i = 0; i < predictions.length; i++) {
 
                 List<InternalAggregation> aggs;
-                Number newKey = factory.nextKey(lastValidKey);
+                long newKey = histo.getRounding().nextRoundingValue(lastValidKey);
 
                 if (lastValidPosition + i + 1 < newBuckets.size()) {
-                    Bucket bucket = newBuckets.get(lastValidPosition + i + 1);
+                    InternalHistogram.Bucket bucket = (InternalHistogram.Bucket) newBuckets.get(lastValidPosition + i + 1);
 
                     // Get the existing aggs in the bucket so we don't clobber data
                     aggs = StreamSupport.stream(bucket.getAggregations().spliterator(), false).map((p) -> {
@@ -158,7 +171,8 @@ public class MovAvgPipelineAggregator extends PipelineAggregator {
                     }).collect(Collectors.toList());
                     aggs.add(new InternalSimpleValue(name(), predictions[i], formatter, new ArrayList<PipelineAggregator>(), metaData()));
 
-                    Bucket newBucket = factory.createBucket(newKey, 0, new InternalAggregations(aggs));
+                    InternalHistogram.Bucket newBucket = factory.createBucket(newKey, 0, new InternalAggregations(
+                            aggs), keyed, formatter);
 
                     // Overwrite the existing bucket with the new version
                     newBuckets.set(lastValidPosition + i + 1, newBucket);
@@ -168,7 +182,8 @@ public class MovAvgPipelineAggregator extends PipelineAggregator {
                     aggs = new ArrayList<>();
                     aggs.add(new InternalSimpleValue(name(), predictions[i], formatter, new ArrayList<PipelineAggregator>(), metaData()));
 
-                    Bucket newBucket = factory.createBucket(newKey, 0, new InternalAggregations(aggs));
+                    InternalHistogram.Bucket newBucket = factory.createBucket(newKey, 0, new InternalAggregations(
+                            aggs), keyed, formatter);
 
                     // Since this is a new bucket, simply append it
                     newBuckets.add(newBucket);
@@ -177,16 +192,16 @@ public class MovAvgPipelineAggregator extends PipelineAggregator {
             }
         }
 
-        return factory.createAggregation(newBuckets);
+        return factory.create(newBuckets, histo);
     }
 
-    private MovAvgModel minimize(List<? extends Bucket> buckets, MultiBucketsAggregation histo, MovAvgModel model) {
+    private MovAvgModel minimize(List<? extends InternalHistogram.Bucket> buckets, InternalHistogram histo, MovAvgModel model) {
 
         int counter = 0;
         EvictingQueue<Double> values = new EvictingQueue<>(this.window);
 
         double[] test = new double[window];
-        ListIterator<? extends Bucket> iter = buckets.listIterator(buckets.size());
+        ListIterator<? extends InternalHistogram.Bucket> iter = buckets.listIterator(buckets.size());
 
         // We have to walk the iterator backwards because we don't know if/how many buckets are empty.
         while (iter.hasPrevious() && counter < window) {

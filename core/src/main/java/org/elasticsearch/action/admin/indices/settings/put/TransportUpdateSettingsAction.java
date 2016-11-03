@@ -19,8 +19,6 @@
 
 package org.elasticsearch.action.admin.indices.settings.put;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.master.TransportMasterNodeAction;
@@ -94,7 +92,7 @@ public class TransportUpdateSettingsAction extends TransportMasterNodeAction<Upd
 
             @Override
             public void onFailure(Exception t) {
-                logger.debug((Supplier<?>) () -> new ParameterizedMessage("failed to update settings on indices [{}]", (Object) concreteIndices), t);
+                logger.debug("failed to update settings on indices [{}]", t, (Object)concreteIndices);
                 listener.onFailure(t);
             }
         });

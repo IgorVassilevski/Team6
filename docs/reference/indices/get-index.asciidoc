@@ -1,14 +1,12 @@
 [[indices-get-index]]
 == Get Index
 
-The get index API allows to retrieve information about one or more indexes.
+The get index API allows to retrieve information about one or more indexes. 
 
 [source,js]
 --------------------------------------------------
-GET /twitter
+$ curl -XGET 'http://localhost:9200/twitter/'
 --------------------------------------------------
-// CONSOLE
-// TEST[setup:twitter]
 
 The above example gets the information for an index called `twitter`. Specifying an index,
 alias or wildcard expression is required.
@@ -19,15 +17,13 @@ all indices by using `_all` or `*` as index.
 [float]
 === Filtering index information
 
-The information returned by the get API can be filtered to include only specific features
+The information returned by the get API can be filtered to include only specific features 
 by specifying a comma delimited list of features in the URL:
 
 [source,js]
 --------------------------------------------------
-GET twitter/_settings,_mappings
+$ curl -XGET 'http://localhost:9200/twitter/_settings,_mappings'
 --------------------------------------------------
-// CONSOLE
-// TEST[setup:twitter]
 
 The above command will only return the settings and mappings for the index called `twitter`.
 

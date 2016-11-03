@@ -42,14 +42,14 @@ public class DocsTestPlugin extends RestTestPlugin {
                 'List snippets that probably should be marked // CONSOLE'
         listConsoleCandidates.perSnippet {
             if (
-                       it.console != null // Already marked, nothing to do
-                    || it.testResponse    // It is a response
+                       it.console      // Already marked, nothing to do
+                    || it.testResponse // It is a response
                 ) {
                 return
             }
             List<String> languages = [
-                // This language should almost always be marked console
-                'js',
+                // These languages should almost always be marked console
+                'js', 'json',
                 // These are often curl commands that should be converted but
                 // are probably false positives
                 'sh', 'shell',

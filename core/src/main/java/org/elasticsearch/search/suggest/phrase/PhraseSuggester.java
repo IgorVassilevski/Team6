@@ -45,6 +45,7 @@ import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.suggest.Suggest.Suggestion;
 import org.elasticsearch.search.suggest.Suggest.Suggestion.Entry;
 import org.elasticsearch.search.suggest.Suggest.Suggestion.Entry.Option;
+import org.elasticsearch.search.suggest.SuggestUtils;
 import org.elasticsearch.search.suggest.Suggester;
 import org.elasticsearch.search.suggest.SuggestionBuilder;
 import org.elasticsearch.search.suggest.SuggestionSearchContext.SuggestionContext;
@@ -83,7 +84,7 @@ public final class PhraseSuggester extends Suggester<PhraseSuggestionContext> {
         final List<CandidateGenerator> gens = new ArrayList<>(generators.size());
         for (int i = 0; i < numGenerators; i++) {
             PhraseSuggestionContext.DirectCandidateGenerator generator = generators.get(i);
-            DirectSpellChecker directSpellChecker = generator.createDirectSpellChecker();
+            DirectSpellChecker directSpellChecker = SuggestUtils.getDirectSpellChecker(generator);
             Terms terms = MultiFields.getTerms(indexReader, generator.field());
             if (terms !=  null) {
                 gens.add(new DirectCandidateGenerator(directSpellChecker, generator.field(), generator.suggestMode(),

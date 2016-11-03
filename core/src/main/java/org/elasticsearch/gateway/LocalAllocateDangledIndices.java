@@ -19,8 +19,6 @@
 
 package org.elasticsearch.gateway;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ClusterStateUpdateTask;
 import org.elasticsearch.cluster.block.ClusterBlocks;
@@ -150,7 +148,8 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
                             upgradedIndexMetaData = metaDataIndexUpgradeService.upgradeIndexMetaData(indexMetaData);
                         } catch (Exception ex) {
                             // upgrade failed - adding index as closed
-                            logger.warn((Supplier<?>) () -> new ParameterizedMessage("found dangled index [{}] on node [{}]. This index cannot be upgraded to the latest version, adding as closed", indexMetaData.getIndex(), request.fromNode), ex);
+                            logger.warn("found dangled index [{}] on node [{}]. This index cannot be upgraded to the latest version, adding as closed", ex,
+                                    indexMetaData.getIndex(), request.fromNode);
                             upgradedIndexMetaData = IndexMetaData.builder(indexMetaData).state(IndexMetaData.State.CLOSE).version(indexMetaData.getVersion() + 1).build();
                         }
                         metaData.put(upgradedIndexMetaData, false);
@@ -177,7 +176,7 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
 
                 @Override
                 public void onFailure(String source, Exception e) {
-                    logger.error((Supplier<?>) () -> new ParameterizedMessage("unexpected failure during [{}]", source), e);
+                    logger.error("unexpected failure during [{}]", e, source);
                     try {
                         channel.sendResponse(e);
                     } catch (Exception inner) {

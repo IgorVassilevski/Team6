@@ -19,12 +19,17 @@
 
 package org.elasticsearch.common.network;
 
+import org.elasticsearch.action.support.replication.ReplicationTask;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.common.Table;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.inject.ModuleTestCase;
+import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.BoundTransportAddress;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.http.HttpInfo;
 import org.elasticsearch.http.HttpServerAdapter;
 import org.elasticsearch.http.HttpServerTransport;
@@ -33,11 +38,12 @@ import org.elasticsearch.rest.BaseRestHandler;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.action.cat.AbstractCatAction;
+import org.elasticsearch.tasks.Task;
 import org.elasticsearch.test.transport.AssertingLocalTransport;
 import org.elasticsearch.transport.Transport;
 import org.elasticsearch.transport.TransportService;
 
-import java.util.Collections;
+import java.io.IOException;
 
 public class NetworkModuleTests extends ModuleTestCase {
 
@@ -106,13 +112,13 @@ public class NetworkModuleTests extends ModuleTestCase {
             .put(NetworkModule.HTTP_ENABLED.getKey(), false)
             .put(NetworkModule.TRANSPORT_TYPE_KEY, "local")
             .build();
-        NetworkModule module = new NetworkModule(new NetworkService(settings, Collections.emptyList()), settings, false);
+        NetworkModule module = new NetworkModule(new NetworkService(settings), settings, false, new NamedWriteableRegistry());
         module.registerTransportService("custom", FakeTransportService.class);
         assertBinding(module, TransportService.class, FakeTransportService.class);
         assertFalse(module.isTransportClient());
 
         // check it works with transport only as well
-        module = new NetworkModule(new NetworkService(settings, Collections.emptyList()), settings, true);
+        module = new NetworkModule(new NetworkService(settings), settings, true, new NamedWriteableRegistry());
         module.registerTransportService("custom", FakeTransportService.class);
         assertBinding(module, TransportService.class, FakeTransportService.class);
         assertTrue(module.isTransportClient());
@@ -122,13 +128,13 @@ public class NetworkModuleTests extends ModuleTestCase {
         Settings settings = Settings.builder().put(NetworkModule.TRANSPORT_TYPE_KEY, "custom")
             .put(NetworkModule.HTTP_ENABLED.getKey(), false)
             .build();
-        NetworkModule module = new NetworkModule(new NetworkService(settings, Collections.emptyList()), settings, false);
+        NetworkModule module = new NetworkModule(new NetworkService(settings), settings, false, new NamedWriteableRegistry());
         module.registerTransport("custom", FakeTransport.class);
         assertBinding(module, Transport.class, FakeTransport.class);
         assertFalse(module.isTransportClient());
 
         // check it works with transport only as well
-        module = new NetworkModule(new NetworkService(settings, Collections.emptyList()), settings, true);
+        module = new NetworkModule(new NetworkService(settings), settings, true, new NamedWriteableRegistry());
         module.registerTransport("custom", FakeTransport.class);
         assertBinding(module, Transport.class, FakeTransport.class);
         assertTrue(module.isTransportClient());
@@ -138,13 +144,13 @@ public class NetworkModuleTests extends ModuleTestCase {
         Settings settings = Settings.builder()
             .put(NetworkModule.HTTP_TYPE_SETTING.getKey(), "custom")
             .put(NetworkModule.TRANSPORT_TYPE_KEY, "local").build();
-        NetworkModule module = new NetworkModule(new NetworkService(settings, Collections.emptyList()), settings, false);
+        NetworkModule module = new NetworkModule(new NetworkService(settings), settings, false, new NamedWriteableRegistry());
         module.registerHttpTransport("custom", FakeHttpTransport.class);
         assertBinding(module, HttpServerTransport.class, FakeHttpTransport.class);
         assertFalse(module.isTransportClient());
 
         // check registration not allowed for transport only
-        module = new NetworkModule(new NetworkService(settings, Collections.emptyList()), settings, true);
+        module = new NetworkModule(new NetworkService(settings), settings, true, new NamedWriteableRegistry());
         assertTrue(module.isTransportClient());
         try {
             module.registerHttpTransport("custom", FakeHttpTransport.class);
@@ -157,8 +163,45 @@ public class NetworkModuleTests extends ModuleTestCase {
         // not added if http is disabled
         settings = Settings.builder().put(NetworkModule.HTTP_ENABLED.getKey(), false)
             .put(NetworkModule.TRANSPORT_TYPE_KEY, "local").build();
-        module = new NetworkModule(new NetworkService(settings, Collections.emptyList()), settings, false);
+        module = new NetworkModule(new NetworkService(settings), settings, false, new NamedWriteableRegistry());
         assertNotBound(module, HttpServerTransport.class);
         assertFalse(module.isTransportClient());
+    }
+
+    public void testRegisterTaskStatus() {
+        NamedWriteableRegistry registry = new NamedWriteableRegistry();
+        Settings settings = Settings.EMPTY;
+        NetworkModule module = new NetworkModule(new NetworkService(settings), settings, false, registry);
+        assertFalse(module.isTransportClient());
+
+        // Builtin reader comes back
+        assertNotNull(registry.getReader(Task.Status.class, ReplicationTask.Status.NAME));
+
+        module.registerTaskStatus(DummyTaskStatus.NAME, DummyTaskStatus::new);
+        assertEquals("test", expectThrows(UnsupportedOperationException.class,
+                () -> registry.getReader(Task.Status.class, DummyTaskStatus.NAME).read(null)).getMessage());
+    }
+
+    private class DummyTaskStatus implements Task.Status {
+        public static final String NAME = "dummy";
+
+        public DummyTaskStatus(StreamInput in) {
+            throw new UnsupportedOperationException("test");
+        }
+
+        @Override
+        public String getWriteableName() {
+            return NAME;
+        }
+
+        @Override
+        public void writeTo(StreamOutput out) throws IOException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+            throw new UnsupportedOperationException();
+        }
     }
 }

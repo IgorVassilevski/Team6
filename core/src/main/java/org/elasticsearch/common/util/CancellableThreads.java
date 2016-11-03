@@ -30,14 +30,11 @@ import java.util.Set;
 /**
  * A utility class for multi threaded operation that needs to be cancellable via interrupts. Every cancellable operation should be
  * executed via {@link #execute(Interruptable)}, which will capture the executing thread and make sure it is interrupted in the case
- * of cancellation.
- *
- * Cancellation policy: This class does not support external interruption via <code>Thread#interrupt()</code>. Always use #cancel() instead.
+ * cancellation.
  */
 public class CancellableThreads {
     private final Set<Thread> threads = new HashSet<>();
-    // needs to be volatile as it is also read outside of synchronized blocks.
-    private volatile boolean cancelled = false;
+    private boolean cancelled = false;
     private String reason;
 
     public synchronized boolean isCancelled() {
@@ -97,18 +94,13 @@ public class CancellableThreads {
      */
     public void executeIO(IOInterruptable interruptable) throws IOException {
         boolean wasInterrupted = add();
-        boolean cancelledByExternalInterrupt = false;
         RuntimeException runtimeException = null;
         IOException ioException = null;
 
         try {
             interruptable.run();
         } catch (InterruptedException | ThreadInterruptedException e) {
-            // ignore, this interrupt has been triggered by us in #cancel()...
-            assert cancelled : "Interruption via Thread#interrupt() is unsupported. Use CancellableThreads#cancel() instead";
-            // we can only reach here if assertions are disabled. If we reach this code and cancelled is false, this means that we've
-            // been interrupted externally (which we don't support).
-            cancelledByExternalInterrupt = !cancelled;
+            // assume this is us and ignore
         } catch (RuntimeException t) {
             runtimeException = t;
         } catch (IOException e) {
@@ -136,12 +128,6 @@ public class CancellableThreads {
                 throw runtimeException;
             }
         }
-        if (cancelledByExternalInterrupt) {
-            // restore interrupt flag to at least adhere to expected behavior
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interruption via Thread#interrupt() is unsupported. Use CancellableThreads#cancel() instead");
-        }
-
     }
 
 

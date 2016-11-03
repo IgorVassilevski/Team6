@@ -38,7 +38,6 @@ import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
 import org.elasticsearch.test.ESIntegTestCase.Scope;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -58,12 +57,12 @@ import static org.hamcrest.Matchers.is;
 public class CustomSuggesterSearchIT extends ESIntegTestCase {
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(CustomSuggesterPlugin.class);
+        return pluginList(CustomSuggesterPlugin.class);
     }
 
     @Override
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
-        return Arrays.asList(CustomSuggesterPlugin.class);
+        return pluginList(CustomSuggesterPlugin.class);
     }
 
     public void testThatCustomSuggestersCanBeRegisteredAndWork() throws Exception {

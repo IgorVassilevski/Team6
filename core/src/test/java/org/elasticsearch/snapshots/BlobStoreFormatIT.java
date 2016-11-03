@@ -32,7 +32,6 @@ import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.compress.CompressorFactory;
 import org.elasticsearch.common.io.Streams;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
-import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.FromXContentBuilder;
@@ -133,9 +132,7 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
 
         public void write(T obj, BlobContainer blobContainer, String blobName) throws IOException {
             BytesReference bytes = write(obj);
-            try (StreamInput stream = bytes.streamInput()) {
-                blobContainer.writeBlob(blobName, stream, bytes.length());
-            }
+            blobContainer.writeBlob(blobName, bytes);
         }
 
         private BytesReference write(T obj) throws IOException {
@@ -287,10 +284,7 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
             buffer[location] = (byte) (buffer[location] ^ 42);
         } while (originalChecksum == checksum(buffer));
         blobContainer.deleteBlob(blobName); // delete original before writing new blob
-        BytesArray bytesArray = new BytesArray(buffer);
-        try (StreamInput stream = bytesArray.streamInput()) {
-            blobContainer.writeBlob(blobName, stream, bytesArray.length());
-        }
+        blobContainer.writeBlob(blobName, new BytesArray(buffer));
     }
 
     private long checksum(byte[] buffer) throws IOException {

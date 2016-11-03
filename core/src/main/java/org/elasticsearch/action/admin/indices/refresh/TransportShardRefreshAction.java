@@ -35,7 +35,6 @@ import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
-
 public class TransportShardRefreshAction
         extends TransportReplicationAction<BasicReplicationRequest, BasicReplicationRequest, ReplicationResponse> {
 
@@ -69,6 +68,11 @@ public class TransportShardRefreshAction
         indexShard.refresh("api");
         logger.trace("{} refresh request executed on replica", indexShard.shardId());
         return new ReplicaResult();
+    }
+
+    @Override
+    protected boolean checkWriteConsistency() {
+        return false;
     }
 
     @Override

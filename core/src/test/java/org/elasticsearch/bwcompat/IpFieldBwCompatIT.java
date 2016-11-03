@@ -21,7 +21,6 @@ package org.elasticsearch.bwcompat;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoFailures;
 
-import java.util.Arrays;
 import java.util.Collection;
 
 import org.elasticsearch.Version;
@@ -40,7 +39,7 @@ public class IpFieldBwCompatIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(InternalSettingsPlugin.class); // uses index.merge.enabled
+        return pluginList(InternalSettingsPlugin.class); // uses index.merge.enabled
     }
 
     @Override

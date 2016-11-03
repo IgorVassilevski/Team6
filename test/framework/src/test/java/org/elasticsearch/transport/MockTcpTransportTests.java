@@ -26,14 +26,12 @@ import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.indices.breaker.NoneCircuitBreakerService;
 import org.elasticsearch.test.transport.MockTransportService;
 
-import java.util.Collections;
-
 public class MockTcpTransportTests extends AbstractSimpleTransportTestCase {
     @Override
     protected MockTransportService build(Settings settings, Version version) {
-        NamedWriteableRegistry namedWriteableRegistry = new NamedWriteableRegistry(Collections.emptyList());
+        NamedWriteableRegistry namedWriteableRegistry = new NamedWriteableRegistry();
         Transport transport = new MockTcpTransport(settings, threadPool, BigArrays.NON_RECYCLING_INSTANCE,
-            new NoneCircuitBreakerService(), namedWriteableRegistry, new NetworkService(settings, Collections.emptyList()), version);
+            new NoneCircuitBreakerService(), namedWriteableRegistry,   new NetworkService(settings), version);
         MockTransportService mockTransportService = new MockTransportService(Settings.EMPTY, transport, threadPool);
         mockTransportService.start();
         return mockTransportService;

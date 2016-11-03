@@ -72,9 +72,10 @@ class ClusterFormationTasks {
             throw new GradleException("bwcVersion must not be null if numBwcNodes is > 0")
         }
         // this is our current version distribution configuration we use for all kinds of REST tests etc.
-        String distroConfigName = "${task.name}_elasticsearchDistro"
-        Configuration distro = project.configurations.create(distroConfigName)
-        configureDistributionDependency(project, config.distribution, distro, VersionProperties.elasticsearch)
+        project.configurations {
+            elasticsearchDistro
+        }
+        configureDistributionDependency(project, config.distribution, project.configurations.elasticsearchDistro, VersionProperties.elasticsearch)
         if (config.bwcVersion != null && config.numBwcNodes > 0) {
             // if we have a cluster that has a BWC cluster we also need to configure a dependency on the BWC version
             // this version uses the same distribution etc. and only differs in the version we depend on.
@@ -90,9 +91,10 @@ class ClusterFormationTasks {
             // we start N nodes and out of these N nodes there might be M bwc nodes.
             // for each of those nodes we might have a different configuratioon
             String elasticsearchVersion = VersionProperties.elasticsearch
+            Configuration configuration = project.configurations.elasticsearchDistro
             if (i < config.numBwcNodes) {
                 elasticsearchVersion = config.bwcVersion
-                distro = project.configurations.elasticsearchBwcDistro
+                configuration = project.configurations.elasticsearchBwcDistro
             }
             NodeInfo node = new NodeInfo(config, i, project, task, elasticsearchVersion, sharedDir)
             if (i == 0) {
@@ -103,7 +105,7 @@ class ClusterFormationTasks {
                 config.seedNodePortsFile = node.transportPortsFile;
             }
             nodes.add(node)
-            startTasks.add(configureNode(project, task, cleanup, node, distro))
+            startTasks.add(configureNode(project, task, cleanup, node, configuration))
         }
 
         Task wait = configureWaitTask("${task.name}#wait", project, nodes, startTasks)
@@ -259,7 +261,6 @@ class ClusterFormationTasks {
                 'node.attr.testattr'                : 'test',
                 'repositories.url.allowed_urls': 'http://snapshot.test*'
         ]
-        esConfig['node.max_local_storage_nodes'] = node.config.numNodes
         esConfig['http.port'] = node.config.httpPort
         esConfig['transport.tcp.port'] =  node.config.transportPort
         esConfig.putAll(node.config.settings)

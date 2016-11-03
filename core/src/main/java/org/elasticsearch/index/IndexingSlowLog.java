@@ -19,9 +19,9 @@
 
 package org.elasticsearch.index;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.Booleans;
 import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
@@ -34,6 +34,8 @@ import org.elasticsearch.index.shard.IndexingOperationListener;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
+/**
+ */
 public final class IndexingSlowLog implements IndexingOperationListener {
     private final Index index;
     private boolean reformat;
@@ -50,7 +52,7 @@ public final class IndexingSlowLog implements IndexingOperationListener {
 
     private SlowLogLevel level;
 
-    private final Logger indexLogger;
+    private final ESLogger indexLogger;
 
     private static final String INDEX_INDEXING_SLOWLOG_PREFIX = "index.indexing.slowlog";
     public static final Setting<TimeValue> INDEX_INDEXING_SLOWLOG_THRESHOLD_INDEX_WARN_SETTING =
@@ -110,7 +112,7 @@ public final class IndexingSlowLog implements IndexingOperationListener {
 
     private void setLevel(SlowLogLevel level) {
         this.level = level;
-        Loggers.setLevel(this.indexLogger, level.name());
+        this.indexLogger.setLevel(level.name());
     }
 
     private void setWarnThreshold(TimeValue warnThreshold) {

@@ -19,7 +19,6 @@
 
 package org.elasticsearch.search.profile.aggregation;
 
-import org.apache.lucene.search.Scorer;
 import org.elasticsearch.search.aggregations.LeafBucketCollector;
 
 import java.io.IOException;
@@ -39,11 +38,6 @@ public class ProfilingLeafBucketCollector extends LeafBucketCollector {
         profileBreakdown.startTime(AggregationTimingType.COLLECT);
         delegate.collect(doc, bucket);
         profileBreakdown.stopAndRecordTime();
-    }
-
-    @Override
-    public void setScorer(Scorer scorer) throws IOException {
-        delegate.setScorer(scorer);
     }
 
 }

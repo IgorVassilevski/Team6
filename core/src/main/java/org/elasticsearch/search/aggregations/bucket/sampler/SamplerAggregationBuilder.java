@@ -19,6 +19,7 @@
 
 package org.elasticsearch.search.aggregations.bucket.sampler;
 
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -37,6 +38,7 @@ import java.util.Objects;
 public class SamplerAggregationBuilder extends AbstractAggregationBuilder<SamplerAggregationBuilder> {
     public static final String NAME = "sampler";
     private static final Type TYPE = new Type(NAME);
+    public static final ParseField AGGREGATION_NAME_FIELD = new ParseField(NAME);
 
     public static final int DEFAULT_SHARD_SAMPLE_SIZE = 100;
 

@@ -34,11 +34,9 @@ public final class SBreak extends AStatement {
     public SBreak(Location location) {
         super(location);
     }
-
+    
     @Override
-    void extractVariables(Set<String> variables) {
-        // Do nothing.
-    }
+    void extractVariables(Set<String> variables) {}
 
     @Override
     void analyze(Locals locals) {

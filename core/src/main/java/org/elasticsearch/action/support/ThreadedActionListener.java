@@ -19,12 +19,10 @@
 
 package org.elasticsearch.action.support;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -41,12 +39,12 @@ public final class ThreadedActionListener<Response> implements ActionListener<Re
      */
     public static class Wrapper {
 
-        private final Logger logger;
+        private final ESLogger logger;
         private final ThreadPool threadPool;
 
         private final boolean threadedListener;
 
-        public Wrapper(Logger logger, Settings settings, ThreadPool threadPool) {
+        public Wrapper(ESLogger logger, Settings settings, ThreadPool threadPool) {
             this.logger = logger;
             this.threadPool = threadPool;
              // Should the action listener be threaded or not by default. Action listeners are automatically threaded for
@@ -70,13 +68,13 @@ public final class ThreadedActionListener<Response> implements ActionListener<Re
         }
     }
 
-    private final Logger logger;
+    private final ESLogger logger;
     private final ThreadPool threadPool;
     private final String executor;
     private final ActionListener<Response> listener;
     private final boolean forceExecution;
 
-    public ThreadedActionListener(Logger logger, ThreadPool threadPool, String executor, ActionListener<Response> listener,
+    public ThreadedActionListener(ESLogger logger, ThreadPool threadPool, String executor, ActionListener<Response> listener,
                                   boolean forceExecution) {
         this.logger = logger;
         this.threadPool = threadPool;
@@ -120,8 +118,7 @@ public final class ThreadedActionListener<Response> implements ActionListener<Re
 
             @Override
             public void onFailure(Exception e) {
-                logger.warn(
-                        (Supplier<?>) () -> new ParameterizedMessage("failed to execute failure callback on [{}]", listener), e);
+                logger.warn("failed to execute failure callback on [{}], failure [{}]", e, listener, e);
             }
         });
     }

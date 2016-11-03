@@ -19,7 +19,6 @@
 
 package org.elasticsearch.bootstrap;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.util.Constants;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.StringHelper;
@@ -29,6 +28,7 @@ import org.elasticsearch.cli.Terminal;
 import org.elasticsearch.common.PidFile;
 import org.elasticsearch.common.SuppressForbidden;
 import org.elasticsearch.common.inject.CreationException;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.LogConfigurator;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
@@ -81,7 +81,7 @@ final class Bootstrap {
 
     /** initialize native resources */
     public static void initializeNatives(Path tmpFile, boolean mlockAll, boolean seccomp, boolean ctrlHandler) {
-        final Logger logger = Loggers.getLogger(Bootstrap.class);
+        final ESLogger logger = Loggers.getLogger(Bootstrap.class);
 
         // check if the user is running as root, and bail
         if (Natives.definitelyRunningAsRoot()) {
@@ -142,8 +142,7 @@ final class Bootstrap {
         JvmInfo.jvmInfo();
     }
 
-    private void setup(boolean addShutdownHook, Environment environment) throws Exception {
-        Settings settings = environment.settings();
+    private void setup(boolean addShutdownHook, Settings settings, Environment environment) throws Exception {
         initializeNatives(
                 environment.tmpFile(),
                 BootstrapSettings.MEMORY_LOCK_SETTING.get(settings),
@@ -172,7 +171,7 @@ final class Bootstrap {
         // install SM after natives, shutdown hooks, etc.
         Security.configure(environment, BootstrapSettings.SECURITY_FILTER_BAD_DEFAULTS_SETTING.get(settings));
 
-        node = new Node(environment) {
+        node = new Node(settings) {
             @Override
             protected void validateNodeBeforeAcceptingRequests(Settings settings, BoundTransportAddress boundTransportAddress) {
                 BootstrapCheck.check(settings, boundTransportAddress);
@@ -180,7 +179,7 @@ final class Bootstrap {
         };
     }
 
-    private static Environment initialEnvironment(boolean foreground, Path pidFile, Map<String, String> esSettings) {
+    private static Environment initialSettings(boolean foreground, Path pidFile, Map<String, String> esSettings) {
         Terminal terminal = foreground ? Terminal.DEFAULT : null;
         Settings.Builder builder = Settings.builder();
         if (pidFile != null) {
@@ -226,8 +225,9 @@ final class Bootstrap {
 
         INSTANCE = new Bootstrap();
 
-        Environment environment = initialEnvironment(foreground, pidFile, esSettings);
-        LogConfigurator.configure(environment, true);
+        Environment environment = initialSettings(foreground, pidFile, esSettings);
+        Settings settings = environment.settings();
+        LogConfigurator.configure(settings, true);
         checkForCustomConfFile();
 
         if (environment.pidFile() != null) {
@@ -250,9 +250,9 @@ final class Bootstrap {
             // initialized as we do not want to grant the runtime permission
             // setDefaultUncaughtExceptionHandler
             Thread.setDefaultUncaughtExceptionHandler(
-                new ElasticsearchUncaughtExceptionHandler(() -> Node.NODE_NAME_SETTING.get(environment.settings())));
+                new ElasticsearchUncaughtExceptionHandler(() -> Node.NODE_NAME_SETTING.get(settings)));
 
-            INSTANCE.setup(true, environment);
+            INSTANCE.setup(true, settings, environment);
 
             INSTANCE.start();
 
@@ -264,16 +264,16 @@ final class Bootstrap {
             if (foreground) {
                 Loggers.disableConsoleLogging();
             }
-            Logger logger = Loggers.getLogger(Bootstrap.class);
+            ESLogger logger = Loggers.getLogger(Bootstrap.class);
             if (INSTANCE.node != null) {
-                logger = Loggers.getLogger(Bootstrap.class, Node.NODE_NAME_SETTING.get(INSTANCE.node.settings()));
+                logger = Loggers.getLogger(Bootstrap.class, INSTANCE.node.settings().get("node.name"));
             }
             // HACK, it sucks to do this, but we will run users out of disk space otherwise
             if (e instanceof CreationException) {
                 // guice: log the shortened exc to the log file
                 ByteArrayOutputStream os = new ByteArrayOutputStream();
                 PrintStream ps = new PrintStream(os, false, "UTF-8");
-                new StartupException(e).printStackTrace(ps);
+                new StartupError(e).printStackTrace(ps);
                 ps.flush();
                 logger.error("Guice Exception: {}", os.toString("UTF-8"));
             } else {
@@ -310,7 +310,7 @@ final class Bootstrap {
 
     private static void checkUnsetAndMaybeExit(String confFileSetting, String settingName) {
         if (confFileSetting != null && confFileSetting.isEmpty() == false) {
-            Logger logger = Loggers.getLogger(Bootstrap.class);
+            ESLogger logger = Loggers.getLogger(Bootstrap.class);
             logger.info("{} is no longer supported. elasticsearch.yml must be placed in the config directory and cannot be renamed.", settingName);
             exit(1);
         }

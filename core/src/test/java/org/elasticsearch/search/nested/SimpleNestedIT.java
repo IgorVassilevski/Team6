@@ -21,7 +21,6 @@ package org.elasticsearch.search.nested;
 
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.join.ScoreMode;
-import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.cluster.stats.ClusterStatsResponse;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.action.delete.DeleteResponse;
@@ -149,7 +148,7 @@ public class SimpleNestedIT extends ESIntegTestCase {
 
         // check delete, so all is gone...
         DeleteResponse deleteResponse = client().prepareDelete("test", "type1", "2").execute().actionGet();
-        assertEquals(DocWriteResponse.Result.DELETED, deleteResponse.getResult());
+        assertThat(deleteResponse.isFound(), equalTo(true));
 
         // flush, so we fetch it from the index (as see that we filter nested docs)
         flush();

@@ -19,8 +19,6 @@
 
 package org.elasticsearch.action.get;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.TransportActions;
@@ -94,7 +92,7 @@ public class TransportShardMultiGetAction extends TransportSingleShardAction<Mul
                 if (TransportActions.isShardNotAvailableException(e)) {
                     throw (ElasticsearchException) e;
                 } else {
-                    logger.debug((Supplier<?>) () -> new ParameterizedMessage("{} failed to execute multi_get for [{}]/[{}]", shardId, item.type(), item.id()), e);
+                    logger.debug("{} failed to execute multi_get for [{}]/[{}]", e, shardId, item.type(), item.id());
                     response.add(request.locations.get(i), new MultiGetResponse.Failure(request.index(), item.type(), item.id(), e));
                 }
             }

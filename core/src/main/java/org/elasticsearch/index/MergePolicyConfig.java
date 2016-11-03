@@ -19,10 +19,11 @@
 
 package org.elasticsearch.index;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.index.MergePolicy;
 import org.apache.lucene.index.NoMergePolicy;
 import org.apache.lucene.index.TieredMergePolicy;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.settings.IndexScopedSettings;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.unit.ByteSizeUnit;
@@ -116,7 +117,7 @@ import org.elasticsearch.common.unit.ByteSizeValue;
 
 public final class MergePolicyConfig {
     private final TieredMergePolicy mergePolicy = new TieredMergePolicy();
-    private final Logger logger;
+    private final ESLogger logger;
     private final boolean mergesEnabled;
 
     public static final double          DEFAULT_EXPUNGE_DELETES_ALLOWED     = 10d;
@@ -154,7 +155,7 @@ public final class MergePolicyConfig {
     public static final String INDEX_MERGE_ENABLED = "index.merge.enabled"; // don't convert to Setting<> and register... we only set this in tests and register via a plugin
 
 
-    MergePolicyConfig(Logger logger, IndexSettings indexSettings) {
+    MergePolicyConfig(ESLogger logger, IndexSettings indexSettings) {
         this.logger = logger;
         double forceMergeDeletesPctAllowed = indexSettings.getValue(INDEX_MERGE_POLICY_EXPUNGE_DELETES_ALLOWED_SETTING); // percentage
         ByteSizeValue floorSegment = indexSettings.getValue(INDEX_MERGE_POLICY_FLOOR_SEGMENT_SETTING);

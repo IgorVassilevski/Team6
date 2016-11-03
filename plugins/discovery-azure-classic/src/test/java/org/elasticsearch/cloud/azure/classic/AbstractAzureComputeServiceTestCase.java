@@ -28,7 +28,6 @@ import org.elasticsearch.plugin.discovery.azure.classic.AzureDiscoveryPlugin;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 
-import java.util.Arrays;
 import java.util.Collection;
 
 public abstract class AbstractAzureComputeServiceTestCase extends ESIntegTestCase {
@@ -57,7 +56,7 @@ public abstract class AbstractAzureComputeServiceTestCase extends ESIntegTestCas
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(AzureDiscoveryPlugin.class, mockPlugin);
+        return pluginList(AzureDiscoveryPlugin.class, mockPlugin);
     }
 
     protected void checkNumberOfNodes(int expected) {

@@ -21,7 +21,6 @@ package org.elasticsearch.index.mapper;
 
 import com.carrotsearch.hppc.ObjectHashSet;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.DelegatingAnalyzerWrapper;
 import org.elasticsearch.ElasticsearchGenerationException;
@@ -38,6 +37,7 @@ import org.elasticsearch.index.AbstractIndexComponent;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.analysis.AnalysisService;
 import org.elasticsearch.index.mapper.Mapper.BuilderContext;
+import org.elasticsearch.index.mapper.object.ObjectMapper;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.similarity.SimilarityService;
 import org.elasticsearch.indices.InvalidTypeNameException;
@@ -217,10 +217,7 @@ public class MapperService extends AbstractIndexComponent {
                     }
                 }
             } catch (Exception e) {
-                logger.warn(
-                    (org.apache.logging.log4j.util.Supplier<?>)
-                        () -> new ParameterizedMessage("[{}] failed to add mapping [{}], source [{}]", index(), mappingType, mappingSource),
-                    e);
+                logger.warn("[{}] failed to add mapping [{}], source [{}]", e, index(), mappingType, mappingSource);
                 throw e;
             }
         }

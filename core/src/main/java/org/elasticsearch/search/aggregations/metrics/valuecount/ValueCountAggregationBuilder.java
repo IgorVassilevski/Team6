@@ -19,6 +19,7 @@
 
 package org.elasticsearch.search.aggregations.metrics.valuecount;
 
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -37,6 +38,7 @@ import java.io.IOException;
 public class ValueCountAggregationBuilder extends ValuesSourceAggregationBuilder.LeafOnly<ValuesSource, ValueCountAggregationBuilder> {
     public static final String NAME = "value_count";
     public static final Type TYPE = new Type(NAME);
+    public static final ParseField AGGREGATION_NAME_FIELD = new ParseField(NAME);
 
     public ValueCountAggregationBuilder(String name, ValueType targetValueType) {
         super(name, TYPE, ValuesSourceType.ANY, targetValueType);

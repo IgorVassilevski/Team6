@@ -429,10 +429,6 @@ public class BigArrays implements Releasable {
         return this.circuitBreakingInstance;
     }
 
-    public CircuitBreakerService breakerService() {
-        return this.circuitBreakingInstance.breakerService;
-    }
-
     private <T extends AbstractBigArray> T resizeInPlace(T array, long newSize) {
         final long oldMemSize = array.ramBytesUsed();
         array.resize(newSize);

@@ -108,11 +108,7 @@ public final class UnassignedInfo implements ToXContent, Writeable {
         /**
          * Unassigned as a result of a failed primary while the replica was initializing.
          */
-        PRIMARY_FAILED,
-        /**
-         * Unassigned after forcing an empty primary
-         */
-        FORCED_EMPTY_PRIMARY
+        PRIMARY_FAILED
     }
 
     /**

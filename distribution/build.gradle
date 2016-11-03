@@ -72,8 +72,7 @@ project.rootProject.subprojects.findAll { it.path.startsWith(':modules:') }.each
   // See https://discuss.gradle.org/t/cross-project-task-dependencies-ordering-screws-up-finalizers/13190
   project.configure(project.subprojects.findAll { it.name != 'integ-test-zip' }) { Project distribution ->
     distribution.afterEvaluate({
-      // some integTest tasks will have multiple finalizers
-      distribution.integTest.mustRunAfter module.tasks.find { t -> t.name.matches(".*integTest\$") }.getFinalizedBy()
+      distribution.integTest.mustRunAfter("${module.path}:integTest#stop")
     })
   }
   // also want to make sure the module's integration tests run after the integ-test-zip (ie rest tests)
@@ -295,7 +294,7 @@ configure(subprojects.findAll { ['deb', 'rpm'].contains(it.name) }) {
       that'll happen when createEtc runs. */
     outputs.file "${packagingFiles}/etc/elasticsearch/elasticsearch.yml"
     outputs.file "${packagingFiles}/etc/elasticsearch/jvm.options"
-    outputs.file "${packagingFiles}/etc/elasticsearch/log4j2.properties"
+    outputs.file "${packagingFiles}/etc/elasticsearch/logging.yml"
   }
 
   task createPidDir(type: EmptyDirTask) {
@@ -375,7 +374,7 @@ configure(subprojects.findAll { ['deb', 'rpm'].contains(it.name) }) {
 
     configurationFile '/etc/elasticsearch/elasticsearch.yml'
     configurationFile '/etc/elasticsearch/jvm.options'
-    configurationFile '/etc/elasticsearch/log4j2.properties'
+    configurationFile '/etc/elasticsearch/logging.yml'
     into('/etc/elasticsearch') {
       fileMode 0750
       permissionGroup 'elasticsearch'
@@ -479,8 +478,6 @@ task run(type: RunTask) {
  * </dl>
  */
 Map<String, String> expansionsForDistribution(distributionType) {
-  final String defaultHeapSize = "2g"
-
   String footer = "# Built for ${project.name}-${project.version} " +
       "(${distributionType})"
   Map<String, Object> expansions = [
@@ -490,7 +487,6 @@ Map<String, String> expansionsForDistribution(distributionType) {
     'path.conf': [
       'tar': '$ES_HOME/config',
       'zip': '$ES_HOME/config',
-      'integ-test-zip': '$ES_HOME/config',
       'def': '/etc/elasticsearch',
     ],
     'path.env': [
@@ -501,8 +497,8 @@ Map<String, String> expansionsForDistribution(distributionType) {
       'def': '',
     ],
 
-    'heap.min': defaultHeapSize,
-    'heap.max': defaultHeapSize,
+    'heap.min': "256m",
+    'heap.max': "2g",
 
     'stopping.timeout': [
       'rpm': 86400,

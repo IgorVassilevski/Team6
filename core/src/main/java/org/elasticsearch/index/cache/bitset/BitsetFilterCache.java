@@ -19,8 +19,6 @@
 
 package org.elasticsearch.index.cache.bitset;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -49,7 +47,7 @@ import org.elasticsearch.index.IndexWarmer.TerminationHandle;
 import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.mapper.DocumentMapper;
 import org.elasticsearch.index.mapper.MapperService;
-import org.elasticsearch.index.mapper.ObjectMapper;
+import org.elasticsearch.index.mapper.object.ObjectMapper;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.ShardUtils;
@@ -260,7 +258,7 @@ public final class BitsetFilterCache extends AbstractIndexComponent implements L
                                 indexShard.warmerService().logger().trace("warmed bitset for [{}], took [{}]", filterToWarm, TimeValue.timeValueNanos(System.nanoTime() - start));
                             }
                         } catch (Exception e) {
-                            indexShard.warmerService().logger().warn((Supplier<?>) () -> new ParameterizedMessage("failed to load bitset for [{}]", filterToWarm), e);
+                            indexShard.warmerService().logger().warn("failed to load bitset for [{}]", e, filterToWarm);
                         } finally {
                             latch.countDown();
                         }

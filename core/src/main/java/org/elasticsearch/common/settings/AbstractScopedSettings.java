@@ -19,9 +19,8 @@
 
 package org.elasticsearch.common.settings;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.apache.lucene.search.spell.LevensteinDistance;
+import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.CollectionUtil;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.common.collect.Tuple;
@@ -36,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
@@ -129,7 +129,7 @@ public abstract class AbstractScopedSettings extends AbstractComponent {
                 settingUpdater.getValue(current, previous);
             } catch (RuntimeException ex) {
                 exceptions.add(ex);
-                logger.debug((Supplier<?>) () -> new ParameterizedMessage("failed to prepareCommit settings for [{}]", settingUpdater), ex);
+                logger.debug("failed to prepareCommit settings for [{}]", ex, settingUpdater);
             }
         }
         // here we are exhaustive and record all settings that failed.
@@ -157,8 +157,7 @@ public abstract class AbstractScopedSettings extends AbstractComponent {
                 try {
                     applyRunnables.add(settingUpdater.updater(current, previous));
                 } catch (Exception ex) {
-                    logger.warn(
-                        (Supplier<?>) () -> new ParameterizedMessage("failed to prepareCommit settings for [{}]", settingUpdater), ex);
+                    logger.warn("failed to prepareCommit settings for [{}]", ex, settingUpdater);
                     throw ex;
                 }
             }
@@ -522,9 +521,7 @@ public abstract class AbstractScopedSettings extends AbstractComponent {
                 }
             } catch (IllegalArgumentException ex) {
                 changed = true;
-                logger.warn(
-                    (Supplier<?>) () -> new ParameterizedMessage(
-                        "found invalid setting: {} value: {} - archiving", entry.getKey(), entry.getValue()), ex);
+                logger.warn("found invalid setting: {} value: {} - archiving",ex , entry.getKey(), entry.getValue());
                 /*
                  * We put them back in here such that tools can check from the outside if there are any indices with broken settings. The
                  * setting can remain there but we want users to be aware that some of their setting are broken and they can research why

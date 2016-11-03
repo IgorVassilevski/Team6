@@ -33,11 +33,11 @@ import java.util.Set;
 /**
  * Represents a list initialization shortcut.
  */
-public final class EListInit extends AExpression {
-    private final List<AExpression> values;
+public class EListInit extends AExpression {
+    final List<AExpression> values;
 
-    private Method constructor = null;
-    private Method method = null;
+    Method constructor = null;
+    Method method = null;
 
     public EListInit(Location location, List<AExpression> values) {
         super(location);
@@ -54,10 +54,6 @@ public final class EListInit extends AExpression {
 
     @Override
     void analyze(Locals locals) {
-        if (!read) {
-            throw createError(new IllegalArgumentException("Must read from list initializer."));
-        }
-
         try {
             actual = Definition.getType("ArrayList");
         } catch (IllegalArgumentException exception) {

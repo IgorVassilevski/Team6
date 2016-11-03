@@ -18,11 +18,8 @@
  */
 package org.elasticsearch.cluster.service;
 
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.ClusterChangedEvent;
@@ -38,7 +35,6 @@ import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.lease.Releasable;
-import org.elasticsearch.common.logging.TestLoggers;
 import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.LocalTransportAddress;
@@ -73,7 +69,9 @@ import java.util.stream.Collectors;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.elasticsearch.test.ClusterServiceUtils.setState;
+import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
@@ -333,7 +331,7 @@ public class ClusterServiceTests extends ESTestCase {
         ClusterStateTaskListener listener = new ClusterStateTaskListener() {
             @Override
             public void onFailure(String source, Exception e) {
-                logger.error((Supplier<?>) () -> new ParameterizedMessage("unexpected failure: [{}]", source), e);
+                logger.error("unexpected failure: [{}]", e, source);
                 failures.add(new Tuple<>(source, e));
                 updateLatch.countDown();
             }
@@ -687,8 +685,8 @@ public class ClusterServiceTests extends ESTestCase {
         mockAppender.addExpectation(new MockLogAppender.SeenEventExpectation("test3", "cluster.service", Level.DEBUG,
             "*processing [test3]: took [3s] done applying updated cluster_state (version: *, uuid: *)"));
 
-        Logger rootLogger = LogManager.getRootLogger();
-        TestLoggers.addAppender(rootLogger, mockAppender);
+        Logger rootLogger = Logger.getRootLogger();
+        rootLogger.addAppender(mockAppender);
         try {
             final CountDownLatch latch = new CountDownLatch(4);
             clusterService.currentTimeOverride = System.nanoTime();
@@ -763,7 +761,7 @@ public class ClusterServiceTests extends ESTestCase {
             });
             latch.await();
         } finally {
-            TestLoggers.removeAppender(rootLogger, mockAppender);
+            rootLogger.removeAppender(mockAppender);
         }
         mockAppender.assertAllExpectationsMatched();
     }
@@ -780,8 +778,8 @@ public class ClusterServiceTests extends ESTestCase {
         mockAppender.addExpectation(new MockLogAppender.SeenEventExpectation("test4", "cluster.service", Level.WARN,
             "*cluster state update task [test4] took [34s] above the warn threshold of *"));
 
-        Logger rootLogger = LogManager.getRootLogger();
-        TestLoggers.addAppender(rootLogger, mockAppender);
+        Logger rootLogger = Logger.getRootLogger();
+        rootLogger.addAppender(mockAppender);
         try {
             final CountDownLatch latch = new CountDownLatch(5);
             final CountDownLatch processedFirstTask = new CountDownLatch(1);
@@ -877,7 +875,7 @@ public class ClusterServiceTests extends ESTestCase {
             });
             latch.await();
         } finally {
-            TestLoggers.removeAppender(rootLogger, mockAppender);
+            rootLogger.removeAppender(mockAppender);
         }
         mockAppender.assertAllExpectationsMatched();
     }

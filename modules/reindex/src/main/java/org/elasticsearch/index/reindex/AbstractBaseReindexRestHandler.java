@@ -21,7 +21,7 @@ package org.elasticsearch.index.reindex;
 
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.GenericAction;
-import org.elasticsearch.action.support.ActiveShardCount;
+import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.settings.Settings;
@@ -32,7 +32,6 @@ import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.RestStatus;
-import org.elasticsearch.search.SearchRequestParsers;
 import org.elasticsearch.search.aggregations.AggregatorParsers;
 import org.elasticsearch.search.suggest.Suggesters;
 import org.elasticsearch.tasks.LoggingTaskListener;
@@ -47,14 +46,19 @@ public abstract class AbstractBaseReindexRestHandler<
                 A extends GenericAction<Request, BulkIndexByScrollResponse>
             > extends BaseRestHandler {
 
-    protected final SearchRequestParsers searchRequestParsers;
+    protected final IndicesQueriesRegistry indicesQueriesRegistry;
+    protected final AggregatorParsers aggParsers;
+    protected final Suggesters suggesters;
     private final ClusterService clusterService;
     private final A action;
 
-    protected AbstractBaseReindexRestHandler(Settings settings, SearchRequestParsers searchRequestParsers,
+    protected AbstractBaseReindexRestHandler(Settings settings, IndicesQueriesRegistry indicesQueriesRegistry,
+                                             AggregatorParsers aggParsers, Suggesters suggesters,
                                              ClusterService clusterService, A action) {
         super(settings);
-        this.searchRequestParsers = searchRequestParsers;
+        this.indicesQueriesRegistry = indicesQueriesRegistry;
+        this.aggParsers = aggParsers;
+        this.suggesters = suggesters;
         this.clusterService = clusterService;
         this.action = action;
     }
@@ -73,7 +77,7 @@ public abstract class AbstractBaseReindexRestHandler<
             client.executeLocally(action, internal, new BulkIndexByScrollResponseContentListener(channel, params));
             return;
         } else {
-            internal.setShouldStoreResult(true);
+            internal.setShouldPersistResult(true);
         }
 
         /*
@@ -104,9 +108,9 @@ public abstract class AbstractBaseReindexRestHandler<
         request.setRefresh(restRequest.paramAsBoolean("refresh", request.isRefresh()));
         request.setTimeout(restRequest.paramAsTime("timeout", request.getTimeout()));
 
-        String waitForActiveShards = restRequest.param("wait_for_active_shards");
-        if (waitForActiveShards != null) {
-            request.setWaitForActiveShards(ActiveShardCount.parseString(waitForActiveShards));
+        String consistency = restRequest.param("consistency");
+        if (consistency != null) {
+            request.setConsistency(WriteConsistencyLevel.fromString(consistency));
         }
 
         Float requestsPerSecond = parseRequestsPerSecond(restRequest);

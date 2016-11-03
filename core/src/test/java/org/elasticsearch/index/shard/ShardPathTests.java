@@ -140,8 +140,7 @@ public class ShardPathTests extends ESTestCase {
             Path[] paths = env.availableShardPaths(shardId);
             Path path = randomFrom(paths);
             ShardStateMetaData.FORMAT.write(new ShardStateMetaData(2, true, indexUUID, AllocationId.newInitializing()), path);
-            ShardPath shardPath = ShardPath.loadShardPath(logger, env, shardId,
-                IndexSettingsModule.newIndexSettings(shardId.getIndex(), indexSettings, nodeSettings));
+            ShardPath shardPath = ShardPath.loadShardPath(logger, env, shardId, IndexSettingsModule.newIndexSettings(shardId.getIndex(), indexSettings));
             boolean found = false;
             for (Path p : env.nodeDataPaths()) {
                 if (p.equals(shardPath.getRootStatePath())) {

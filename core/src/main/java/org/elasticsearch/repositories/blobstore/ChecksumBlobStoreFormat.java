@@ -179,10 +179,7 @@ public class ChecksumBlobStoreFormat<T extends ToXContent> extends BlobStoreForm
                 }
                 CodecUtil.writeFooter(indexOutput);
             }
-            BytesArray bytesArray = new BytesArray(byteArrayOutputStream.toByteArray());
-            try (InputStream stream = bytesArray.streamInput()) {
-                blobContainer.writeBlob(blobName, stream, bytesArray.length());
-            }
+            blobContainer.writeBlob(blobName, new BytesArray(byteArrayOutputStream.toByteArray()));
         }
     }
 

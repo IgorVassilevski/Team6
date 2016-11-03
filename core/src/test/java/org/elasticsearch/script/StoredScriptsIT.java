@@ -23,7 +23,6 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -45,7 +44,7 @@ public class StoredScriptsIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(CustomScriptPlugin.class);
+        return pluginList(CustomScriptPlugin.class);
     }
 
     public void testBasics() {
@@ -87,7 +86,7 @@ public class StoredScriptsIT extends ESIntegTestCase {
 
         @Override
         protected Map<String, Function<Map<String, Object>, Object>> pluginScripts() {
-            return Collections.singletonMap("1", script -> "1");
+            return Collections.emptyMap();
         }
     }
 }

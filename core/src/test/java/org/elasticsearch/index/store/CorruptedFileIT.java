@@ -61,7 +61,7 @@ import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.IndexShardState;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.indices.recovery.RecoveryFileChunkRequest;
-import org.elasticsearch.indices.recovery.PeerRecoveryTargetService;
+import org.elasticsearch.indices.recovery.RecoveryTargetService;
 import org.elasticsearch.monitor.fs.FsInfo;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.plugins.Plugin;
@@ -70,7 +70,6 @@ import org.elasticsearch.test.CorruptionUtils;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.InternalSettingsPlugin;
 import org.elasticsearch.test.MockIndexEventListener;
-import org.elasticsearch.test.junit.annotations.TestLogging;
 import org.elasticsearch.test.store.MockFSIndexStore;
 import org.elasticsearch.test.transport.MockTransportService;
 import org.elasticsearch.transport.TransportException;
@@ -86,7 +85,6 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -127,7 +125,7 @@ public class CorruptedFileIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(MockTransportService.TestPlugin.class, MockIndexEventListener.TestPlugin.class, MockFSIndexStore.TestPlugin.class,
+        return pluginList(MockTransportService.TestPlugin.class, MockIndexEventListener.TestPlugin.class, MockFSIndexStore.TestPlugin.class,
             InternalSettingsPlugin.class);  // uses index.version.created
     }
 
@@ -176,7 +174,7 @@ public class CorruptedFileIT extends ESIntegTestCase {
         ClusterHealthResponse health = client().admin().cluster()
             .health(Requests.clusterHealthRequest("test").waitForGreenStatus()
                 .timeout("5m") // sometimes due to cluster rebalacing and random settings default timeout is just not enough.
-                .waitForNoRelocatingShards(true)).actionGet();
+                .waitForRelocatingShards(0)).actionGet();
         if (health.isTimedOut()) {
             logger.info("cluster state:\n{}\n{}", client().admin().cluster().prepareState().get().getState().prettyPrint(), client().admin().cluster().preparePendingClusterTasks().get().prettyPrint());
             assertThat("timed out waiting for green state", health.isTimedOut(), equalTo(false));
@@ -347,7 +345,7 @@ public class CorruptedFileIT extends ESIntegTestCase {
 
                 @Override
                 public void sendRequest(DiscoveryNode node, long requestId, String action, TransportRequest request, TransportRequestOptions options) throws IOException, TransportException {
-                    if (corrupt.get() && action.equals(PeerRecoveryTargetService.Actions.FILE_CHUNK)) {
+                    if (corrupt.get() && action.equals(RecoveryTargetService.Actions.FILE_CHUNK)) {
                         RecoveryFileChunkRequest req = (RecoveryFileChunkRequest) request;
                         byte[] array = BytesRef.deepCopyOf(req.content().toBytesRef()).bytes;
                         int i = randomIntBetween(0, req.content().length() - 1);
@@ -419,7 +417,7 @@ public class CorruptedFileIT extends ESIntegTestCase {
 
                 @Override
                 public void sendRequest(DiscoveryNode node, long requestId, String action, TransportRequest request, TransportRequestOptions options) throws IOException, TransportException {
-                    if (action.equals(PeerRecoveryTargetService.Actions.FILE_CHUNK)) {
+                    if (action.equals(RecoveryTargetService.Actions.FILE_CHUNK)) {
                         RecoveryFileChunkRequest req = (RecoveryFileChunkRequest) request;
                         if (truncate && req.length() > 1) {
                             BytesRef bytesRef = req.content().toBytesRef();
@@ -473,7 +471,6 @@ public class CorruptedFileIT extends ESIntegTestCase {
      * TODO once checksum verification on snapshotting is implemented this test needs to be fixed or split into several
      * parts... We should also corrupt files on the actual snapshot and check that we don't restore the corrupted shard.
      */
-    @TestLogging("monitor.fs:DEBUG")
     public void testCorruptFileThenSnapshotAndRestore() throws ExecutionException, InterruptedException, IOException {
         int numDocs = scaledRandomIntBetween(100, 1000);
         internalCluster().ensureAtLeastNumDataNodes(2);

@@ -19,8 +19,6 @@
 
 package org.elasticsearch.action.ingest;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
@@ -92,7 +90,7 @@ public final class IngestActionFilter extends AbstractComponent implements Actio
     void processIndexRequest(Task task, String action, ActionListener listener, ActionFilterChain chain, IndexRequest indexRequest) {
 
         executionService.executeIndexRequest(indexRequest, t -> {
-            logger.error((Supplier<?>) () -> new ParameterizedMessage("failed to execute pipeline [{}]", indexRequest.getPipeline()), t);
+            logger.error("failed to execute pipeline [{}]", t, indexRequest.getPipeline());
             listener.onFailure(t);
         }, success -> {
             // TransportIndexAction uses IndexRequest and same action name on the node that receives the request and the node that
@@ -107,7 +105,7 @@ public final class IngestActionFilter extends AbstractComponent implements Actio
         long ingestStartTimeInNanos = System.nanoTime();
         BulkRequestModifier bulkRequestModifier = new BulkRequestModifier(original);
         executionService.executeBulkRequest(() -> bulkRequestModifier, (indexRequest, exception) -> {
-            logger.debug((Supplier<?>) () -> new ParameterizedMessage("failed to execute pipeline [{}] for document [{}/{}/{}]", indexRequest.getPipeline(), indexRequest.index(), indexRequest.type(), indexRequest.id()), exception);
+            logger.debug("failed to execute pipeline [{}] for document [{}/{}/{}]", exception, indexRequest.getPipeline(), indexRequest.index(), indexRequest.type(), indexRequest.id());
             bulkRequestModifier.markCurrentItemAsFailed(exception);
         }, (exception) -> {
             if (exception != null) {
@@ -165,7 +163,7 @@ public final class IngestActionFilter extends AbstractComponent implements Actio
             } else {
                 BulkRequest modifiedBulkRequest = new BulkRequest();
                 modifiedBulkRequest.setRefreshPolicy(bulkRequest.getRefreshPolicy());
-                modifiedBulkRequest.waitForActiveShards(bulkRequest.waitForActiveShards());
+                modifiedBulkRequest.consistencyLevel(bulkRequest.consistencyLevel());
                 modifiedBulkRequest.timeout(bulkRequest.timeout());
 
                 int slot = 0;

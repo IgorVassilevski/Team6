@@ -18,7 +18,6 @@
  */
 package org.elasticsearch.search.aggregations.bucket.histogram;
 
-import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
 
@@ -29,13 +28,6 @@ import java.util.List;
  * A {@code histogram} aggregation. Defines multiple buckets, each representing an interval in a histogram.
  */
 public interface Histogram extends MultiBucketsAggregation {
-
-    ParseField INTERVAL_FIELD = new ParseField("interval");
-    ParseField OFFSET_FIELD = new ParseField("offset");
-    ParseField ORDER_FIELD = new ParseField("order");
-    ParseField KEYED_FIELD = new ParseField("keyed");
-    ParseField MIN_DOC_COUNT_FIELD = new ParseField("min_doc_count");
-    ParseField EXTENDED_BOUNDS_FIELD = new ParseField("extended_bounds");
 
     /**
      * A bucket in the histogram where documents fall in
@@ -48,7 +40,7 @@ public interface Histogram extends MultiBucketsAggregation {
      * @return  The buckets of this histogram (each bucket representing an interval in the histogram)
      */
     @Override
-    List<Bucket> getBuckets();
+    List<? extends Bucket> getBuckets();
 
 
     /**
@@ -56,48 +48,38 @@ public interface Histogram extends MultiBucketsAggregation {
      */
     abstract class Order implements ToXContent {
 
-        private static int compareKey(Histogram.Bucket b1, Histogram.Bucket b2) {
-            if (b1 instanceof InternalHistogram.Bucket) {
-                return Double.compare(((InternalHistogram.Bucket) b1).key, ((InternalHistogram.Bucket) b2).key);
-            } else if (b1 instanceof InternalDateHistogram.Bucket) {
-                return Long.compare(((InternalDateHistogram.Bucket) b1).key, ((InternalDateHistogram.Bucket) b2).key);
-            } else {
-                throw new IllegalStateException("Unexpected impl: " + b1.getClass());
-            }
-        }
-
-        public static final Order KEY_ASC = new InternalOrder((byte) 1, "_key", true, new Comparator<Histogram.Bucket>() {
+        public static final Order KEY_ASC = new InternalOrder((byte) 1, "_key", true, new Comparator<InternalHistogram.Bucket>() {
             @Override
-            public int compare(Histogram.Bucket b1, Histogram.Bucket b2) {
-                return compareKey(b1, b2);
+            public int compare(InternalHistogram.Bucket b1, InternalHistogram.Bucket b2) {
+                return Long.compare(b1.key, b2.key);
             }
         });
 
-        public static final Order KEY_DESC = new InternalOrder((byte) 2, "_key", false, new Comparator<Histogram.Bucket>() {
+        public static final Order KEY_DESC = new InternalOrder((byte) 2, "_key", false, new Comparator<InternalHistogram.Bucket>() {
             @Override
-            public int compare(Histogram.Bucket b1, Histogram.Bucket b2) {
-                return compareKey(b2, b1);
+            public int compare(InternalHistogram.Bucket b1, InternalHistogram.Bucket b2) {
+                return -Long.compare(b1.key, b2.key);
             }
         });
 
-        public static final Order COUNT_ASC = new InternalOrder((byte) 3, "_count", true, new Comparator<Histogram.Bucket>() {
+        public static final Order COUNT_ASC = new InternalOrder((byte) 3, "_count", true, new Comparator<InternalHistogram.Bucket>() {
             @Override
-            public int compare(Histogram.Bucket b1, Histogram.Bucket b2) {
+            public int compare(InternalHistogram.Bucket b1, InternalHistogram.Bucket b2) {
                 int cmp = Long.compare(b1.getDocCount(), b2.getDocCount());
                 if (cmp == 0) {
-                    cmp = compareKey(b1, b2);
+                    cmp = Long.compare(b1.key, b2.key);
                 }
                 return cmp;
             }
         });
 
 
-        public static final Order COUNT_DESC = new InternalOrder((byte) 4, "_count", false, new Comparator<Histogram.Bucket>() {
+        public static final Order COUNT_DESC = new InternalOrder((byte) 4, "_count", false, new Comparator<InternalHistogram.Bucket>() {
             @Override
-            public int compare(Histogram.Bucket b1, Histogram.Bucket b2) {
-                int cmp = Long.compare(b2.getDocCount(), b1.getDocCount());
+            public int compare(InternalHistogram.Bucket b1, InternalHistogram.Bucket b2) {
+                int cmp = -Long.compare(b1.getDocCount(), b2.getDocCount());
                 if (cmp == 0) {
-                    cmp = compareKey(b1, b2);
+                    cmp = Long.compare(b1.key, b2.key);
                 }
                 return cmp;
             }
@@ -127,7 +109,7 @@ public interface Histogram extends MultiBucketsAggregation {
         /**
          * @return The bucket comparator by which the order will be applied.
          */
-        abstract Comparator<Histogram.Bucket> comparator();
+        abstract Comparator<InternalHistogram.Bucket> comparator();
 
     }
 }

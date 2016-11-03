@@ -21,6 +21,7 @@ package org.elasticsearch.common.bytes;
 
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefIterator;
+import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.ByteArray;
 
@@ -35,24 +36,24 @@ public class PagedBytesReference extends BytesReference {
     private static final int PAGE_SIZE = BigArrays.BYTE_PAGE_SIZE;
 
     private final BigArrays bigarrays;
-    protected final ByteArray byteArray;
+    protected final ByteArray bytearray;
     private final int offset;
     private final int length;
 
-    public PagedBytesReference(BigArrays bigarrays, ByteArray byteArray, int length) {
-        this(bigarrays, byteArray, 0, length);
+    public PagedBytesReference(BigArrays bigarrays, ByteArray bytearray, int length) {
+        this(bigarrays, bytearray, 0, length);
     }
 
-    public PagedBytesReference(BigArrays bigarrays, ByteArray byteArray, int from, int length) {
+    public PagedBytesReference(BigArrays bigarrays, ByteArray bytearray, int from, int length) {
         this.bigarrays = bigarrays;
-        this.byteArray = byteArray;
+        this.bytearray = bytearray;
         this.offset = from;
         this.length = length;
     }
 
     @Override
     public byte get(int index) {
-        return byteArray.get(offset + index);
+        return bytearray.get(offset + index);
     }
 
     @Override
@@ -65,14 +66,14 @@ public class PagedBytesReference extends BytesReference {
         if (from < 0 || (from + length) > length()) {
             throw new IllegalArgumentException("can't slice a buffer with length [" + length() + "], with slice parameters from [" + from + "], length [" + length + "]");
         }
-        return new PagedBytesReference(bigarrays, byteArray, offset + from, length);
+        return new PagedBytesReference(bigarrays, bytearray, offset + from, length);
     }
 
     @Override
     public BytesRef toBytesRef() {
         BytesRef bref = new BytesRef();
         // if length <= pagesize this will dereference the page, or materialize the byte[]
-        byteArray.get(offset, length, bref);
+        bytearray.get(offset, length, bref);
         return bref;
     }
 
@@ -94,7 +95,7 @@ public class PagedBytesReference extends BytesReference {
             @Override
             public BytesRef next() throws IOException {
                 if (nextFragmentSize != 0) {
-                    final boolean materialized = byteArray.get(offset + position, nextFragmentSize, slice);
+                    final boolean materialized = bytearray.get(offset + position, nextFragmentSize, slice);
                     assert materialized == false : "iteration should be page aligned but array got materialized";
                     position += nextFragmentSize;
                     final int remaining = length - position;
@@ -110,6 +111,6 @@ public class PagedBytesReference extends BytesReference {
 
     @Override
     public long ramBytesUsed() {
-        return byteArray.ramBytesUsed();
+        return bytearray.ramBytesUsed();
     }
 }

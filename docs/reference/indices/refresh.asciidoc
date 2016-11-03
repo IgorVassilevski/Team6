@@ -9,10 +9,8 @@ refresh is scheduled periodically.
 
 [source,js]
 --------------------------------------------------
-POST /twitter/_refresh
+$ curl -XPOST 'http://localhost:9200/twitter/_refresh'
 --------------------------------------------------
-// CONSOLE
-// TEST[setup:twitter]
 
 [float]
 === Multi Index
@@ -22,9 +20,7 @@ call, or even on `_all` the indices.
 
 [source,js]
 --------------------------------------------------
-POST /kimchy,elasticsearch/_refresh
+$ curl -XPOST 'http://localhost:9200/kimchy,elasticsearch/_refresh'
 
-POST /_refresh
+$ curl -XPOST 'http://localhost:9200/_refresh'
 --------------------------------------------------
-// CONSOLE
-// TEST[s/^/PUT kimchy\nPUT elasticsearch\n/]

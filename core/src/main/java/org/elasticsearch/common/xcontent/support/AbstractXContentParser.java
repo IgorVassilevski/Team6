@@ -300,7 +300,16 @@ public abstract class AbstractXContentParser implements XContentParser {
         } else if (token == XContentParser.Token.VALUE_STRING) {
             return parser.text();
         } else if (token == XContentParser.Token.VALUE_NUMBER) {
-            return parser.numberValue();
+            XContentParser.NumberType numberType = parser.numberType();
+            if (numberType == XContentParser.NumberType.INT) {
+                return parser.intValue();
+            } else if (numberType == XContentParser.NumberType.LONG) {
+                return parser.longValue();
+            } else if (numberType == XContentParser.NumberType.FLOAT) {
+                return parser.floatValue();
+            } else if (numberType == XContentParser.NumberType.DOUBLE) {
+                return parser.doubleValue();
+            }
         } else if (token == XContentParser.Token.VALUE_BOOLEAN) {
             return parser.booleanValue();
         } else if (token == XContentParser.Token.START_OBJECT) {

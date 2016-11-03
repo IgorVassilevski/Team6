@@ -1,4 +1,0 @@
-org.elasticsearch.cloud.aws
-org.elasticsearch.cloud.aws.network
-org.elasticsearch.discovery.ec2
-org.elasticsearch.plugin.discovery.ec2

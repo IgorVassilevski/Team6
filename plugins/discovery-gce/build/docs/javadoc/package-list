@@ -1,4 +1,0 @@
-org.elasticsearch.cloud.gce
-org.elasticsearch.cloud.gce.network
-org.elasticsearch.discovery.gce
-org.elasticsearch.plugin.discovery.gce

@@ -1,3 +1,0 @@
-org.elasticsearch.common.blobstore.gcs
-org.elasticsearch.plugin.repository.gcs
-org.elasticsearch.repositories.gcs

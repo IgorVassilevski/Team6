@@ -1,9 +1,0 @@
-digraph "org.elasticsearch.Version.isAlpha"
-{
-  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
-  node [fontname="Helvetica",fontsize="10",shape=record];
-  rankdir="LR";
-  Node5 [label="org.elasticsearch.Version.is\lAlpha",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
-  Node5 -> Node6 [dir="back",color="midnightblue",fontsize="10",style="solid"];
-  Node6 [label="org.elasticsearch.Version.minimum\lCompatibilityVersion",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_version.html#af19fa9cd6c365d9b6f1ab0003463e259"];
-}

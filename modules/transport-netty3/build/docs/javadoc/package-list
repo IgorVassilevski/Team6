@@ -1,5 +1,0 @@
-org.elasticsearch.http.netty3
-org.elasticsearch.http.netty3.cors
-org.elasticsearch.http.netty3.pipelining
-org.elasticsearch.transport
-org.elasticsearch.transport.netty3

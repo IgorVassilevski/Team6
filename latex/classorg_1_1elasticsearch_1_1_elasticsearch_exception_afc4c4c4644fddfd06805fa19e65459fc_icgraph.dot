@@ -1,9 +1,0 @@
-digraph "org.elasticsearch.ElasticsearchException.unwrapCause"
-{
-  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
-  node [fontname="Helvetica",fontsize="10",shape=record];
-  rankdir="LR";
-  Node65 [label="org.elasticsearch.Elasticsearch\lException.unwrapCause",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
-  Node65 -> Node66 [dir="back",color="midnightblue",fontsize="10",style="solid"];
-  Node66 [label="org.elasticsearch.Elasticsearch\lException.status",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classorg_1_1elasticsearch_1_1_elasticsearch_exception.html#ad9c404eb416b323496900d737183875e"];
-}

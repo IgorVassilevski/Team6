@@ -47,6 +47,7 @@ import org.elasticsearch.index.shard.IndexShardRelocatedException;
 import org.elasticsearch.index.shard.IndexShardState;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.store.DirectoryService;
+import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.index.store.StoreFileMetaData;
 import org.elasticsearch.index.translog.Translog;
@@ -97,7 +98,7 @@ public class RecoverySourceHandlerTests extends ESTestCase {
             writer.addDocument(document);
         }
         writer.commit();
-        Store.MetadataSnapshot metadata = store.getMetadata();
+        MetadataSnapshot metadata = store.getMetadata();
         List<StoreFileMetaData> metas = new ArrayList<>();
         for (StoreFileMetaData md : metadata) {
             metas.add(md);
@@ -116,7 +117,7 @@ public class RecoverySourceHandlerTests extends ESTestCase {
                 throw new RuntimeException(e);
             }
         });
-        Store.MetadataSnapshot targetStoreMetadata = targetStore.getMetadata();
+        MetadataSnapshot targetStoreMetadata = targetStore.getMetadata();
         Store.RecoveryDiff recoveryDiff = targetStoreMetadata.recoveryDiff(metadata);
         assertEquals(metas.size(), recoveryDiff.identical.size());
         assertEquals(0, recoveryDiff.different.size());
@@ -157,7 +158,7 @@ public class RecoverySourceHandlerTests extends ESTestCase {
         writer.commit();
         writer.close();
 
-        Store.MetadataSnapshot metadata = store.getMetadata();
+        MetadataSnapshot metadata = store.getMetadata();
         List<StoreFileMetaData> metas = new ArrayList<>();
         for (StoreFileMetaData md : metadata) {
             metas.add(md);
@@ -221,7 +222,7 @@ public class RecoverySourceHandlerTests extends ESTestCase {
         writer.commit();
         writer.close();
 
-        Store.MetadataSnapshot metadata = store.getMetadata();
+        MetadataSnapshot metadata = store.getMetadata();
         List<StoreFileMetaData> metas = new ArrayList<>();
         for (StoreFileMetaData md : metadata) {
             metas.add(md);

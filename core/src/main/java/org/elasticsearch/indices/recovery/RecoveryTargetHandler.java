@@ -19,6 +19,7 @@
 package org.elasticsearch.indices.recovery;
 
 import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.index.store.StoreFileMetaData;
 import org.elasticsearch.index.translog.Translog;
@@ -70,7 +71,7 @@ public interface RecoveryTargetHandler {
      * @param totalTranslogOps an update number of translog operations that will be replayed later on
      * @param sourceMetaData meta data of the source store
      */
-    void cleanFiles(int totalTranslogOps, Store.MetadataSnapshot sourceMetaData) throws IOException;
+    void cleanFiles(int totalTranslogOps, MetadataSnapshot sourceMetaData) throws IOException;
 
     /** writes a partial file chunk to the target store */
     void writeFileChunk(StoreFileMetaData fileMetaData, long position, BytesReference content,

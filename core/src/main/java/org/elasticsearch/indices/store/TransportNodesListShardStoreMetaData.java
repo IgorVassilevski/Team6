@@ -46,6 +46,7 @@ import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.ShardPath;
+import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.index.store.StoreFileMetaData;
 import org.elasticsearch.indices.IndicesService;
@@ -143,12 +144,12 @@ public class TransportNodesListShardStoreMetaData extends TransportNodesAction<T
             }
             if (metaData == null) {
                 logger.trace("{} node doesn't have meta data for the requests index, responding with empty", shardId);
-                return new StoreFilesMetaData(shardId, Store.MetadataSnapshot.EMPTY);
+                return new StoreFilesMetaData(shardId, MetadataSnapshot.EMPTY);
             }
             final IndexSettings indexSettings = indexService != null ? indexService.getIndexSettings() : new IndexSettings(metaData, settings);
             final ShardPath shardPath = ShardPath.loadShardPath(logger, nodeEnv, shardId, indexSettings);
             if (shardPath == null) {
-                return new StoreFilesMetaData(shardId, Store.MetadataSnapshot.EMPTY);
+                return new StoreFilesMetaData(shardId, MetadataSnapshot.EMPTY);
             }
             // note that this may fail if it can't get access to the shard lock. Since we check above there is an active shard, this means:
             // 1) a shard is being constructed, which means the master will not use a copy of this replica
@@ -173,12 +174,12 @@ public class TransportNodesListShardStoreMetaData extends TransportNodesAction<T
 
     public static class StoreFilesMetaData implements Iterable<StoreFileMetaData>, Streamable {
         private ShardId shardId;
-        Store.MetadataSnapshot metadataSnapshot;
+        MetadataSnapshot metadataSnapshot;
 
         StoreFilesMetaData() {
         }
 
-        public StoreFilesMetaData(ShardId shardId, Store.MetadataSnapshot metadataSnapshot) {
+        public StoreFilesMetaData(ShardId shardId, MetadataSnapshot metadataSnapshot) {
             this.shardId = shardId;
             this.metadataSnapshot = metadataSnapshot;
         }
@@ -213,7 +214,7 @@ public class TransportNodesListShardStoreMetaData extends TransportNodesAction<T
         @Override
         public void readFrom(StreamInput in) throws IOException {
             shardId = ShardId.readShardId(in);
-            this.metadataSnapshot = new Store.MetadataSnapshot(in);
+            this.metadataSnapshot = new MetadataSnapshot(in);
         }
 
         @Override

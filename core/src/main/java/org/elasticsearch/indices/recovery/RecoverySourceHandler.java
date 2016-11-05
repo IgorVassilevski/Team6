@@ -44,6 +44,7 @@ import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.IndexShardClosedException;
 import org.elasticsearch.index.shard.IndexShardRelocatedException;
 import org.elasticsearch.index.shard.IndexShardState;
+import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.index.store.StoreFileMetaData;
 import org.elasticsearch.index.translog.Translog;
@@ -192,7 +193,7 @@ public class RecoverySourceHandler {
         store.incRef();
         try {
             StopWatch stopWatch = new StopWatch().start();
-            final Store.MetadataSnapshot recoverySourceMetadata;
+            final MetadataSnapshot recoverySourceMetadata;
             try {
                 recoverySourceMetadata = store.getMetadata(snapshot);
             } catch (CorruptIndexException | IndexFormatTooOldException | IndexFormatTooNewException ex) {
@@ -289,7 +290,7 @@ public class RecoverySourceHandler {
                     //   - maybe due to old segments without checksums or length only checks
                     if ((corruptIndexException = ExceptionsHelper.unwrapCorruption(targetException)) != null) {
                         try {
-                            final Store.MetadataSnapshot recoverySourceMetadata1 = store.getMetadata(snapshot);
+                            final MetadataSnapshot recoverySourceMetadata1 = store.getMetadata(snapshot);
                             StoreFileMetaData[] metadata =
                                     StreamSupport.stream(recoverySourceMetadata1.spliterator(), false).toArray(size -> new
                                             StoreFileMetaData[size]);

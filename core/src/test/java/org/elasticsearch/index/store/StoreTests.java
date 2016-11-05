@@ -170,7 +170,7 @@ public class StoreTests extends ESTestCase {
         indexInput.seek(0);
         BytesRef ref = new BytesRef(scaledRandomIntBetween(1, 1024));
         long length = indexInput.length();
-        IndexOutput verifyingOutput = new Store.LuceneVerifyingIndexOutput(new StoreFileMetaData("foo1.bar", length, checksum), dir.createOutput("foo1.bar", IOContext.DEFAULT));
+        IndexOutput verifyingOutput = new LuceneVerifyingIndexOutput(new StoreFileMetaData("foo1.bar", length, checksum), dir.createOutput("foo1.bar", IOContext.DEFAULT));
         while (length > 0) {
             if (random().nextInt(10) == 0) {
                 verifyingOutput.writeByte(indexInput.readByte());
@@ -201,7 +201,7 @@ public class StoreTests extends ESTestCase {
 
     public void testVerifyingIndexOutputOnEmptyFile() throws IOException {
         Directory dir = newDirectory();
-        IndexOutput verifyingOutput = new Store.LuceneVerifyingIndexOutput(new StoreFileMetaData("foo.bar", 0, Store.digestToString(0)),
+        IndexOutput verifyingOutput = new LuceneVerifyingIndexOutput(new StoreFileMetaData("foo.bar", 0, Store.digestToString(0)),
             dir.createOutput("foo1.bar", IOContext.DEFAULT));
         try {
             Store.verify(verifyingOutput);
@@ -230,7 +230,7 @@ public class StoreTests extends ESTestCase {
         indexInput.seek(0);
         BytesRef ref = new BytesRef(scaledRandomIntBetween(1, 1024));
         long length = indexInput.length();
-        IndexOutput verifyingOutput = new Store.LuceneVerifyingIndexOutput(new StoreFileMetaData("foo1.bar", length, checksum), dir.createOutput("foo1.bar", IOContext.DEFAULT));
+        IndexOutput verifyingOutput = new LuceneVerifyingIndexOutput(new StoreFileMetaData("foo1.bar", length, checksum), dir.createOutput("foo1.bar", IOContext.DEFAULT));
         length -= 8; // we write the checksum in the try / catch block below
         while (length > 0) {
             if (random().nextInt(10) == 0) {
@@ -284,7 +284,7 @@ public class StoreTests extends ESTestCase {
     public void testVerifyingIndexOutputWithBogusInput() throws IOException {
         Directory dir = newDirectory();
         int length = scaledRandomIntBetween(10, 1024);
-        IndexOutput verifyingOutput = new Store.LuceneVerifyingIndexOutput(new StoreFileMetaData("foo1.bar", length, ""), dir.createOutput("foo1.bar", IOContext.DEFAULT));
+        IndexOutput verifyingOutput = new LuceneVerifyingIndexOutput(new StoreFileMetaData("foo1.bar", length, ""), dir.createOutput("foo1.bar", IOContext.DEFAULT));
         try {
             while (length > 0) {
                 verifyingOutput.writeByte((byte) random().nextInt());
@@ -325,7 +325,7 @@ public class StoreTests extends ESTestCase {
         if (random().nextBoolean()) {
             DirectoryReader.open(writer).close(); // flush
         }
-        Store.MetadataSnapshot metadata;
+         MetadataSnapshot metadata;
         // check before we committed
         try {
             store.getMetadata();
@@ -333,7 +333,7 @@ public class StoreTests extends ESTestCase {
         } catch (IndexNotFoundException ex) {
             // expected
         }
-        assertThat(store.getMetadataOrEmpty(), is(Store.MetadataSnapshot.EMPTY)); // nothing committed
+        assertThat(store.getMetadataOrEmpty(), is( MetadataSnapshot.EMPTY)); // nothing committed
         writer.commit();
         writer.close();
         metadata = store.getMetadata();
@@ -439,7 +439,7 @@ public class StoreTests extends ESTestCase {
         IndexInput indexInput = dir.openInput("foo.bar", IOContext.DEFAULT);
         long checksum = CodecUtil.retrieveChecksum(indexInput);
         indexInput.seek(0);
-        IndexInput verifyingIndexInput = new Store.VerifyingIndexInput(dir.openInput("foo.bar", IOContext.DEFAULT));
+        IndexInput verifyingIndexInput = new VerifyingIndexInput(dir.openInput("foo.bar", IOContext.DEFAULT));
         readIndexInputFullyWithRandomSeeks(verifyingIndexInput);
         Store.verify(verifyingIndexInput);
         assertThat(checksum, equalTo(((ChecksumIndexInput) verifyingIndexInput).getChecksum()));
@@ -447,7 +447,7 @@ public class StoreTests extends ESTestCase {
 
         // Corrupt file and check again
         corruptFile(dir, "foo.bar", "foo1.bar");
-        verifyingIndexInput = new Store.VerifyingIndexInput(dir.openInput("foo1.bar", IOContext.DEFAULT));
+        verifyingIndexInput = new VerifyingIndexInput(dir.openInput("foo1.bar", IOContext.DEFAULT));
         readIndexInputFullyWithRandomSeeks(verifyingIndexInput);
         try {
             Store.verify(verifyingIndexInput);
@@ -537,7 +537,7 @@ public class StoreTests extends ESTestCase {
         }
     }
 
-    public static void assertConsistent(Store store, Store.MetadataSnapshot metadata) throws IOException {
+    public static void assertConsistent(Store store, MetadataSnapshot metadata) throws IOException {
         for (String file : store.directory().listAll()) {
             if (!IndexWriter.WRITE_LOCK_NAME.equals(file) && !IndexFileNames.OLD_SEGMENTS_GEN.equals(file) && file.startsWith("extra") == false) {
                 assertTrue(file + " is not in the map: " + metadata.asMap().size() + " vs. " + store.directory().listAll().length, metadata.asMap().containsKey(file));
@@ -558,7 +558,7 @@ public class StoreTests extends ESTestCase {
             docs.add(doc);
         }
         long seed = random().nextLong();
-        Store.MetadataSnapshot first;
+         MetadataSnapshot first;
         {
             Random random = new Random(seed);
             IndexWriterConfig iwc = new IndexWriterConfig(new MockAnalyzer(random)).setCodec(TestUtil.getDefaultCodec());
@@ -587,7 +587,7 @@ public class StoreTests extends ESTestCase {
         while (time == new Date().getTime()) {
             Thread.sleep(10); // bump the time
         }
-        Store.MetadataSnapshot second;
+         MetadataSnapshot second;
         Store store;
         {
             Random random = new Random(seed);
@@ -639,7 +639,7 @@ public class StoreTests extends ESTestCase {
         writer.deleteDocuments(new Term("id", Integer.toString(random().nextInt(numDocs))));
         writer.commit();
         writer.close();
-        Store.MetadataSnapshot metadata = store.getMetadata();
+         MetadataSnapshot metadata = store.getMetadata();
         StoreFileMetaData delFile = null;
         for (StoreFileMetaData md : metadata) {
             if (md.name().endsWith(".liv")) {
@@ -674,7 +674,7 @@ public class StoreTests extends ESTestCase {
         writer.addDocument(docs.get(0));
         writer.close();
 
-        Store.MetadataSnapshot newCommitMetaData = store.getMetadata();
+         MetadataSnapshot newCommitMetaData = store.getMetadata();
         Store.RecoveryDiff newCommitDiff = newCommitMetaData.recoveryDiff(metadata);
         if (delFile != null) {
             assertThat(newCommitDiff.identical.size(), equalTo(newCommitMetaData.size() - 5)); // segments_N, del file, cfs, cfe, si for the new segment
@@ -723,7 +723,7 @@ public class StoreTests extends ESTestCase {
             writer.addDocument(doc);
         }
 
-        Store.MetadataSnapshot firstMeta = store.getMetadata();
+         MetadataSnapshot firstMeta = store.getMetadata();
 
         if (random().nextBoolean()) {
             for (int i = 0; i < docs; i++) {
@@ -738,7 +738,7 @@ public class StoreTests extends ESTestCase {
         writer.commit();
         writer.close();
 
-        Store.MetadataSnapshot secondMeta = store.getMetadata();
+         MetadataSnapshot secondMeta = store.getMetadata();
 
 
         if (randomBoolean()) {
@@ -864,7 +864,7 @@ public class StoreTests extends ESTestCase {
     }
 
     public void testMetadataSnapshotStreaming() throws Exception {
-        Store.MetadataSnapshot outMetadataSnapshot = createMetaDataSnapshot();
+         MetadataSnapshot outMetadataSnapshot = createMetaDataSnapshot();
         org.elasticsearch.Version targetNodeVersion = randomVersion(random());
 
         ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
@@ -875,7 +875,7 @@ public class StoreTests extends ESTestCase {
         ByteArrayInputStream inBuffer = new ByteArrayInputStream(outBuffer.toByteArray());
         InputStreamStreamInput in = new InputStreamStreamInput(inBuffer);
         in.setVersion(targetNodeVersion);
-        Store.MetadataSnapshot inMetadataSnapshot = new Store.MetadataSnapshot(in);
+         MetadataSnapshot inMetadataSnapshot = new  MetadataSnapshot(in);
         Map<String, StoreFileMetaData> origEntries = new HashMap<>();
         origEntries.putAll(outMetadataSnapshot.asMap());
         for (Map.Entry<String, StoreFileMetaData> entry : inMetadataSnapshot.asMap().entrySet()) {
@@ -885,7 +885,7 @@ public class StoreTests extends ESTestCase {
         assertThat(inMetadataSnapshot.getCommitUserData(), equalTo(outMetadataSnapshot.getCommitUserData()));
     }
 
-    protected Store.MetadataSnapshot createMetaDataSnapshot() {
+    protected  MetadataSnapshot createMetaDataSnapshot() {
         StoreFileMetaData storeFileMetaData1 = new StoreFileMetaData("segments", 1, "666");
         StoreFileMetaData storeFileMetaData2 = new StoreFileMetaData("no_segments", 1, "666");
         Map<String, StoreFileMetaData> storeFileMetaDataMap = new HashMap<>();
@@ -894,7 +894,7 @@ public class StoreTests extends ESTestCase {
         Map<String, String> commitUserData = new HashMap<>();
         commitUserData.put("userdata_1", "test");
         commitUserData.put("userdata_2", "test");
-        return new Store.MetadataSnapshot(unmodifiableMap(storeFileMetaDataMap), unmodifiableMap(commitUserData), 0);
+        return new  MetadataSnapshot(unmodifiableMap(storeFileMetaDataMap), unmodifiableMap(commitUserData), 0);
     }
 
     public void testUserDataRead() throws IOException {
@@ -916,7 +916,7 @@ public class StoreTests extends ESTestCase {
         writer.setCommitData(commitData);
         writer.commit();
         writer.close();
-        Store.MetadataSnapshot metadata;
+         MetadataSnapshot metadata;
         if (randomBoolean()) {
             metadata = store.getMetadata();
         } else {
@@ -932,7 +932,7 @@ public class StoreTests extends ESTestCase {
     }
 
     public void testStreamStoreFilesMetaData() throws Exception {
-        Store.MetadataSnapshot metadataSnapshot = createMetaDataSnapshot();
+         MetadataSnapshot metadataSnapshot = createMetaDataSnapshot();
         TransportNodesListShardStoreMetaData.StoreFilesMetaData outStoreFileMetaData = new TransportNodesListShardStoreMetaData.StoreFilesMetaData(new ShardId("test", "_na_", 0),metadataSnapshot);
         ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
         OutputStreamStreamOutput out = new OutputStreamStreamOutput(outBuffer);

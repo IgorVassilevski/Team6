@@ -41,6 +41,7 @@ import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
+import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.index.store.StoreFileMetaData;
 import org.elasticsearch.index.translog.Translog;
@@ -367,7 +368,7 @@ public class RecoveryTarget extends AbstractRefCounted implements RecoveryTarget
     }
 
     @Override
-    public void cleanFiles(int totalTranslogOps, Store.MetadataSnapshot sourceMetaData) throws IOException {
+    public void cleanFiles(int totalTranslogOps, MetadataSnapshot sourceMetaData) throws IOException {
         state().getTranslog().totalOperations(totalTranslogOps);
         // first, we go and move files that were created with the recovery id suffix to
         // the actual names, its ok if we have a corrupted index here, since we have replicas

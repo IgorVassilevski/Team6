@@ -55,7 +55,6 @@ import org.elasticsearch.index.snapshots.blobstore.BlobStoreIndexShardSnapshots;
 import org.elasticsearch.index.snapshots.blobstore.RateLimitingInputStream;
 import org.elasticsearch.index.snapshots.blobstore.SlicedInputStream;
 import org.elasticsearch.index.snapshots.blobstore.SnapshotFiles;
-import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.index.store.StoreFileMetaData;
 import org.elasticsearch.indices.recovery.RecoveryState;
@@ -1144,7 +1143,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                 int indexNumberOfFiles = 0;
                 long indexTotalFilesSize = 0;
                 ArrayList<BlobStoreIndexShardSnapshot.FileInfo> filesToSnapshot = new ArrayList<>();
-                final MetadataSnapshot metadata;
+                final Store.MetadataSnapshot metadata;
                 // TODO apparently we don't use the MetadataSnapshot#.recoveryDiff(...) here but we should
                 final Collection<String> fileNames;
                 try {
@@ -1346,7 +1345,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * The new logic for StoreFileMetaData reads the entire <tt>.si</tt> and <tt>segments.n</tt> files to strengthen the
      * comparison of the files on a per-segment / per-commit level.
      */
-    private static void maybeRecalculateMetadataHash(final BlobContainer blobContainer, final BlobStoreIndexShardSnapshot.FileInfo fileInfo, MetadataSnapshot snapshot) throws Exception {
+    private static void maybeRecalculateMetadataHash(final BlobContainer blobContainer, final BlobStoreIndexShardSnapshot.FileInfo fileInfo, Store.MetadataSnapshot snapshot) throws Exception {
         final StoreFileMetaData metadata;
         if (fileInfo != null && (metadata = snapshot.get(fileInfo.physicalName())) != null) {
             if (metadata.hash().length > 0 && fileInfo.metadata().hash().length == 0) {
@@ -1355,7 +1354,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                 // we might have multiple parts even though the file is small... make sure we read all of it.
                 try (final InputStream stream = new PartSliceStream(blobContainer, fileInfo)) {
                     BytesRefBuilder builder = new BytesRefBuilder();
-                    MetadataSnapshot.hashFile(builder, stream, fileInfo.length());
+                    Store.MetadataSnapshot.hashFile(builder, stream, fileInfo.length());
                     BytesRef hash = fileInfo.metadata().hash(); // reset the file infos metadata hash
                     assert hash.length == 0;
                     hash.bytes = builder.bytes();
@@ -1434,7 +1433,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                 }
 
                 SnapshotFiles snapshotFiles = new SnapshotFiles(snapshot.snapshot(), snapshot.indexFiles());
-                final MetadataSnapshot recoveryTargetMetadata;
+                final Store.MetadataSnapshot recoveryTargetMetadata;
                 try {
                     recoveryTargetMetadata = store.getMetadataOrEmpty();
                 } catch (CorruptIndexException | IndexFormatTooOldException | IndexFormatTooNewException e) {
@@ -1459,7 +1458,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     snapshotMetaData.put(fileInfo.metadata().name(), fileInfo.metadata());
                     fileInfos.put(fileInfo.metadata().name(), fileInfo);
                 }
-                final MetadataSnapshot sourceMetaData = new MetadataSnapshot(unmodifiableMap(snapshotMetaData), emptyMap(), 0);
+                final Store.MetadataSnapshot sourceMetaData = new Store.MetadataSnapshot(unmodifiableMap(snapshotMetaData), emptyMap(), 0);
                 final Store.RecoveryDiff diff = sourceMetaData.recoveryDiff(recoveryTargetMetadata);
                 for (StoreFileMetaData md : diff.identical) {
                     BlobStoreIndexShardSnapshot.FileInfo fileInfo = fileInfos.get(md.name());

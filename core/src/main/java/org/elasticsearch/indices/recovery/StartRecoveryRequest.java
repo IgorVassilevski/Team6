@@ -23,7 +23,6 @@ import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.transport.TransportRequest;
 
@@ -42,7 +41,7 @@ public class StartRecoveryRequest extends TransportRequest {
 
     private DiscoveryNode targetNode;
 
-    private MetadataSnapshot metadataSnapshot;
+    private Store.MetadataSnapshot metadataSnapshot;
 
     private RecoveryState.Type recoveryType;
 
@@ -55,7 +54,7 @@ public class StartRecoveryRequest extends TransportRequest {
      * @param sourceNode       The node to recover from
      * @param targetNode       The node to recover to
      */
-    public StartRecoveryRequest(ShardId shardId, DiscoveryNode sourceNode, DiscoveryNode targetNode, MetadataSnapshot metadataSnapshot, RecoveryState.Type recoveryType, long recoveryId) {
+    public StartRecoveryRequest(ShardId shardId, DiscoveryNode sourceNode, DiscoveryNode targetNode, Store.MetadataSnapshot metadataSnapshot, RecoveryState.Type recoveryType, long recoveryId) {
         this.recoveryId = recoveryId;
         this.shardId = shardId;
         this.sourceNode = sourceNode;
@@ -84,7 +83,7 @@ public class StartRecoveryRequest extends TransportRequest {
         return recoveryType;
     }
 
-    public MetadataSnapshot metadataSnapshot() {
+    public Store.MetadataSnapshot metadataSnapshot() {
         return metadataSnapshot;
     }
 
@@ -95,7 +94,7 @@ public class StartRecoveryRequest extends TransportRequest {
         shardId = ShardId.readShardId(in);
         sourceNode = new DiscoveryNode(in);
         targetNode = new DiscoveryNode(in);
-        metadataSnapshot = new MetadataSnapshot(in);
+        metadataSnapshot = new Store.MetadataSnapshot(in);
         recoveryType = RecoveryState.Type.fromId(in.readByte());
 
     }

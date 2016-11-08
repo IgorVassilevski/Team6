@@ -46,7 +46,6 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.set.Sets;
 import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.index.store.StoreFileMetaData;
 import org.elasticsearch.indices.store.TransportNodesListShardStoreMetaData;
@@ -367,7 +366,7 @@ public class ReplicaShardAllocatorTests extends ESAllocationTestCase {
                 commitData.put(Engine.SYNC_COMMIT_ID, syncId);
             }
             data.put(node, new TransportNodesListShardStoreMetaData.StoreFilesMetaData(shardId,
-                    new MetadataSnapshot(unmodifiableMap(filesAsMap), unmodifiableMap(commitData), randomInt())));
+                    new Store.MetadataSnapshot(unmodifiableMap(filesAsMap), unmodifiableMap(commitData), randomInt())));
             return this;
         }
 

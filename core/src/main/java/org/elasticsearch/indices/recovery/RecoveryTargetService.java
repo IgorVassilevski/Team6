@@ -46,7 +46,6 @@ import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.shard.ShardNotFoundException;
 import org.elasticsearch.index.shard.TranslogRecoveryPerformer;
-import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.node.NodeClosedException;
 import org.elasticsearch.threadpool.ThreadPool;
@@ -166,12 +165,12 @@ public class RecoveryTargetService extends AbstractComponent implements IndexEve
         assert recoveryTarget.sourceNode() != null : "can't do a recovery without a source node";
 
         logger.trace("collecting local files for {}", recoveryTarget);
-        MetadataSnapshot metadataSnapshot = null;
+        Store.MetadataSnapshot metadataSnapshot = null;
         try {
             metadataSnapshot = recoveryTarget.store().getMetadataOrEmpty();
         } catch (IOException e) {
             logger.warn("error while listing local files, recover as if there are none", e);
-            metadataSnapshot = MetadataSnapshot.EMPTY;
+            metadataSnapshot = Store.MetadataSnapshot.EMPTY;
         } catch (Exception e) {
             // this will be logged as warning later on...
             logger.trace("unexpected error while listing local files, failing recovery", e);

@@ -25,7 +25,6 @@ import org.elasticsearch.common.io.stream.InputStreamStreamInput;
 import org.elasticsearch.common.io.stream.OutputStreamStreamOutput;
 import org.elasticsearch.common.transport.LocalTransportAddress;
 import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.test.ESTestCase;
 
@@ -46,7 +45,7 @@ public class StartRecoveryRequestTests extends ESTestCase {
                 new ShardId("test", "_na_", 0),
                 new DiscoveryNode("a", new LocalTransportAddress("1"), emptyMap(), emptySet(), targetNodeVersion),
                 new DiscoveryNode("b", new LocalTransportAddress("1"), emptyMap(), emptySet(), targetNodeVersion),
-                MetadataSnapshot.EMPTY,
+                Store.MetadataSnapshot.EMPTY,
                 RecoveryState.Type.PRIMARY_RELOCATION,
                 1L
         );

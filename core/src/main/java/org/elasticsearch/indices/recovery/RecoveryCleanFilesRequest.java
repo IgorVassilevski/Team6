@@ -22,7 +22,6 @@ package org.elasticsearch.indices.recovery;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.index.store.MetadataSnapshot;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.transport.TransportRequest;
 
@@ -36,13 +35,13 @@ public class RecoveryCleanFilesRequest extends TransportRequest {
     private long recoveryId;
     private ShardId shardId;
 
-    private MetadataSnapshot snapshotFiles;
+    private Store.MetadataSnapshot snapshotFiles;
     private int totalTranslogOps = RecoveryState.Translog.UNKNOWN;
 
     public RecoveryCleanFilesRequest() {
     }
 
-    RecoveryCleanFilesRequest(long recoveryId, ShardId shardId, MetadataSnapshot snapshotFiles, int totalTranslogOps) {
+    RecoveryCleanFilesRequest(long recoveryId, ShardId shardId, Store.MetadataSnapshot snapshotFiles, int totalTranslogOps) {
         this.recoveryId = recoveryId;
         this.shardId = shardId;
         this.snapshotFiles = snapshotFiles;
@@ -62,7 +61,7 @@ public class RecoveryCleanFilesRequest extends TransportRequest {
         super.readFrom(in);
         recoveryId = in.readLong();
         shardId = ShardId.readShardId(in);
-        snapshotFiles = new MetadataSnapshot(in);
+        snapshotFiles = new Store.MetadataSnapshot(in);
         totalTranslogOps = in.readVInt();
     }
 
@@ -75,7 +74,7 @@ public class RecoveryCleanFilesRequest extends TransportRequest {
         out.writeVInt(totalTranslogOps);
     }
 
-    public MetadataSnapshot sourceMetaSnapshot() {
+    public Store.MetadataSnapshot sourceMetaSnapshot() {
         return snapshotFiles;
     }
 

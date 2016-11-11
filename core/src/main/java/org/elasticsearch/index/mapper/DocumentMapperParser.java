@@ -30,6 +30,7 @@ import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.analysis.AnalysisService;
+import org.elasticsearch.index.mapper.array.DynamicArrayFieldMapperBuilderFactory;
 import org.elasticsearch.index.mapper.object.RootObjectMapper;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.similarity.SimilarityService;
@@ -56,10 +57,12 @@ public class DocumentMapperParser {
 
     private final Map<String, Mapper.TypeParser> typeParsers;
     private final Map<String, MetadataFieldMapper.TypeParser> rootTypeParsers;
+    private final DynamicArrayFieldMapperBuilderFactory dynamicArrayFieldMapperBuilderFactory;
 
     public DocumentMapperParser(IndexSettings indexSettings, MapperService mapperService, AnalysisService analysisService,
                                 SimilarityService similarityService, MapperRegistry mapperRegistry,
-                                Supplier<QueryShardContext> queryShardContextSupplier) {
+                                Supplier<QueryShardContext> queryShardContextSupplier,
+    @Nullable DynamicArrayFieldMapperBuilderFactory dynamicArrayFieldMapperBuilderFactory) {
         this.parseFieldMatcher = new ParseFieldMatcher(indexSettings.getSettings());
         this.mapperService = mapperService;
         this.analysisService = analysisService;
@@ -67,7 +70,11 @@ public class DocumentMapperParser {
         this.queryShardContextSupplier = queryShardContextSupplier;
         this.typeParsers = mapperRegistry.getMapperParsers();
         this.rootTypeParsers = mapperRegistry.getMetadataMapperParsers();
+        this.dynamicArrayFieldMapperBuilderFactory = dynamicArrayFieldMapperBuilderFactory;
         indexVersionCreated = indexSettings.getIndexVersionCreated();
+    }
+    public DynamicArrayFieldMapperBuilderFactory dynamicArrayFieldMapperBuilderFactory() {
+             return dynamicArrayFieldMapperBuilderFactory;
     }
 
     public Mapper.TypeParser.ParserContext parserContext(String type) {

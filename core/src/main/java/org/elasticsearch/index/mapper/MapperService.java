@@ -131,12 +131,11 @@ public class MapperService extends AbstractIndexComponent {
 
     public MapperService(IndexSettings indexSettings, AnalysisService analysisService,
                          SimilarityService similarityService, MapperRegistry mapperRegistry,
-                         Supplier<QueryShardContext> queryShardContextSupplier,
-                         DynamicArrayFieldMapperBuilderFactoryProvider dynamicArrayFieldMapperBuilderFactoryProvider) {
+                         Supplier<QueryShardContext> queryShardContextSupplier,DynamicArrayFieldMapperBuilderFactoryProvider dynamicArrayFieldMapperBuilderFactoryProvider) {
         super(indexSettings);
         this.analysisService = analysisService;
         this.fieldTypes = new FieldTypeLookup();
-        this.documentParser = new DocumentMapperParser(indexSettings, this, analysisService, similarityService, mapperRegistry, queryShardContextSupplier, dynamicArrayFieldMapperBuilderFactoryProvider.get());
+        this.documentParser = new DocumentMapperParser(indexSettings, this, analysisService, similarityService, mapperRegistry, queryShardContextSupplier,dynamicArrayFieldMapperBuilderFactoryProvider.get());
         this.indexAnalyzer = new MapperAnalyzerWrapper(analysisService.defaultIndexAnalyzer(), p -> p.indexAnalyzer());
         this.searchAnalyzer = new MapperAnalyzerWrapper(analysisService.defaultSearchAnalyzer(), p -> p.searchAnalyzer());
         this.searchQuoteAnalyzer = new MapperAnalyzerWrapper(analysisService.defaultSearchQuoteAnalyzer(), p -> p.searchQuoteAnalyzer());

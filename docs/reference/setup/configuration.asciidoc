@@ -44,7 +44,7 @@ using the <<cluster-nodes-info>> API, with:
 
 [source,js]
 --------------------------------------------------
-curl localhost:9200/_nodes/stats/process?pretty
+curl localhost:9200/_nodes/process?pretty
 --------------------------------------------------
 
 [float]
@@ -56,7 +56,7 @@ operating system limits on mmap counts is likely to be too low, which may
 result in out of memory exceptions.  On Linux, you can increase the limits by
 running the following command as `root`:
 
-[source,sh]
+[source,bash]
 -------------------------------------
 sysctl -w vm.max_map_count=262144
 -------------------------------------
@@ -70,8 +70,8 @@ NOTE: If you installed Elasticsearch using a package (.deb, .rpm) this setting w
 [[setup-configuration-memory]]
 ==== Memory Settings
 
-Most operating systems try to use as much memory as possible for file system
-caches and eagerly swap out unused application memory, possibly resulting
+The Linux kernel tries to use as much memory as possible for file system
+caches and eagerly swaps out unused application memory, possibly resulting
 in the elasticsearch process being swapped. Swapping is very bad for
 performance and for node stability, so it should be avoided at all costs.
 
@@ -84,16 +84,10 @@ There are three options:
 The simplest option is to completely disable swap. Usually Elasticsearch
 is the only service running on a box, and its memory usage is controlled
 by the `ES_HEAP_SIZE` environment variable.  There should be no need
-to have swap enabled.
-
-On Linux systems, you can disable swap temporarily
+to have swap enabled.  On Linux systems, you can disable swap temporarily
 by running: `sudo swapoff -a`. To disable it permanently, you will need
 to edit the `/etc/fstab` file and comment out any lines that contain the
 word `swap`.
-
-On Windows, the equivalent can be achieved by disabling the paging file entirely
-via `System Properties → Advanced → Performance → Advanced → Virtual memory`.
-
 --
 
 * **Configure `swappiness`**
@@ -113,8 +107,8 @@ emergencies.
 * **`mlockall`**
 +
 --
-The third option is to use
-http://opengroup.org/onlinepubs/007908799/xsh/mlockall.html[mlockall] on Linux/Unix systems, or https://msdn.microsoft.com/en-us/library/windows/desktop/aa366895%28v=vs.85%29.aspx[VirtualLock] on Windows, to
+The third option on Linux/Unix systems only, is to use
+http://opengroup.org/onlinepubs/007908799/xsh/mlockall.html[mlockall] to
 try to lock the process address space into RAM, preventing any Elasticsearch
 memory from being swapped out.  This can be done, by adding this line
 to the `config/elasticsearch.yml` file:
@@ -133,14 +127,14 @@ request:
 curl http://localhost:9200/_nodes/process?pretty
 --------------
 
-If you see that `mlockall` is `false`, then it means that the `mlockall`
-request has failed.  The most probable reason, on Linux/Unix systems, is that
-the user running Elasticsearch doesn't have permission to lock memory.  This can
-be granted by running `ulimit -l unlimited` as `root` before starting Elasticsearch.
+If you see that `mlockall` is `false`, then it means that the the `mlockall`
+request has failed.  The most probable reason is that the user running
+Elasticsearch doesn't have permission to lock memory.  This can be granted
+by running `ulimit -l unlimited` as `root` before starting Elasticsearch.
 
 Another possible reason why `mlockall` can fail is that the temporary directory
 (usually `/tmp`) is mounted with the `noexec` option. This can be solved by
-specifying a new temp directory, by starting Elasticsearch with:
+specfying a new temp directory, by starting Elasticsearch with:
 
 [source,sh]
 --------------
@@ -199,11 +193,6 @@ cluster:
   name: <NAME OF YOUR CLUSTER>
 --------------------------------------------------
 
-Make sure that you don't reuse the same cluster names in different
-environments, otherwise you might end up with nodes joining the wrong cluster.
-For instance you could use `logging-dev`, `logging-stage`, and `logging-prod`
-for the development, staging, and production clusters.
-
 [float]
 [[node-name]]
 ==== Node name
@@ -219,27 +208,16 @@ node:
   name: <NAME OF YOUR NODE>
 --------------------------------------------------
 
-The hostname of the machine is provided in the environment
-variable `HOSTNAME`. If on your machine you only run a
-single elasticsearch node for that cluster, you can set
-the node name to the hostname using the `${...}` notation:
-
-[source,yaml]
---------------------------------------------------
-node:
-  name: ${HOSTNAME}
---------------------------------------------------
-
-[float]
-[[styles]]
-==== Configuration styles
-
 Internally, all settings are collapsed into "namespaced" settings. For
 example, the above gets collapsed into `node.name`. This means that
 its easy to support other configuration formats, for example,
 http://www.json.org[JSON]. If JSON is a preferred configuration format,
 simply rename the `elasticsearch.yml` file to `elasticsearch.json` and
 add:
+
+[float]
+[[styles]]
+==== Configuration styles
 
 [source,yaml]
 --------------------------------------------------
@@ -275,44 +253,30 @@ file which will resolve to an environment setting, for example:
 }
 --------------------------------------------------
 
-Additionally, for settings that you do not wish to store in the configuration
-file, you can use the value `${prompt.text}` or `${prompt.secret}` and start
-Elasticsearch in the foreground. `${prompt.secret}` has echoing disabled so
-that the value entered will not be shown in your terminal; `${prompt.text}`
-will allow you to see the value as you type it in. For example:
-
-[source,yaml]
---------------------------------------------------
-node:
-  name: ${prompt.text}
---------------------------------------------------
-
-On execution of the `elasticsearch` command, you will be prompted to enter
-the actual value like so:
+The location of the configuration file can be set externally using a
+system property:
 
 [source,sh]
 --------------------------------------------------
-Enter value for [node.name]:
+$ elasticsearch -Des.config=/path/to/config/file
 --------------------------------------------------
-
-NOTE: Elasticsearch will not start if `${prompt.text}` or `${prompt.secret}`
-is used in the settings and the process is run as a service or in the background.
 
 [float]
 [[configuration-index-settings]]
 === Index Settings
 
 Indices created within the cluster can provide their own settings. For
-example, the following creates an index with a refresh interval of 5
-seconds instead of the default refresh interval (the format can be either
+example, the following creates an index with memory based storage
+instead of the default file system based one (the format can be either
 YAML or JSON):
 
 [source,sh]
 --------------------------------------------------
 $ curl -XPUT http://localhost:9200/kimchy/ -d \
 '
-index:
-    refresh_interval: 5s
+index :
+    store:
+        type: memory
 '
 --------------------------------------------------
 
@@ -322,18 +286,19 @@ within the `elasticsearch.yml` file, the following can be set:
 [source,yaml]
 --------------------------------------------------
 index :
-    refresh_interval: 5s
+    store:
+        type: memory
 --------------------------------------------------
 
 This means that every index that gets created on the specific node
-started with the mentioned configuration will use a refresh interval of
-5 seconds *unless the index explicitly sets it*. In other words, any
-index level settings override what is set in the node configuration. Of
-course, the above can also be set as a "collapsed" setting, for example:
+started with the mentioned configuration will store the index in memory
+*unless the index explicitly sets it*. In other words, any index level
+settings override what is set in the node configuration. Of course, the
+above can also be set as a "collapsed" setting, for example:
 
 [source,sh]
 --------------------------------------------------
-$ elasticsearch -Des.index.refresh_interval=5s
+$ elasticsearch -Des.index.store.type=memory
 --------------------------------------------------
 
 All of the index level configuration can be found within each
@@ -351,32 +316,11 @@ http://en.wikipedia.org/wiki/JSON[JSON] and
 http://en.wikipedia.org/wiki/.properties[properties] formats are also
 supported. Multiple configuration files can be loaded, in which case they will
 get merged, as long as they start with the `logging.` prefix and end with one
-of the supported suffixes (either `.yml`, `.yaml`, `.json` or `.properties`).
+of the supported suffixes (either `.yml`, `.yaml`, `.json` or `.properties`)
+added[1.4.1,Previously only the `logging.` prefix was required].
 The logger section contains the java packages and their corresponding log
 level, where it is possible to omit the `org.elasticsearch` prefix. The
 appender section contains the destinations for the logs. Extensive information
 on how to customize logging and all the supported appenders can be found on
 the http://logging.apache.org/log4j/1.2/manual.html[log4j documentation].
 
-Additional Appenders and other logging classes provided by
-http://logging.apache.org/log4j/extras/[log4j-extras] are also available,
-out of the box.
-
-[float]
-[[deprecation-logging]]
-==== Deprecation logging
-
-In addition to regular logging, Elasticsearch allows you to enable logging
-of deprecated actions. For example this allows you to determine early, if
-you need to migrate certain functionality in the future. By default,
-deprecation logging is disabled. You can enable it in the `config/logging.yml`
-file by setting the deprecation log level to `DEBUG`.
-
-[source,yaml]
---------------------------------------------------
-deprecation: DEBUG, deprecation_log_file
---------------------------------------------------
-
-This will create a daily rolling deprecation log file in your log directory.
-Check this file regularly, especially when you intend to upgrade to a new
-major version.

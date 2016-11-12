@@ -22,27 +22,20 @@ use HTTP::Tiny;
 use IO::Socket::SSL 1.52;
 use utf8;
 
-my $Github_Key = load_github_key();
-my $Base_URL   = "https://${Github_Key}api.github.com/repos/";
-my $User_Repo  = 'elastic/elasticsearch/';
-my $Issue_URL  = "http://github.com/${User_Repo}issues/";
+my $Base_URL  = 'https://api.github.com/repos/';
+my $User_Repo = 'elasticsearch/elasticsearch/';
+my $Issue_URL = "http://github.com/${User_Repo}issues/";
 
-my @Groups = qw(
-    breaking deprecation feature
-    enhancement bug regression upgrade build doc test
-);
+my @Groups       = qw(breaking feature enhancement bug regression doc test);
 my %Group_Labels = (
     breaking    => 'Breaking changes',
-    build       => 'Build',
-    deprecation => 'Deprecations',
     doc         => 'Docs',
     feature     => 'New features',
     enhancement => 'Enhancements',
     bug         => 'Bug fixes',
-    regression  => 'Regressions',
+    regression  => 'Regression',
     test        => 'Tests',
-    upgrade     => 'Upgrades',
-    other       => 'NOT CLASSIFIED',
+    other       => 'Not classified',
 );
 
 use JSON();
@@ -72,27 +65,19 @@ sub dump_issues {
     $month++;
     $year += 1900;
 
-    print <<"ASCIIDOC";
-:issue: https://github.com/${User_Repo}issues/
-:pull:  https://github.com/${User_Repo}pull/
-
-[[release-notes-$version]]
-== $version Release Notes
-
-ASCIIDOC
-
     for my $group ( @Groups, 'other' ) {
         my $group_issues = $issues->{$group} or next;
-        print "[[$group-$version]]\n"
-            . "[float]\n"
-            . "=== $Group_Labels{$group}\n\n";
+        print "<h2>$Group_Labels{$group}</h2>\n\n<ul>\n";
 
         for my $header ( sort keys %$group_issues ) {
             my $header_issues = $group_issues->{$header};
-            print( $header || 'HEADER MISSING', "::\n" );
-
+            my $prefix        = "<li>";
+            if ($header) {
+                print "<li>$header:<ul>";
+            }
             for my $issue (@$header_issues) {
                 my $title = $issue->{title};
+                $title =~ s{`([^`]+)`}{<code>$1</code>}g;
 
                 if ( $issue->{state} eq 'open' ) {
                     $title .= " [OPEN]";
@@ -102,21 +87,27 @@ ASCIIDOC
                 }
                 my $number = $issue->{number};
 
-                print encode_utf8("* $title {pull}${number}[#${number}]");
+                print encode_utf8( $prefix
+                        . $title
+                        . qq[ <a href="${Issue_URL}${number}">#${number}</a>] );
 
                 if ( my $related = $issue->{related_issues} ) {
                     my %uniq = map { $_ => 1 } @$related;
                     print keys %uniq > 1
                         ? " (issues: "
                         : " (issue: ";
-                    print join ", ", map {"{issue}${_}[#${_}]"}
+                    print join ", ",
+                        map {qq[<a href="${Issue_URL}${_}">#${_}</a>]}
                         sort keys %uniq;
                     print ")";
                 }
-                print "\n";
+                print "</li>\n";
             }
-            print "\n";
+            if ($header) {
+                print "</ul></li>\n";
+            }
         }
+        print "</ul>";
         print "\n\n";
     }
 }
@@ -145,7 +136,8 @@ sub fetch_issues {
                 next unless $issue->{pull_request};
                 for ( $issue->{body} =~ m{(?:#|${User_Repo}issues/)(\d+)}g ) {
                     $seen{$_}++;
-                    push @{ $issue->{related_issues} }, $_;
+                    $issue->{related_issues} ||= [];
+                    push @{$issue}{related_issues}, $_;
                 }
             }
             $page++;
@@ -158,8 +150,7 @@ ISSUE:
     for my $issue (@issues) {
         next if $seen{ $issue->{number} } && !$issue->{pull_request};
         my %labels = map { $_->{name} => 1 } @{ $issue->{labels} };
-        my ($header) = map { substr( $_, 1 ) } grep {/^:/} keys %labels;
-        $header ||= 'NOT CLASSIFIED';
+        my $header = $issue->{title} =~ s/^([^:]+):\s+// ? $1 : '';
         for (@Groups) {
             if ( $labels{$_} ) {
                 push @{ $group{$_}{$header} }, $issue;
@@ -200,25 +191,6 @@ sub fetch {
 
     #    print $response->{content};
     return $json->decode( $response->{content} );
-}
-
-#===================================
-sub load_github_key {
-#===================================
-    my ($file) = glob("~/.github_auth");
-    unless ( -e $file ) {
-        warn "File ~/.github_auth doesn't exist - using anonymous API. "
-            . "Generate a Personal Access Token at https://github.com/settings/applications\n";
-        return '';
-    }
-    open my $fh, $file or die "Couldn't open $file: $!";
-    my ($key) = <$fh> || die "Couldn't read $file: $!";
-    $key =~ s/^\s+//;
-    $key =~ s/\s+$//;
-    die "Invalid GitHub key: $key"
-        unless $key =~ /^[0-9a-f]{40}$/;
-    return "$key:x-oauth-basic@";
-
 }
 
 #===================================

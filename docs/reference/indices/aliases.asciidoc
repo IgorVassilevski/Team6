@@ -8,7 +8,7 @@ converting the alias name to the actual index name. An alias can also be
 mapped to more than one index, and when specifying it, the alias will
 automatically expand to the aliases indices. An alias can also be
 associated with a filter that will automatically be applied when
-searching, and routing values. An alias cannot have the same name as an index.
+searching, and routing values.
 
 Here is a sample of associating the alias `alias1` with index `test1`:
 
@@ -44,7 +44,7 @@ curl -XPOST 'http://localhost:9200/_aliases' -d '
 {
     "actions" : [
         { "remove" : { "index" : "test1", "alias" : "alias1" } },
-        { "add" : { "index" : "test2", "alias" : "alias1" } }
+        { "add" : { "index" : "test1", "alias" : "alias2" } }
     ]
 }'
 --------------------------------------------------
@@ -63,38 +63,6 @@ curl -XPOST 'http://localhost:9200/_aliases' -d '
 }'
 --------------------------------------------------
 
-Multiple indices can be specified for an action with the `indices` array syntax:
-
-[source,js]
---------------------------------------------------
-curl -XPOST 'http://localhost:9200/_aliases' -d '
-{
-    "actions" : [
-        { "add" : { "indices" : ["test1", "test2"], "alias" : "alias1" } }
-    ]
-}'
---------------------------------------------------
-
-To specify multiple aliases in one action, the corresponding `aliases` array
-syntax exists as well.
-
-For the example above, a glob pattern can also be used to associate an alias to
-more than one index that share a common name:
-
-[source,js]
---------------------------------------------------
-curl -XPOST 'http://localhost:9200/_aliases' -d '
-{
-    "actions" : [
-        { "add" : { "index" : "test*", "alias" : "all_test_indices" } }
-    ]
-}'
---------------------------------------------------
-
-In this case, the alias is a point-in-time alias that will group all
-current indices that match, it will not automatically update as new
-indices that match this pattern are added/removed.
-
 It is an error to index to an alias which points to more than one index.
 
 [float]
@@ -105,6 +73,8 @@ Aliases with filters provide an easy way to create different "views" of
 the same index. The filter can be defined using Query DSL and is applied
 to all Search, Count, Delete By Query and More Like This operations with
 this alias.
+
+added[1.4.0.Beta1,Fields referred to in alias filters must exist in the mappings of the index/indices pointed to by the alias]
 
 To create a filtered alias, first we need to ensure that the fields already
 exist in the mapping:
@@ -122,7 +92,7 @@ curl -XPUT 'http://localhost:9200/test1' -d '{
       }
     }
   }
-}'
+}
 --------------------------------------------------
 
 Now we can create an alias that uses a filter on field `user`:
@@ -215,7 +185,7 @@ An alias can also be added with the endpoint
 where
 
 [horizontal]
-`index`::   The index the alias refers to. Can be any of `* | _all | glob pattern | name1, name2, …`
+`index`::   The index the alias refers to. Can be any of `blank | * | _all | glob pattern | name1, name2, …`
 `name`::   The name of the alias. This is a required option.
 `routing`:: An optional routing that can be associated with an alias.
 `filter`::  An optional filter that can be associated with an alias.
@@ -337,10 +307,15 @@ Possible options:
     multiple alias names separated by a comma.
 
 `ignore_unavailable`::
-    What to do if an specified index name doesn't
+    What to do is an specified index name doesn't
     exist. If set to `true` then those indices are ignored.
 
 The rest endpoint is: `/{index}/_alias/{alias}`.
+
+added[1.4.0.Beta1,The API will always include an `aliases` section, even if there aren't any aliases. Previous versions would not return the `aliases` section]
+
+WARNING: For future versions of Elasticsearch, the default <<multi-index>> options will error if a requested index is unavailable. This is to bring 
+this API in line with the other indices GET APIs
 
 [float]
 ==== Examples:
@@ -442,7 +417,7 @@ option as the get indices aliases api. Examples:
 
 [source,js]
 --------------------------------------------------
-curl -XHEAD -i 'localhost:9200/_alias/2013'
-curl -XHEAD -i 'localhost:9200/_alias/2013_01*'
-curl -XHEAD -i 'localhost:9200/users/_alias/*'
+curl -XHEAD 'localhost:9200/_alias/2013'
+curl -XHEAD 'localhost:9200/_alias/2013_01*'
+curl -XHEAD 'localhost:9200/users/_alias/*'
 --------------------------------------------------

@@ -1,50 +1,76 @@
 [[modules-indices]]
 == Indices
 
-The indices module controls index-related settings that are globally managed
-for all indices, rather than being configurable at a per-index level.
+The indices module allow to control settings that are globally managed
+for all indices.
 
-Available settings include:
+[float]
+[[buffer]]
+=== Indexing Buffer
 
-<<circuit-breaker,Circuit breaker>>::
+The indexing buffer setting allows to control how much memory will be
+allocated for the indexing process. It is a global setting that bubbles
+down to all the different shards allocated on a specific node.
 
-    Circuit breakers set limits on memory usage to avoid out of memory exceptions.
+The `indices.memory.index_buffer_size` accepts either a percentage or a
+byte size value. It defaults to `10%`, meaning that `10%` of the total
+memory allocated to a node will be used as the indexing buffer size.
+This amount is then divided between all the different shards. Also, if
+percentage is used, it is possible to set `min_index_buffer_size` (defaults to
+`48mb`) and `max_index_buffer_size` (defaults to unbounded).
 
-<<modules-fielddata,Fielddata cache>>::
+The `indices.memory.min_shard_index_buffer_size` allows to set a hard
+lower limit for the memory allocated per shard for its own indexing
+buffer. It defaults to `4mb`.
 
-    Set limits on the amount of heap used by the in-memory fielddata cache.
+[float]
+[[indices-ttl]]
+=== TTL interval
 
-<<query-cache,Node query cache>>::
+You can dynamically set the `indices.ttl.interval`, which allows to set how
+often expired documents will be automatically deleted. The default value
+is 60s.
 
-    Configure the amount heap used to cache queries results.
+The deletion orders are processed by bulk. You can set
+`indices.ttl.bulk_size` to fit your needs. The default value is 10000.
 
-<<indexing-buffer,Indexing buffer>>::
+See also <<mapping-ttl-field>>.
 
-    Control the size of the buffer allocated to the indexing process.
+[float]
+[[recovery]]
+=== Recovery
 
-<<shard-request-cache,Shard request cache>>::
+The following settings can be set to manage the recovery policy:
 
-    Control the behaviour of the shard-level request cache.
+[horizontal]
+`indices.recovery.concurrent_streams`::
+    defaults to `3`.
 
-<<recovery,Recovery>>::
+`indices.recovery.file_chunk_size`::
+    defaults to `512kb`.
 
-    Control the resource limits on the shard recovery process.
+`indices.recovery.translog_ops`::
+    defaults to `1000`.
 
-<<indices-ttl,TTL interval>>::
+`indices.recovery.translog_size`::
+    defaults to `512kb`.
 
-    Control how expired documents are removed.
+`indices.recovery.compress`::
+    defaults to `true`.
 
-include::indices/circuit_breaker.asciidoc[]
+`indices.recovery.max_bytes_per_sec`::
+    defaults to `20mb`.
 
-include::indices/fielddata.asciidoc[]
+[float]
+[[throttling]]
+=== Store level throttling
 
-include::indices/query_cache.asciidoc[]
+The following settings can be set to control the store throttling:
 
-include::indices/indexing_buffer.asciidoc[]
+[horizontal]
+`indices.store.throttle.type`::
+    could be `merge` (default), `none` or `all`. See <<index-modules-store>>.
 
-include::indices/request_cache.asciidoc[]
-
-include::indices/recovery.asciidoc[]
-
-include::indices/ttl_interval.asciidoc[]
+`indices.store.throttle.max_bytes_per_sec`::
+    defaults to `20mb`.
 

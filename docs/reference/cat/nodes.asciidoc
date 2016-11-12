@@ -25,7 +25,7 @@ ActN   3806 192.168.56.20 9300 {version}   {jdk}
 
 The next few give a picture of your heap, memory, and load.
 
-[source,sh]
+[source,shell]
 --------------------------------------------------
 diskAvail heapPercent heapMax ramPercent  ramMax load
    72.1gb        31.3  93.9mb         81 239.1mb 0.24
@@ -39,7 +39,7 @@ ones.  How many master-eligible nodes do I have?  How many client
 nodes?  It looks like someone restarted a node recently; which one was
 it?
 
-[source,sh]
+[source,shell]
 --------------------------------------------------
 uptime data/client master name
   3.5h d           m      Boneyard
@@ -90,18 +90,10 @@ k0zy 192.168.56.10 9300 {version} m
 |`build` |`b` |No |Elasticsearch Build hash |5c03844
 |`jdk` |`j` |No |Running Java version |1.8.0
 |`disk.avail` |`d`, `disk`, `diskAvail` |No |Available disk space |1.8gb
-|`heap.current` |`hc`, `heapCurrent` |No |Used heap |311.2mb
-|`heap.percent` |`hp`, `heapPercent` |Yes |Used heap percentage |7
+|`heap.percent` |`hp`, `heapPercent` |No |Used heap percentage |7
 |`heap.max` |`hm`, `heapMax` |No |Maximum configured heap |1015.6mb
-|`ram.current` |`rc`, `ramCurrent` |No |Used total memory |513.4mb
-|`ram.percent` |`rp`, `ramPercent` |Yes |Used total memory percentage |47
+|`ram.percent` |`rp`, `ramPercent` |No |Used total memory percentage |47
 |`ram.max` |`rm`, `ramMax` |No |Total memory |2.9gb
-|`file_desc.current` |`fdc`, `fileDescriptorCurrent` |No |Used file
-descriptors |123
-|`file_desc.percent` |`fdp`, `fileDescriptorPercent` |Yes |Used file
-descriptors percentage |1
-|`file_desc.max` |`fdm`, `fileDescriptorMax` |No |Maximum number of file
-descriptors |1024
 |`load` |`l` |No |Most recent load average |0.22
 |`uptime` |`u` |No |Node uptime |17.3m
 |`node.role` |`r`, `role`, `dc`, `nodeRole` |Yes |Data node (d); Client
@@ -113,18 +105,10 @@ node (c) |d
 cache memory |0b
 |`fielddata.evictions` |`fe`, `fielddataEvictions` |No |Fielddata cache
 evictions |0
-|`query_cache.memory_size` |`qcm`, `queryCacheMemory` |No |Used query
+|`filter_cache.memory_size` |`fcm`, `filterCacheMemory` |No |Used filter
 cache memory |0b
-|`query_cache.evictions` |`qce`, `queryCacheEvictions` |No |Query
+|`filter_cache.evictions` |`fce`, `filterCacheEvictions` |No |Filter
 cache evictions |0
-|`request_cache.memory_size` |`rcm`, `requestCacheMemory` |No | Used request
-cache memory |0b
-|`request_cache.evictions` |`rce`, `requestCacheEvictions` |No |Request
-cache evictions |0
-|`request_cache.hit_count` |`rchc`, `requestCacheHitCount` |No | Request
-cache hit count |0
-|`request_cache.miss_count` |`rcmc`, `requestCacheMissCount` |No | Request
-cache miss count |0
 |`flush.total` |`ft`, `flushTotal` |No |Number of flushes |1
 |`flush.total_time` |`ftt`, `flushTotalTime` |No |Time spent in flush |1
 |`get.current` |`gc`, `getCurrent` |No |Number of current get
@@ -139,6 +123,8 @@ get operations |2
 gets |0s
 |`get.missing_total` |`gmto`, `getMissingTotal` |No |Number of failed
 get operations |1
+|`id_cache.memory_size` |`im`, `idCacheMemory` |No |Used ID cache
+memory |216b
 |`indexing.delete_current` |`idc`, `indexingDeleteCurrent` |No |Number
 of current deletion operations |0
 |`indexing.delete_time` |`idti`, `indexingDeleteTime` |No |Time spent in
@@ -176,8 +162,6 @@ percolating |0s
 |`percolate.total` |`pto`, `percolateTotal` |No |Total percolations |0
 |`refresh.total` |`rto`, `refreshTotal` |No |Number of refreshes |16
 |`refresh.time` |`rti`, `refreshTime` |No |Time spent in refreshes |91ms
-|`script.compilations` |`scrcc`, `scriptCompilations` |No |Total script compilations |17
-|`script.cache_evictions` |`scrce`, `scriptCacheEvictions` |No |Total compiled scripts evicted from cache |6
 |`search.fetch_current` |`sfc`, `searchFetchCurrent` |No |Current fetch
 phase operations |0
 |`search.fetch_time` |`sfti`, `searchFetchTime` |No |Time spent in fetch
@@ -192,9 +176,6 @@ phase operations |0
 phase |43ms
 |`search.query_total` |`sqto`, `searchFetchTotal` |No |Number of query
 operations |9
-|`search.scroll_current` |`scc`, `searchScrollCurrent` |No |Open scroll contexts |2
-|`search.scroll_time` |`scti`, `searchScrollTime` |No |Time scroll contexts held open|2m
-|`search.scroll_total` |`scto`, `searchScrollTotal` |No |Completed scroll contexts |1
 |`segments.count` |`sc`, `segmentsCount` |No |Number of segments |4
 |`segments.memory` |`sm`, `segmentsMemory` |No |Memory used by
 segments |1.4kb

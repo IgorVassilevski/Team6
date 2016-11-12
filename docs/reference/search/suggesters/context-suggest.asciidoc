@@ -41,9 +41,9 @@ PUT services/_mapping/service
                         "neighbors": true,
                         "default": "u33"
                     }
+                }
             }
         }
-    }
     }
 }
 --------------------------------------------------
@@ -52,7 +52,7 @@ PUT services/_mapping/service
 
 However contexts are specified (as type `category` or `geo`, which are discussed below), each
 context value generates a new sub-set of documents which can be queried by the completion
-suggester. Both types accept a `default` parameter which provides a default value to use
+suggester. All three types accept a `default` parameter which provides a default value to use
 if the corresponding context value is absent.
 
 The basic structure of this element is that each field forms a new context and the fieldname
@@ -106,7 +106,7 @@ or as reference to another field within the documents indexed:
 "context": {
     "color": {
         "type": "category",
-        "default": "red",
+        "default": "red"
         "path": "color_field"
     }
 }
@@ -135,8 +135,8 @@ PUT services/service/1
         "input": ["knacksack", "backpack", "daypack"],
         "context": {
             "color": ["red", "yellow"]
-            }
         }
+    }
 }
 --------------------------------------------------
 
@@ -207,7 +207,7 @@ locations.
         "default": {
             "lat": 0.0,
             "lon": 0.0
-    }
+        }
     }
 }
 --------------------------------------------------
@@ -230,16 +230,7 @@ PUT services/service/1
             "location": {
                     "lat": 0,
                     "lon": 0
-        "contexts": [
-            "location": [
-                {
-                    "lat": 43.6624803,
-                    "lon": -79.3863353
-                },
-                {
-                    "lat": 43.6624718,
-                    "lon": -79.3873227
-                }
+            }
         }
     }
 }
@@ -262,7 +253,7 @@ POST services/_suggest
         "completion" : {
             "field" : "suggest_field",
             "size": 10,
-            "contexts": {
+            "context": {
                 "location": {
                     "lat": 0,
                     "lon": 0
@@ -286,14 +277,14 @@ POST services/_suggest
         "completion" : {
             "field" : "suggest_field",
             "size": 10,
-                        "context": {
+            "context": {
                 "location": {
                     "value": {
                         "lat": 0,
                         "lon": 0
-                        },
+                    },
                     "precision": "1km"
-                    }
+                }
             }
         }
     }

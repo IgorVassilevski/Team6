@@ -23,22 +23,10 @@ defined, defaults are used. There is an option to define which analyzers
 will be used by default when none can be derived.
 
 The `default` logical name allows one to configure an analyzer that will
-be used both for indexing and for searching APIs. The `default_search`
+be used both for indexing and for searching APIs. The `default_index`
 logical name can be used to configure a default analyzer that will be
-used just when searching (the `default` analyzer would still be used for
-indexing).
-
-For instance, the following settings could be used to perform exact matching
-only by default:
-
-[source,js]
---------------------------------------------------
-index :
-  analysis :
-    analyzer :
-      default :
-        tokenizer : keyword
---------------------------------------------------
+used just when indexing, and the `default_search` can be used to
+configure a default analyzer that will be used just when searching.
 
 [float]
 [[aliasing-analyzers]]

@@ -390,29 +390,7 @@ public class ClusterState implements ToXContent, Diffable<ClusterState> {
         }
 
         if (metrics.contains(Metric.BLOCKS)) {
-            builder.startObject("blocks");
-
-            if (!blocks().global().isEmpty()) {
-                builder.startObject("global");
-                for (ClusterBlock block : blocks().global()) {
-                    block.toXContent(builder, params);
-                }
-                builder.endObject();
-            }
-
-            if (!blocks().indices().isEmpty()) {
-                builder.startObject("indices");
-                for (ObjectObjectCursor<String, Set<ClusterBlock>> entry : blocks().indices()) {
-                    builder.startObject(entry.key);
-                    for (ClusterBlock block : entry.value) {
-                        block.toXContent(builder, params);
-                    }
-                    builder.endObject();
-                }
-                builder.endObject();
-            }
-
-            builder.endObject();
+            metricsContainMaster_Node(builder, params);
         }
 
         // nodes
@@ -426,146 +404,17 @@ public class ClusterState implements ToXContent, Diffable<ClusterState> {
 
         // meta data
         if (metrics.contains(Metric.METADATA)) {
-            builder.startObject("metadata");
-            builder.field("cluster_uuid", metaData().clusterUUID());
-            builder.startObject("templates");
-            for (ObjectCursor<IndexTemplateMetaData> cursor : metaData().templates().values()) {
-                IndexTemplateMetaData templateMetaData = cursor.value;
-                builder.startObject(templateMetaData.name());
-
-                builder.field("template", templateMetaData.template());
-                builder.field("order", templateMetaData.order());
-
-                builder.startObject("settings");
-                Settings settings = templateMetaData.settings();
-                settings.toXContent(builder, params);
-                builder.endObject();
-
-                builder.startObject("mappings");
-                for (ObjectObjectCursor<String, CompressedXContent> cursor1 : templateMetaData.mappings()) {
-                    byte[] mappingSource = cursor1.value.uncompressed();
-                    Map<String, Object> mapping;
-                    try (XContentParser parser = XContentFactory.xContent(mappingSource).createParser(mappingSource)) {
-                        mapping = parser.map();
-                    }
-                    if (mapping.size() == 1 && mapping.containsKey(cursor1.key)) {
-                        // the type name is the root value, reduce it
-                        mapping = (Map<String, Object>) mapping.get(cursor1.key);
-                    }
-                    builder.field(cursor1.key);
-                    builder.map(mapping);
-                }
-                builder.endObject();
-
-
-                builder.endObject();
-            }
-            builder.endObject();
-
-            builder.startObject("indices");
-            for (IndexMetaData indexMetaData : metaData()) {
-                builder.startObject(indexMetaData.getIndex().getName());
-
-                builder.field("state", indexMetaData.getState().toString().toLowerCase(Locale.ENGLISH));
-
-                builder.startObject("settings");
-                Settings settings = indexMetaData.getSettings();
-                settings.toXContent(builder, params);
-                builder.endObject();
-
-                builder.startObject("mappings");
-                for (ObjectObjectCursor<String, MappingMetaData> cursor : indexMetaData.getMappings()) {
-                    byte[] mappingSource = cursor.value.source().uncompressed();
-                    Map<String, Object> mapping;
-                    try (XContentParser parser = XContentFactory.xContent(mappingSource).createParser(mappingSource)) {
-                        mapping = parser.map();
-                    }
-                    if (mapping.size() == 1 && mapping.containsKey(cursor.key)) {
-                        // the type name is the root value, reduce it
-                        mapping = (Map<String, Object>) mapping.get(cursor.key);
-                    }
-                    builder.field(cursor.key);
-                    builder.map(mapping);
-                }
-                builder.endObject();
-
-                builder.startArray("aliases");
-                for (ObjectCursor<String> cursor : indexMetaData.getAliases().keys()) {
-                    builder.value(cursor.value);
-                }
-                builder.endArray();
-
-                builder.startObject(IndexMetaData.KEY_PRIMARY_TERMS);
-                for (int shard = 0; shard < indexMetaData.getNumberOfShards(); shard++) {
-                    builder.field(Integer.toString(shard), indexMetaData.primaryTerm(shard));
-                }
-                builder.endObject();
-
-                builder.startObject(IndexMetaData.KEY_IN_SYNC_ALLOCATIONS);
-                for (IntObjectCursor<Set<String>> cursor : indexMetaData.getInSyncAllocationIds()) {
-                    builder.startArray(String.valueOf(cursor.key));
-                    for (String allocationId : cursor.value) {
-                        builder.value(allocationId);
-                    }
-                    builder.endArray();
-                }
-                builder.endObject();
-
-                // index metadata
-                builder.endObject();
-            }
-            builder.endObject();
-
-            for (ObjectObjectCursor<String, MetaData.Custom> cursor : metaData.customs()) {
-                builder.startObject(cursor.key);
-                cursor.value.toXContent(builder, params);
-                builder.endObject();
-            }
-
-            builder.endObject();
+            metricsContainsMetaData(builder, params);
         }
 
         // routing table
         if (metrics.contains(Metric.ROUTING_TABLE)) {
-            builder.startObject("routing_table");
-            builder.startObject("indices");
-            for (IndexRoutingTable indexRoutingTable : routingTable()) {
-                builder.startObject(indexRoutingTable.getIndex().getName());
-                builder.startObject("shards");
-                for (IndexShardRoutingTable indexShardRoutingTable : indexRoutingTable) {
-                    builder.startArray(Integer.toString(indexShardRoutingTable.shardId().id()));
-                    for (ShardRouting shardRouting : indexShardRoutingTable) {
-                        shardRouting.toXContent(builder, params);
-                    }
-                    builder.endArray();
-                }
-                builder.endObject();
-                builder.endObject();
-            }
-            builder.endObject();
-            builder.endObject();
+            metricsContainsRouting_Table(builder, params);
         }
 
         // routing nodes
         if (metrics.contains(Metric.ROUTING_NODES)) {
-            builder.startObject("routing_nodes");
-            builder.startArray("unassigned");
-            for (ShardRouting shardRouting : getRoutingNodes().unassigned()) {
-                shardRouting.toXContent(builder, params);
-            }
-            builder.endArray();
-
-            builder.startObject("nodes");
-            for (RoutingNode routingNode : getRoutingNodes()) {
-                builder.startArray(routingNode.nodeId() == null ? "null" : routingNode.nodeId());
-                for (ShardRouting shardRouting : routingNode) {
-                    shardRouting.toXContent(builder, params);
-                }
-                builder.endArray();
-            }
-            builder.endObject();
-
-            builder.endObject();
+            metricsContainRouting_Nodes(builder, params);
         }
         if (metrics.contains(Metric.CUSTOMS)) {
             for (ObjectObjectCursor<String, Custom> cursor : customs) {
@@ -576,6 +425,177 @@ public class ClusterState implements ToXContent, Diffable<ClusterState> {
         }
 
         return builder;
+    }
+
+    private void metricsContainsRouting_Table(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject("routing_table");
+        builder.startObject("indices");
+        for (IndexRoutingTable indexRoutingTable : routingTable()) {
+            builder.startObject(indexRoutingTable.getIndex().getName());
+            builder.startObject("shards");
+            for (IndexShardRoutingTable indexShardRoutingTable : indexRoutingTable) {
+                builder.startArray(Integer.toString(indexShardRoutingTable.shardId().id()));
+                for (ShardRouting shardRouting : indexShardRoutingTable) {
+                    shardRouting.toXContent(builder, params);
+                }
+                builder.endArray();
+            }
+            builder.endObject();
+            builder.endObject();
+        }
+        builder.endObject();
+        builder.endObject();
+    }
+
+    private void metricsContainsMetaData(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject("metadata");
+        builder.field("cluster_uuid", metaData().clusterUUID());
+        builder.startObject("templates");
+        for (ObjectCursor<IndexTemplateMetaData> cursor : metaData().templates().values()) {
+            duringSmaller(builder, params, cursor);
+        }
+        builder.endObject();
+
+        builder.startObject("indices");
+        for (IndexMetaData indexMetaData : metaData()) {
+            builder.startObject(indexMetaData.getIndex().getName());
+
+            builder.field("state", indexMetaData.getState().toString().toLowerCase(Locale.ENGLISH));
+
+            builder.startObject("settings");
+            Settings settings = indexMetaData.getSettings();
+            settings.toXContent(builder, params);
+            builder.endObject();
+
+            builder.startObject("mappings");
+            for (ObjectObjectCursor<String, MappingMetaData> cursor : indexMetaData.getMappings()) {
+                byte[] mappingSource = cursor.value.source().uncompressed();
+                Map<String, Object> mapping;
+                try (XContentParser parser = XContentFactory.xContent(mappingSource).createParser(mappingSource)) {
+                    mapping = parser.map();
+                }
+                if (mapping.size() == 1 && mapping.containsKey(cursor.key)) {
+                    // the type name is the root value, reduce it
+                    mapping = (Map<String, Object>) mapping.get(cursor.key);
+                }
+                builder.field(cursor.key);
+                builder.map(mapping);
+            }
+            builder.endObject();
+
+            builder.startArray("aliases");
+            for (ObjectCursor<String> cursor : indexMetaData.getAliases().keys()) {
+                builder.value(cursor.value);
+            }
+            builder.endArray();
+
+            builder.startObject(IndexMetaData.KEY_PRIMARY_TERMS);
+            for (int shard = 0; shard < indexMetaData.getNumberOfShards(); shard++) {
+                builder.field(Integer.toString(shard), indexMetaData.primaryTerm(shard));
+            }
+            builder.endObject();
+
+            builder.startObject(IndexMetaData.KEY_IN_SYNC_ALLOCATIONS);
+            for (IntObjectCursor<Set<String>> cursor : indexMetaData.getInSyncAllocationIds()) {
+                builder.startArray(String.valueOf(cursor.key));
+                for (String allocationId : cursor.value) {
+                    builder.value(allocationId);
+                }
+                builder.endArray();
+            }
+            builder.endObject();
+
+            // index metadata
+            builder.endObject();
+        }
+        builder.endObject();
+
+        for (ObjectObjectCursor<String, MetaData.Custom> cursor : metaData.customs()) {
+            builder.startObject(cursor.key);
+            cursor.value.toXContent(builder, params);
+            builder.endObject();
+        }
+
+        builder.endObject();
+    }
+
+    private void metricsContainRouting_Nodes(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject("routing_nodes");
+        builder.startArray("unassigned");
+        for (ShardRouting shardRouting : getRoutingNodes().unassigned()) {
+            shardRouting.toXContent(builder, params);
+        }
+        builder.endArray();
+
+        builder.startObject("nodes");
+        for (RoutingNode routingNode : getRoutingNodes()) {
+            builder.startArray(routingNode.nodeId() == null ? "null" : routingNode.nodeId());
+            for (ShardRouting shardRouting : routingNode) {
+                shardRouting.toXContent(builder, params);
+            }
+            builder.endArray();
+        }
+        builder.endObject();
+
+        builder.endObject();
+    }
+
+    private void duringSmaller(XContentBuilder builder, Params params, ObjectCursor<IndexTemplateMetaData> cursor) throws IOException {
+        IndexTemplateMetaData templateMetaData = cursor.value;
+        builder.startObject(templateMetaData.name());
+
+        builder.field("template", templateMetaData.template());
+        builder.field("order", templateMetaData.order());
+
+        builder.startObject("settings");
+        Settings settings = templateMetaData.settings();
+        settings.toXContent(builder, params);
+        builder.endObject();
+
+        builder.startObject("mappings");
+        for (ObjectObjectCursor<String, CompressedXContent> cursor1 : templateMetaData.mappings()) {
+            byte[] mappingSource = cursor1.value.uncompressed();
+            Map<String, Object> mapping;
+            try (XContentParser parser = XContentFactory.xContent(mappingSource).createParser(mappingSource)) {
+                mapping = parser.map();
+            }
+            if (mapping.size() == 1 && mapping.containsKey(cursor1.key)) {
+                // the type name is the root value, reduce it
+                mapping = (Map<String, Object>) mapping.get(cursor1.key);
+            }
+            builder.field(cursor1.key);
+            builder.map(mapping);
+        }
+        builder.endObject();
+
+
+        builder.endObject();
+    }
+
+    private void metricsContainMaster_Node(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject("blocks");
+
+        if (!blocks().global().isEmpty()) {
+            builder.startObject("global");
+            for (ClusterBlock block : blocks().global()) {
+                block.toXContent(builder, params);
+            }
+            builder.endObject();
+        }
+
+        if (!blocks().indices().isEmpty()) {
+            builder.startObject("indices");
+            for (ObjectObjectCursor<String, Set<ClusterBlock>> entry : blocks().indices()) {
+                builder.startObject(entry.key);
+                for (ClusterBlock block : entry.value) {
+                    block.toXContent(builder, params);
+                }
+                builder.endObject();
+            }
+            builder.endObject();
+        }
+
+        builder.endObject();
     }
 
     public static Builder builder(ClusterName clusterName) {

@@ -280,18 +280,7 @@ final class Seccomp {
             throw new UnsupportedOperationException("seccomp unavailable: your kernel is buggy and you should upgrade");
         }
 
-        switch (Native.getLastError()) {
-            case ENOSYS:
-                break; // ok
-            case EPERM:
-                // NOT ok, but likely a docker container
-                if (logger.isDebugEnabled()) {
-                    logger.debug("syscall(BOGUS) bogusly gets EPERM instead of ENOSYS");
-                }
-                break;
-            default:
-                throw new UnsupportedOperationException("seccomp unavailable: your kernel is buggy and you should upgrade");
-        }
+        checkNative();
 
         // try to check system calls really are who they claim
         // you never know (e.g. https://chromium.googlesource.com/chromium/src.git/+/master/sandbox/linux/seccomp-bpf/sandbox_bpf.cc#57)
@@ -299,70 +288,22 @@ final class Seccomp {
 
         // test seccomp(BOGUS)
         long ret = linux_syscall(arch.seccomp, bogusArg);
-        if (ret != -1) {
-            throw new UnsupportedOperationException("seccomp unavailable: seccomp(BOGUS_OPERATION) returned " + ret);
-        } else {
-            int errno = Native.getLastError();
-            switch (errno) {
-                case ENOSYS: break; // ok
-                case EINVAL: break; // ok
-                default: throw new UnsupportedOperationException("seccomp(BOGUS_OPERATION): " + JNACLibrary.strerror(errno));
-            }
-        }
+        testSeccompBogus(ret);
 
         // test seccomp(VALID, BOGUS)
         ret = linux_syscall(arch.seccomp, SECCOMP_SET_MODE_FILTER, bogusArg);
-        if (ret != -1) {
-            throw new UnsupportedOperationException("seccomp unavailable: seccomp(SECCOMP_SET_MODE_FILTER, BOGUS_FLAG) returned " + ret);
-        } else {
-            int errno = Native.getLastError();
-            switch (errno) {
-                case ENOSYS: break; // ok
-                case EINVAL: break; // ok
-                default: throw new UnsupportedOperationException("seccomp(SECCOMP_SET_MODE_FILTER, BOGUS_FLAG): " + JNACLibrary.strerror(errno));
-            }
-        }
+        testSeccompValidBogus(ret);
 
         // test prctl(BOGUS)
         ret = linux_prctl(bogusArg, 0, 0, 0, 0);
-        if (ret != -1) {
-            throw new UnsupportedOperationException("seccomp unavailable: prctl(BOGUS_OPTION) returned " + ret);
-        } else {
-            int errno = Native.getLastError();
-            switch (errno) {
-                case ENOSYS: break; // ok
-                case EINVAL: break; // ok
-                default: throw new UnsupportedOperationException("prctl(BOGUS_OPTION): " + JNACLibrary.strerror(errno));
-            }
-        }
+        testprctlBogus(ret);
 
         // now just normal defensive checks
 
         // check for GET_NO_NEW_PRIVS
-        switch (linux_prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0)) {
-            case 0: break; // not yet set
-            case 1: break; // already set by caller
-            default:
-                int errno = Native.getLastError();
-                if (errno == EINVAL) {
-                    // friendly error, this will be the typical case for an old kernel
-                    throw new UnsupportedOperationException("seccomp unavailable: requires kernel 3.5+ with CONFIG_SECCOMP and CONFIG_SECCOMP_FILTER compiled in");
-                } else {
-                    throw new UnsupportedOperationException("prctl(PR_GET_NO_NEW_PRIVS): " + JNACLibrary.strerror(errno));
-                }
-        }
+        checkGetNoNewPrivs();
         // check for SECCOMP
-        switch (linux_prctl(PR_GET_SECCOMP, 0, 0, 0, 0)) {
-            case 0: break; // not yet set
-            case 2: break; // already in filter mode by caller
-            default:
-                int errno = Native.getLastError();
-                if (errno == EINVAL) {
-                    throw new UnsupportedOperationException("seccomp unavailable: CONFIG_SECCOMP not compiled into kernel, CONFIG_SECCOMP and CONFIG_SECCOMP_FILTER are needed");
-                } else {
-                    throw new UnsupportedOperationException("prctl(PR_GET_SECCOMP): " + JNACLibrary.strerror(errno));
-                }
-        }
+        checkSeccomp();
         // check for SECCOMP_MODE_FILTER
         if (linux_prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, 0, 0, 0) != 0) {
             int errno = Native.getLastError();
@@ -424,6 +365,89 @@ final class Seccomp {
 
         logger.debug("Linux seccomp filter installation successful, threads: [{}]", method == 1 ? "all" : "app" );
         return method;
+    }
+
+    private static void testprctlBogus(long ret) {
+        if (ret != -1) {
+            throw new UnsupportedOperationException("seccomp unavailable: prctl(BOGUS_OPTION) returned " + ret);
+        } else {
+            int errno = Native.getLastError();
+            switch (errno) {
+                case ENOSYS: break; // ok
+                case EINVAL: break; // ok
+                default: throw new UnsupportedOperationException("prctl(BOGUS_OPTION): " + JNACLibrary.strerror(errno));
+            }
+        }
+    }
+
+    private static void testSeccompValidBogus(long ret) {
+        if (ret != -1) {
+            throw new UnsupportedOperationException("seccomp unavailable: seccomp(SECCOMP_SET_MODE_FILTER, BOGUS_FLAG) returned " + ret);
+        } else {
+            int errno = Native.getLastError();
+            switch (errno) {
+                case ENOSYS: break; // ok
+                case EINVAL: break; // ok
+                default: throw new UnsupportedOperationException("seccomp(SECCOMP_SET_MODE_FILTER, BOGUS_FLAG): " + JNACLibrary.strerror(errno));
+            }
+        }
+    }
+
+    private static void testSeccompBogus(long ret) {
+        if (ret != -1) {
+            throw new UnsupportedOperationException("seccomp unavailable: seccomp(BOGUS_OPERATION) returned " + ret);
+        } else {
+            int errno = Native.getLastError();
+            switch (errno) {
+                case ENOSYS: break; // ok
+                case EINVAL: break; // ok
+                default: throw new UnsupportedOperationException("seccomp(BOGUS_OPERATION): " + JNACLibrary.strerror(errno));
+            }
+        }
+    }
+
+    private static void checkSeccomp() {
+        switch (linux_prctl(PR_GET_SECCOMP, 0, 0, 0, 0)) {
+            case 0: break; // not yet set
+            case 2: break; // already in filter mode by caller
+            default:
+                int errno = Native.getLastError();
+                if (errno == EINVAL) {
+                    throw new UnsupportedOperationException("seccomp unavailable: CONFIG_SECCOMP not compiled into kernel, CONFIG_SECCOMP and CONFIG_SECCOMP_FILTER are needed");
+                } else {
+                    throw new UnsupportedOperationException("prctl(PR_GET_SECCOMP): " + JNACLibrary.strerror(errno));
+                }
+        }
+    }
+
+    private static void checkGetNoNewPrivs() {
+        switch (linux_prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0)) {
+            case 0: break; // not yet set
+            case 1: break; // already set by caller
+            default:
+                int errno = Native.getLastError();
+                if (errno == EINVAL) {
+                    // friendly error, this will be the typical case for an old kernel
+                    throw new UnsupportedOperationException("seccomp unavailable: requires kernel 3.5+ with CONFIG_SECCOMP and CONFIG_SECCOMP_FILTER compiled in");
+                } else {
+                    throw new UnsupportedOperationException("prctl(PR_GET_NO_NEW_PRIVS): " + JNACLibrary.strerror(errno));
+                }
+        }
+    }
+
+    private static void checkNative() {
+        switch (Native.getLastError()) {
+            case ENOSYS:
+                break; // ok
+            case EPERM:
+                // NOT ok, but likely a docker container
+                if (logger.isDebugEnabled()) {
+                    logger.debug("syscall(BOGUS) bogusly gets EPERM instead of ENOSYS");
+                }
+                break;
+            default:
+                throw new UnsupportedOperationException("seccomp unavailable: your kernel is buggy and you should upgrade");
+        }
     }
 
     // OS X implementation via sandbox(7)

@@ -139,9 +139,9 @@ public class TransportClusterAllocationExplainAction
                                                            String assignedNodeId,
                                                            Set<String> activeAllocationIds,
                                                            boolean hasPendingAsyncFetch) {
-        final ClusterAllocationExplanation.FinalDecision finalDecision;
+        ClusterAllocationExplanation.FinalDecision finalDecision;
         final ClusterAllocationExplanation.StoreCopy storeCopy;
-        final String finalExplanation;
+        String finalExplanation;
 
         if (storeStatus == null) {
             // No copies of the data
@@ -184,36 +184,10 @@ public class TransportClusterAllocationExplainAction
                 && hasPendingAsyncFetch) {
             finalExplanation = "the shard's state is still being fetched so it cannot be allocated";
             finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
-        } else if (shard.primary() && shard.unassigned() && shard.recoverySource().getType() == RecoverySource.Type.EXISTING_STORE &&
-                storeCopy == ClusterAllocationExplanation.StoreCopy.STALE) {
-            finalExplanation = "the copy of the shard is stale, allocation ids do not match";
-            finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
-        } else if (shard.primary() && shard.unassigned() && shard.recoverySource().getType() == RecoverySource.Type.EXISTING_STORE &&
-                storeCopy == ClusterAllocationExplanation.StoreCopy.NONE) {
-            finalExplanation = "there is no copy of the shard available";
-            finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
-        } else if (shard.primary() && shard.unassigned() && shard.recoverySource().getType() == RecoverySource.Type.EXISTING_STORE &&
-                storeCopy == ClusterAllocationExplanation.StoreCopy.CORRUPT) {
-            finalExplanation = "the copy of the shard is corrupt";
-            finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
-        } else if (shard.primary() && shard.unassigned() && shard.recoverySource().getType() == RecoverySource.Type.EXISTING_STORE &&
-                storeCopy == ClusterAllocationExplanation.StoreCopy.IO_ERROR) {
-            finalExplanation = "the copy of the shard cannot be read";
-            finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
-        } else {
-            if (nodeDecision.type() == Decision.Type.NO) {
-                finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
-                finalExplanation = "the shard cannot be assigned because one or more allocation decider returns a 'NO' decision";
-            } else {
-                // TODO: handle throttling decision better here
-                finalDecision = ClusterAllocationExplanation.FinalDecision.YES;
-                if (storeCopy == ClusterAllocationExplanation.StoreCopy.AVAILABLE) {
-                    finalExplanation = "the shard can be assigned and the node contains a valid copy of the shard data";
-                } else {
-                    finalExplanation = "the shard can be assigned";
-                }
-            }
         }
+        NodetoAssignedNode nodetoAssignedNode = new NodetoAssignedNode(shard, nodeDecision, storeCopy).invoke();
+            finalDecision = nodetoAssignedNode.getFinalDecision();
+            finalExplanation = nodetoAssignedNode.getFinalExplanation();
         return new NodeExplanation(node, nodeDecision, nodeWeight, storeStatus, finalDecision, finalExplanation, storeCopy);
     }
 
@@ -341,5 +315,61 @@ public class TransportClusterAllocationExplainAction
         IndicesShardStoresRequest request = new IndicesShardStoresRequest(shard.getIndexName());
         request.shardStatuses("all");
         shardStoresAction.execute(request, listener);
+    }
+
+    private static class NodetoAssignedNode {
+        private ShardRouting shard;
+        private Decision nodeDecision;
+        private ClusterAllocationExplanation.StoreCopy storeCopy;
+        private ClusterAllocationExplanation.FinalDecision finalDecision;
+        private String finalExplanation;
+
+        public NodetoAssignedNode(ShardRouting shard, Decision nodeDecision, ClusterAllocationExplanation.StoreCopy storeCopy) {
+            this.shard = shard;
+            this.nodeDecision = nodeDecision;
+            this.storeCopy = storeCopy;
+        }
+
+        public ClusterAllocationExplanation.FinalDecision getFinalDecision() {
+            return finalDecision;
+        }
+
+        public String getFinalExplanation() {
+            return finalExplanation;
+        }
+
+        public NodetoAssignedNode invoke() {
+            if (shard.primary() && shard.unassigned() && shard.recoverySource().getType() == RecoverySource.Type.EXISTING_STORE &&
+                    storeCopy == ClusterAllocationExplanation.StoreCopy.STALE) {
+                finalExplanation = "the copy of the shard is stale, allocation ids do not match";
+                finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
+            } else if (shard.primary() && shard.unassigned() && shard.recoverySource().getType() == RecoverySource.Type.EXISTING_STORE &&
+                    storeCopy == ClusterAllocationExplanation.StoreCopy.NONE) {
+                finalExplanation = "there is no copy of the shard available";
+                finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
+            } else if (shard.primary() && shard.unassigned() && shard.recoverySource().getType() == RecoverySource.Type.EXISTING_STORE &&
+                    storeCopy == ClusterAllocationExplanation.StoreCopy.CORRUPT) {
+                finalExplanation = "the copy of the shard is corrupt";
+                finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
+            } else if (shard.primary() && shard.unassigned() && shard.recoverySource().getType() == RecoverySource.Type.EXISTING_STORE &&
+                    storeCopy == ClusterAllocationExplanation.StoreCopy.IO_ERROR) {
+                finalExplanation = "the copy of the shard cannot be read";
+                finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
+            } else {
+                if (nodeDecision.type() == Decision.Type.NO) {
+                    finalDecision = ClusterAllocationExplanation.FinalDecision.NO;
+                    finalExplanation = "the shard cannot be assigned because one or more allocation decider returns a 'NO' decision";
+                } else {
+                    // TODO: handle throttling decision better here
+                    finalDecision = ClusterAllocationExplanation.FinalDecision.YES;
+                    if (storeCopy == ClusterAllocationExplanation.StoreCopy.AVAILABLE) {
+                        finalExplanation = "the shard can be assigned and the node contains a valid copy of the shard data";
+                    } else {
+                        finalExplanation = "the shard can be assigned";
+                    }
+                }
+            }
+            return this;
+        }
     }
 }

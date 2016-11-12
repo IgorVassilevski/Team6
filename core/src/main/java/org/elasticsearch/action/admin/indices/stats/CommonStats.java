@@ -302,6 +302,10 @@ public class CommonStats implements Streamable, ToXContent {
         } else {
             warmer.add(stats.getWarmer());
         }
+        addRest(stats);
+    }
+
+    private void addRest(CommonStats stats) {
         if (queryCache == null) {
             if (stats.getQueryCache() != null) {
                 queryCache = new QueryCacheStats();

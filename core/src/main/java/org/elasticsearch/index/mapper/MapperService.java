@@ -19,80 +19,114 @@
 
 package org.elasticsearch.index.mapper;
 
-import com.carrotsearch.hppc.ObjectOpenHashSet;
-import com.google.common.base.Charsets;
+import com.carrotsearch.hppc.ObjectHashSet;
+import com.google.common.base.Function;
 import com.google.common.base.Predicate;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
-import com.google.common.collect.Lists;
+
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.DelegatingAnalyzerWrapper;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queries.FilterClause;
-import org.apache.lucene.queries.TermFilter;
-import org.apache.lucene.queries.TermsFilter;
+import org.apache.lucene.queries.TermsQuery;
 import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.Filter;
+import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.ConstantScoreQuery;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.ElasticsearchGenerationException;
-import org.elasticsearch.ElasticsearchIllegalArgumentException;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.collect.ImmutableOpenMap;
-import org.elasticsearch.common.collect.Tuple;
-import org.elasticsearch.common.compress.CompressedString;
+import org.elasticsearch.common.compress.CompressedXContent;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.io.FileSystemUtils;
-import org.elasticsearch.common.io.Streams;
-import org.elasticsearch.common.lucene.search.AndFilter;
-import org.elasticsearch.common.lucene.search.NotFilter;
-import org.elasticsearch.common.lucene.search.XBooleanFilter;
+import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.env.FailedToResolveConfigException;
 import org.elasticsearch.index.AbstractIndexComponent;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.analysis.AnalysisService;
-import org.elasticsearch.index.codec.docvaluesformat.DocValuesFormatService;
-import org.elasticsearch.index.codec.postingsformat.PostingsFormatService;
-import org.elasticsearch.index.fielddata.IndexFieldDataService;
 import org.elasticsearch.index.mapper.Mapper.BuilderContext;
-import org.elasticsearch.index.mapper.array.DynamicArrayFieldMapperBuilderFactoryProvider;
 import org.elasticsearch.index.mapper.internal.TypeFieldMapper;
 import org.elasticsearch.index.mapper.object.ObjectMapper;
-import org.elasticsearch.index.search.nested.NonNestedDocsFilter;
-import org.elasticsearch.index.settings.IndexSettings;
+import org.elasticsearch.index.settings.IndexSettingsService;
 import org.elasticsearch.index.similarity.SimilarityLookupService;
 import org.elasticsearch.indices.InvalidTypeNameException;
 import org.elasticsearch.indices.TypeMissingException;
+import org.elasticsearch.indices.mapper.MapperRegistry;
 import org.elasticsearch.percolator.PercolatorService;
 import org.elasticsearch.script.ScriptService;
 
+import java.io.Closeable;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.elasticsearch.common.collect.MapBuilder.newMapBuilder;
-import static org.elasticsearch.index.mapper.DocumentMapper.MergeFlags.mergeFlags;
 
 /**
  *
  */
-public class MapperService extends AbstractIndexComponent  {
+public class MapperService extends AbstractIndexComponent implements Closeable {
+
+    /**
+     * The reason why a mapping is being merged.
+     */
+    public enum MergeReason {
+        /**
+         * Create or update a mapping.
+         */
+        MAPPING_UPDATE,
+        /**
+         * Recovery of an existing mapping, for instance because of a restart,
+         * if a shard was moved to a different node or for administrative
+         * purposes.
+         */
+        MAPPING_RECOVERY;
+    }
 
     public static final String DEFAULT_MAPPING = "_default_";
-    private static ObjectOpenHashSet<String> META_FIELDS = ObjectOpenHashSet.from(
-            "_uid", "_id", "_type", "_all", "_analyzer", "_boost", "_parent", "_routing", "_index",
+    public static final String INDEX_MAPPER_DYNAMIC_SETTING = "index.mapper.dynamic";
+    public static final String INDEX_MAPPING_NESTED_FIELDS_LIMIT_SETTING = "index.mapping.nested_fields.limit";
+    public static final boolean INDEX_MAPPER_DYNAMIC_DEFAULT = true;
+    private static ObjectHashSet<String> META_FIELDS = ObjectHashSet.from(
+            "_uid", "_id", "_type", "_all", "_parent", "_routing", "_index",
             "_size", "_timestamp", "_ttl"
     );
 
+    private static final Function<MappedFieldType, Analyzer> INDEX_ANALYZER_EXTRACTOR = new Function<MappedFieldType, Analyzer>() {
+        public Analyzer apply(MappedFieldType fieldType) {
+            return fieldType.indexAnalyzer();
+        }
+    };
+    private static final Function<MappedFieldType, Analyzer> SEARCH_ANALYZER_EXTRACTOR = new Function<MappedFieldType, Analyzer>() {
+        public Analyzer apply(MappedFieldType fieldType) {
+            return fieldType.searchAnalyzer();
+        }
+    };
+    private static final Function<MappedFieldType, Analyzer> SEARCH_QUOTE_ANALYZER_EXTRACTOR = new Function<MappedFieldType, Analyzer>() {
+        public Analyzer apply(MappedFieldType fieldType) {
+            return fieldType.searchQuoteAnalyzer();
+        }
+    };
+
+    private final Settings indexSettings;
+
+    private final IndexSettingsService indexSettingsService;
+
     private final AnalysisService analysisService;
-    private final IndexFieldDataService fieldDataService;
 
     /**
      * Will create types automatically if they do not exists in the mapping definition yet
@@ -102,142 +136,76 @@ public class MapperService extends AbstractIndexComponent  {
     private volatile String defaultMappingSource;
     private volatile String defaultPercolatorMappingSource;
 
-
     private volatile Map<String, DocumentMapper> mappers = ImmutableMap.of();
 
-    private final Object typeMutex = new Object();
-    private final Object mappersMutex = new Object();
-
-    private volatile FieldMappersLookup fieldMappers;
-    private volatile ImmutableOpenMap<String, ObjectMappers> fullPathObjectMappers = ImmutableOpenMap.of();
+    private volatile FieldTypeLookup fieldTypes;
+    private volatile Map<String, ObjectMapper> fullPathObjectMappers = new HashMap<>();
     private boolean hasNested = false; // updated dynamically to true when a nested object is added
 
     private final DocumentMapperParser documentParser;
 
-    private final InternalFieldMapperListener fieldMapperListener = new InternalFieldMapperListener();
-    private final InternalObjectMapperListener objectMapperListener = new InternalObjectMapperListener();
-
-    private final SmartIndexNameSearchAnalyzer searchAnalyzer;
-    private final SmartIndexNameSearchQuoteAnalyzer searchQuoteAnalyzer;
+    private final MapperAnalyzerWrapper indexAnalyzer;
+    private final MapperAnalyzerWrapper searchAnalyzer;
+    private final MapperAnalyzerWrapper searchQuoteAnalyzer;
 
     private final List<DocumentTypeListener> typeListeners = new CopyOnWriteArrayList<>();
 
-    private volatile ImmutableMap<String, FieldMapper<?>> unmappedFieldMappers = ImmutableMap.of();
+    private volatile ImmutableMap<String, MappedFieldType> unmappedFieldTypes = ImmutableMap.of();
+
+    private volatile Set<String> parentTypes = ImmutableSet.of();
+
+    final MapperRegistry mapperRegistry;
 
     @Inject
-    public MapperService(Index index, @IndexSettings Settings indexSettings, Environment environment, AnalysisService analysisService, IndexFieldDataService fieldDataService,
-                         PostingsFormatService postingsFormatService, DocValuesFormatService docValuesFormatService, SimilarityLookupService similarityLookupService,
-                         ScriptService scriptService,
-                         DynamicArrayFieldMapperBuilderFactoryProvider dynamicArrayFieldMapperBuilderFactoryProvider) {
-        super(index, indexSettings);
+    public MapperService(Index index, IndexSettingsService indexSettingsService, AnalysisService analysisService,
+                         SimilarityLookupService similarityLookupService,
+                         ScriptService scriptService, MapperRegistry mapperRegistry) {
+        super(index, indexSettingsService.getSettings());
+        this.indexSettings = indexSettingsService.getSettings();
+        this.indexSettingsService = indexSettingsService;
         this.analysisService = analysisService;
-        this.fieldDataService = fieldDataService;
-        this.fieldMappers = new FieldMappersLookup();
-        this.documentParser = new DocumentMapperParser(index, indexSettings, analysisService, postingsFormatService, docValuesFormatService, similarityLookupService, scriptService, dynamicArrayFieldMapperBuilderFactoryProvider.get());
-        this.searchAnalyzer = new SmartIndexNameSearchAnalyzer(analysisService.defaultSearchAnalyzer());
-        this.searchQuoteAnalyzer = new SmartIndexNameSearchQuoteAnalyzer(analysisService.defaultSearchQuoteAnalyzer());
+        this.mapperRegistry = mapperRegistry;
+        this.fieldTypes = new FieldTypeLookup();
+        this.documentParser = new DocumentMapperParser(indexSettings, this, analysisService, similarityLookupService, scriptService, mapperRegistry);
+        this.indexAnalyzer = new MapperAnalyzerWrapper(analysisService.defaultIndexAnalyzer(), INDEX_ANALYZER_EXTRACTOR);
+        this.searchAnalyzer = new MapperAnalyzerWrapper(analysisService.defaultSearchAnalyzer(), SEARCH_ANALYZER_EXTRACTOR);
+        this.searchQuoteAnalyzer = new MapperAnalyzerWrapper(analysisService.defaultSearchQuoteAnalyzer(), SEARCH_QUOTE_ANALYZER_EXTRACTOR);
 
-        this.dynamic = componentSettings.getAsBoolean("dynamic", true);
-        String defaultMappingLocation = componentSettings.get("default_mapping_location");
-        final URL defaultMappingUrl;
+        this.dynamic = this.indexSettings.getAsBoolean(INDEX_MAPPER_DYNAMIC_SETTING, INDEX_MAPPER_DYNAMIC_DEFAULT);
+        defaultPercolatorMappingSource = "{\n" +
+            "\"_default_\":{\n" +
+            "\"properties\" : {\n" +
+            "\"query\" : {\n" +
+            "\"type\" : \"object\",\n" +
+            "\"enabled\" : false\n" +
+            "}\n" +
+            "}\n" +
+            "}\n" +
+            "}";
         if (index.getName().equals(ScriptService.SCRIPT_INDEX)){
-            defaultMappingUrl = getMappingUrl(indexSettings, environment, defaultMappingLocation, "script-mapping.json", "org/elasticsearch/index/mapper/script-mapping.json");
+            defaultMappingSource =  "{" +
+                "\"_default_\": {" +
+                "\"properties\": {" +
+                "\"script\": { \"enabled\": false }," +
+                "\"template\": { \"enabled\": false }" +
+                "}" +
+                "}" +
+                "}";
         } else {
-            defaultMappingUrl = getMappingUrl(indexSettings, environment, defaultMappingLocation, "default-mapping.json", "org/elasticsearch/index/mapper/default-mapping.json");
-        }
-
-        if (defaultMappingUrl == null) {
-            logger.info("failed to find default-mapping.json in the classpath, using the default template");
-            if (index.getName().equals(ScriptService.SCRIPT_INDEX)){
-                defaultMappingSource =  "{" +
-                        "\"_default_\": {" +
-                        "\"properties\": {" +
-                        "\"script\": { \"enabled\": false }," +
-                        "\"template\": { \"enabled\": false }" +
-                        "}" +
-                        "}" +
-                        "}";
-            } else {
-                defaultMappingSource = "{\n" +
-                        "    \"_default_\":{\n" +
-                        "    }\n" +
-                        "}";
-            }
-        } else {
-            try {
-                defaultMappingSource = Streams.copyToString(FileSystemUtils.newBufferedReader(defaultMappingUrl, Charsets.UTF_8));
-            } catch (IOException e) {
-                throw new MapperException("Failed to load default mapping source from [" + defaultMappingLocation + "]", e);
-            }
-        }
-
-        String percolatorMappingLocation = componentSettings.get("default_percolator_mapping_location");
-        URL percolatorMappingUrl = null;
-        if (percolatorMappingLocation != null) {
-            try {
-                percolatorMappingUrl = environment.resolveConfig(percolatorMappingLocation);
-            } catch (FailedToResolveConfigException e) {
-                // not there, default to the built in one
-                try {
-                percolatorMappingUrl = Paths.get(percolatorMappingLocation).toUri().toURL();
-                } catch (MalformedURLException e1) {
-                    throw new FailedToResolveConfigException("Failed to resolve default percolator mapping location [" + percolatorMappingLocation + "]");
-                }
-            }
-        }
-        if (percolatorMappingUrl != null) {
-            try {
-                defaultPercolatorMappingSource = Streams.copyToString(FileSystemUtils.newBufferedReader(percolatorMappingUrl, Charsets.UTF_8));
-            } catch (IOException e) {
-                throw new MapperException("Failed to load default percolator mapping source from [" + percolatorMappingUrl + "]", e);
-            }
-        } else {
-            defaultPercolatorMappingSource = "{\n" +
-                    //"    \"" + PercolatorService.TYPE_NAME + "\":{\n" +
-                    "    \"" + "_default_" + "\":{\n" +
-                    "        \"_id\" : {\"index\": \"not_analyzed\"}," +
-                    "        \"properties\" : {\n" +
-                    "            \"query\" : {\n" +
-                    "                \"type\" : \"object\",\n" +
-                    "                \"enabled\" : false\n" +
-                    "            }\n" +
-                    "        }\n" +
-                    "    }\n" +
-                    "}";
+            defaultMappingSource = "{\"_default_\":{}}";
         }
 
         if (logger.isTraceEnabled()) {
-            logger.trace("using dynamic[{}], default mapping: default_mapping_location[{}], loaded_from[{}] and source[{}], default percolator mapping: location[{}], loaded_from[{}] and source[{}]", dynamic, defaultMappingLocation, defaultMappingUrl, defaultMappingSource, percolatorMappingLocation, percolatorMappingUrl, defaultPercolatorMappingSource);
+            logger.trace("using dynamic[{}], default mapping source[{}], default percolator mapping source[{}]", dynamic, defaultMappingSource, defaultPercolatorMappingSource);
         } else if (logger.isDebugEnabled()) {
-            logger.debug("using dynamic[{}], default mapping: default_mapping_location[{}], loaded_from[{}], default percolator mapping: location[{}], loaded_from[{}]", dynamic, defaultMappingLocation, defaultMappingUrl, percolatorMappingLocation, percolatorMappingUrl);
+            logger.debug("using dynamic[{}]", dynamic);
         }
     }
 
-    private URL getMappingUrl(Settings indexSettings, Environment environment, String mappingLocation, String configString, String resourceLocation) {
-        URL mappingUrl;
-        if (mappingLocation == null) {
-            try {
-                mappingUrl = environment.resolveConfig(configString);
-            } catch (FailedToResolveConfigException e) {
-                // not there, default to the built in one
-                mappingUrl = indexSettings.getClassLoader().getResource(resourceLocation);
-                if (mappingUrl == null) {
-                    mappingUrl = MapperService.class.getClassLoader().getResource(resourceLocation);
-                }
-            }
-        } else {
-            try {
-                mappingUrl = environment.resolveConfig(mappingLocation);
-            } catch (FailedToResolveConfigException e) {
-                // not there, default to the built in one
-                try {
-                    mappingUrl = Paths.get(mappingLocation).toUri().toURL();
-                } catch (MalformedURLException e1) {
-                    throw new FailedToResolveConfigException("Failed to resolve dynamic mapping location [" + mappingLocation + "]");
-                }
-            }
-        }
-        return mappingUrl;
+    public MapperService(Index index, Settings indexSettings, AnalysisService analysisService,
+                         SimilarityLookupService similarityLookupService,
+                         ScriptService scriptService, MapperRegistry mapperRegistry) {
+        this(index, new IndexSettingsService(index, indexSettings), analysisService, similarityLookupService, scriptService, mapperRegistry);
     }
 
     public void close() {
@@ -294,13 +262,14 @@ public class MapperService extends AbstractIndexComponent  {
         typeListeners.remove(listener);
     }
 
-    public DocumentMapper merge(String type, CompressedString mappingSource, boolean applyDefault) {
+    public DocumentMapper merge(String type, CompressedXContent mappingSource, MergeReason reason, boolean updateAllTypes) {
         if (DEFAULT_MAPPING.equals(type)) {
             // verify we can parse it
-            DocumentMapper mapper = documentParser.parseCompressed(type, mappingSource);
+            // NOTE: never apply the default here
+            DocumentMapper mapper = documentParser.parse(type, mappingSource);
             // still add it as a document mapper so we have it registered and, for example, persisted back into
             // the cluster meta data if needed, or checked for existence
-            synchronized (typeMutex) {
+            synchronized (this) {
                 mappers = newMapBuilder(mappers).put(type, mapper).map();
             }
             try {
@@ -310,176 +279,279 @@ public class MapperService extends AbstractIndexComponent  {
             }
             return mapper;
         } else {
-            return merge(parse(type, mappingSource, applyDefault));
+            synchronized (this) {
+                final boolean applyDefault =
+                        // the default was already applied if we are recovering
+                        reason != MergeReason.MAPPING_RECOVERY
+                        // only apply the default mapping if we don't have the type yet
+                        && mappers.containsKey(type) == false;
+                DocumentMapper mergeWith = parse(type, mappingSource, applyDefault);
+                return merge(mergeWith, reason, updateAllTypes);
+            }
         }
     }
 
-    // never expose this to the outside world, we need to reparse the doc mapper so we get fresh
-    // instances of field mappers to properly remove existing doc mapper
-    private DocumentMapper merge(DocumentMapper mapper) {
-        synchronized (typeMutex) {
-            if (mapper.type().length() == 0) {
-                throw new InvalidTypeNameException("mapping type name is empty");
-            }
-            if (mapper.type().charAt(0) == '_') {
-                throw new InvalidTypeNameException("mapping type name [" + mapper.type() + "] can't start with '_'");
-            }
-            if (mapper.type().contains("#")) {
-                throw new InvalidTypeNameException("mapping type name [" + mapper.type() + "] should not include '#' in it");
-            }
-            if (mapper.type().contains(",")) {
-                throw new InvalidTypeNameException("mapping type name [" + mapper.type() + "] should not include ',' in it");
-            }
-            if (mapper.type().contains(".") && !PercolatorService.TYPE_NAME.equals(mapper.type())) {
-                logger.warn("Type [{}] contains a '.', it is recommended not to include it within a type name", mapper.type());
-            }
-            // we can add new field/object mappers while the old ones are there
-            // since we get new instances of those, and when we remove, we remove
-            // by instance equality
-            DocumentMapper oldMapper = mappers.get(mapper.type());
-
-            if (oldMapper != null) {
-                DocumentMapper.MergeResult result = oldMapper.merge(mapper, mergeFlags().simulate(false));
-                if (result.hasConflicts()) {
-                    // TODO: What should we do???
-                    if (logger.isDebugEnabled()) {
-                        logger.debug("merging mapping for type [{}] resulted in conflicts: [{}]", mapper.type(), Arrays.toString(result.conflicts()));
-                    }
-                }
-                fieldDataService.onMappingUpdate();
-                return oldMapper;
+    private synchronized DocumentMapper merge(DocumentMapper mapper, MergeReason reason, boolean updateAllTypes) {
+        if (mapper.type().length() == 0) {
+            throw new InvalidTypeNameException("mapping type name is empty");
+        }
+        if (Version.indexCreated(indexSettings).onOrAfter(Version.V_2_0_0_beta1) && mapper.type().length() > 255) {
+            throw new InvalidTypeNameException("mapping type name [" + mapper.type() + "] is too long; limit is length 255 but was [" + mapper.type().length() + "]");
+        }
+        if (mapper.type().charAt(0) == '_') {
+           throw new InvalidTypeNameException("mapping type name [" + mapper.type() + "] can't start with '_'");
+        }
+        if (mapper.type().contains("#")) {
+            throw new InvalidTypeNameException("mapping type name [" + mapper.type() + "] should not include '#' in it");
+        }
+        if (mapper.type().contains(",")) {
+            throw new InvalidTypeNameException("mapping type name [" + mapper.type() + "] should not include ',' in it");
+        }
+        if (Version.indexCreated(indexSettings).onOrAfter(Version.V_2_0_0_beta1) && mapper.type().equals(mapper.parentFieldMapper().type())) {
+            throw new IllegalArgumentException("The [_parent.type] option can't point to the same type");
+        }
+        if (typeNameStartsWithIllegalDot(mapper)) {
+            if (Version.indexCreated(indexSettings).onOrAfter(Version.V_2_0_0_beta1)) {
+                throw new IllegalArgumentException("mapping type name [" + mapper.type() + "] must not start with a '.'");
             } else {
-                FieldMapperListener.Aggregator fieldMappersAgg = new FieldMapperListener.Aggregator();
-                mapper.traverse(fieldMappersAgg);
-                addFieldMappers(fieldMappersAgg.mappers);
-                mapper.addFieldMapperListener(fieldMapperListener, false);
-
-                ObjectMapperListener.Aggregator objectMappersAgg = new ObjectMapperListener.Aggregator();
-                mapper.traverse(objectMappersAgg);
-                addObjectMappers(objectMappersAgg.mappers.toArray(new ObjectMapper[objectMappersAgg.mappers.size()]));
-                mapper.addObjectMapperListener(objectMapperListener, false);
-
-                for (DocumentTypeListener typeListener : typeListeners) {
-                    typeListener.beforeCreate(mapper);
-                }
-                mappers = newMapBuilder(mappers).put(mapper.type(), mapper).map();
-                return mapper;
+                logger.warn("Type [{}] starts with a '.', it is recommended not to start a type name with a '.'", mapper.type());
             }
         }
-    }
 
-    private void addObjectMappers(ObjectMapper[] objectMappers) {
-        synchronized (mappersMutex) {
-            ImmutableOpenMap.Builder<String, ObjectMappers> fullPathObjectMappers = ImmutableOpenMap.builder(this.fullPathObjectMappers);
-            for (ObjectMapper objectMapper : objectMappers) {
-                ObjectMappers mappers = fullPathObjectMappers.get(objectMapper.fullPath());
-                if (mappers == null) {
-                    mappers = new ObjectMappers(objectMapper);
-                } else {
-                    mappers = mappers.concat(objectMapper);
-                }
-                fullPathObjectMappers.put(objectMapper.fullPath(), mappers);
-                // update the hasNested flag
-                if (objectMapper.nested().isNested()) {
-                    hasNested = true;
-                }
-            }
-            this.fullPathObjectMappers = fullPathObjectMappers.build();
+        // 1. compute the merged DocumentMapper
+        DocumentMapper oldMapper = mappers.get(mapper.type());
+        DocumentMapper newMapper;
+        if (oldMapper != null) {
+            newMapper = oldMapper.merge(mapper.mapping(), updateAllTypes);
+        } else {
+            newMapper = mapper;
         }
-    }
 
-    private void addFieldMappers(List<FieldMapper<?>> fieldMappers) {
-        synchronized (mappersMutex) {
-            this.fieldMappers = this.fieldMappers.copyAndAddAll(fieldMappers);
-        }
-    }
+        // 2. check basic sanity of the new mapping
+        List<ObjectMapper> objectMappers = new ArrayList<>();
+        List<FieldMapper> fieldMappers = new ArrayList<>();
+        Collections.addAll(fieldMappers, newMapper.mapping().metadataMappers);
+        MapperUtils.collect(newMapper.mapping().root(), objectMappers, fieldMappers);
+        checkFieldUniqueness(newMapper.type(), objectMappers, fieldMappers);
+        checkObjectsCompatibility(newMapper.type(), objectMappers, fieldMappers, updateAllTypes);
 
-    public void remove(String type) {
-        synchronized (typeMutex) {
-            DocumentMapper docMapper = mappers.get(type);
-            if (docMapper == null) {
-                return;
+        // 3. update lookup data-structures
+        // this will in particular make sure that the merged fields are compatible with other types
+        FieldTypeLookup fieldTypes = this.fieldTypes.copyAndAddAll(newMapper.type(), fieldMappers, updateAllTypes);
+
+        boolean hasNested = this.hasNested;
+        Map<String, ObjectMapper> fullPathObjectMappers = new HashMap<>(this.fullPathObjectMappers);
+        for (ObjectMapper objectMapper : objectMappers) {
+            fullPathObjectMappers.put(objectMapper.fullPath(), objectMapper);
+            if (objectMapper.nested().isNested()) {
+                hasNested = true;
             }
-            docMapper.close();
-            mappers = newMapBuilder(mappers).remove(type).map();
-            removeObjectAndFieldMappers(docMapper);
+        }
+        fullPathObjectMappers = Collections.unmodifiableMap(fullPathObjectMappers);
+
+        if (reason == MergeReason.MAPPING_UPDATE) {
+            checkNestedFieldsLimit(fullPathObjectMappers);
+        }
+
+        Set<String> parentTypes = this.parentTypes;
+        if (oldMapper == null && newMapper.parentFieldMapper().active()) {
+            parentTypes = new HashSet<>(parentTypes.size() + 1);
+            parentTypes.addAll(this.parentTypes);
+            parentTypes.add(mapper.parentFieldMapper().type());
+            parentTypes = Collections.unmodifiableSet(parentTypes);
+        }
+
+        Map<String, DocumentMapper> mappers = new HashMap<>(this.mappers);
+        mappers.put(newMapper.type(), newMapper);
+        for (Map.Entry<String, DocumentMapper> entry : mappers.entrySet()) {
+            if (entry.getKey().equals(DEFAULT_MAPPING)) {
+                continue;
+            }
+            DocumentMapper m = entry.getValue();
+            // apply changes to the field types back
+            m = m.updateFieldType(fieldTypes.fullNameToFieldType);
+            entry.setValue(m);
+        }
+        mappers = Collections.unmodifiableMap(mappers);
+
+        // 4. commit the change
+        this.mappers = mappers;
+        this.fieldTypes = fieldTypes;
+        this.hasNested = hasNested;
+        this.fullPathObjectMappers = fullPathObjectMappers;
+        this.parentTypes = parentTypes;
+
+        // 5. send notifications about the change
+        if (oldMapper == null) {
+            // means the mapping was created
             for (DocumentTypeListener typeListener : typeListeners) {
-                typeListener.afterRemove(docMapper);
+                typeListener.beforeCreate(mapper);
+            }
+        }
+
+        assert assertSerialization(newMapper);
+        assert assertMappersShareSameFieldType();
+
+        return newMapper;
+    }
+
+    private boolean assertMappersShareSameFieldType() {
+        for (DocumentMapper mapper : docMappers(false)) {
+            List<FieldMapper> fieldMappers = new ArrayList<>();
+            Collections.addAll(fieldMappers, mapper.mapping().metadataMappers);
+            MapperUtils.collect(mapper.root(), new ArrayList<ObjectMapper>(), fieldMappers);
+            for (FieldMapper fieldMapper : fieldMappers) {
+                assert fieldMapper.fieldType() == fieldTypes.get(fieldMapper.name()) : fieldMapper.name();
+            }
+        }
+        return true;
+    }
+
+    private boolean typeNameStartsWithIllegalDot(DocumentMapper mapper) {
+        return mapper.type().startsWith(".") && !PercolatorService.TYPE_NAME.equals(mapper.type());
+    }
+
+    private boolean assertSerialization(DocumentMapper mapper) {
+        // capture the source now, it may change due to concurrent parsing
+        final CompressedXContent mappingSource = mapper.mappingSource();
+        DocumentMapper newMapper = parse(mapper.type(), mappingSource, false);
+
+        if (newMapper.mappingSource().equals(mappingSource) == false) {
+            throw new IllegalStateException("DocumentMapper serialization result is different from source. \n--> Source ["
+                + mappingSource + "]\n--> Result ["
+                + newMapper.mappingSource() + "]");
+        }
+        return true;
+    }
+
+    private void checkFieldUniqueness(String type, Collection<ObjectMapper> objectMappers, Collection<FieldMapper> fieldMappers) {
+        assert Thread.holdsLock(this);
+
+        // first check within mapping
+        final Set<String> objectFullNames = new HashSet<>();
+        for (ObjectMapper objectMapper : objectMappers) {
+            final String fullPath = objectMapper.fullPath();
+            if (objectFullNames.add(fullPath) == false) {
+                throw new IllegalArgumentException("Object mapper [" + fullPath + "] is defined twice in mapping for type [" + type + "]");
+            }
+        }
+
+        {
+            // Before 3.0 some metadata mappers are also registered under the root object mapper
+            // So we avoid false positives by deduplicating mappers
+            // given that we check exact equality, this would still catch the case that a mapper
+            // is defined under the root object
+            Collection<FieldMapper> uniqueFieldMappers = Collections.newSetFromMap(new IdentityHashMap<FieldMapper, Boolean>());
+            uniqueFieldMappers.addAll(fieldMappers);
+            fieldMappers = uniqueFieldMappers;
+        }
+
+        final Set<String> fieldNames = new HashSet<>();
+        for (FieldMapper fieldMapper : fieldMappers) {
+            final String name = fieldMapper.name();
+            if (objectFullNames.contains(name)) {
+                throw new IllegalArgumentException("Field [" + name + "] is defined both as an object and a field in [" + type + "]");
+            } else if (fieldNames.add(name) == false) {
+                throw new IllegalArgumentException("Field [" + name + "] is defined twice in [" + type + "]");
+            }
+        }
+
+        // then check other types
+        for (String fieldName : fieldNames) {
+            if (fullPathObjectMappers.containsKey(fieldName)) {
+                throw new IllegalArgumentException("[" + fieldName + "] is defined as a field in mapping [" + type
+                        + "] but this name is already used for an object in other types");
+            }
+        }
+
+        for (String objectPath : objectFullNames) {
+            if (fieldTypes.get(objectPath) != null) {
+                throw new IllegalArgumentException("[" + objectPath + "] is defined as an object in mapping [" + type
+                        + "] but this name is already used for a field in other types");
             }
         }
     }
 
-    private void removeObjectAndFieldMappers(DocumentMapper docMapper) {
-        synchronized (mappersMutex) {
-            fieldMappers = fieldMappers.copyAndRemoveAll(docMapper.mappers());
+    private void checkObjectsCompatibility(String type, Collection<ObjectMapper> objectMappers, Collection<FieldMapper> fieldMappers, boolean updateAllTypes) {
+        assert Thread.holdsLock(this);
 
-            ImmutableOpenMap.Builder<String, ObjectMappers> fullPathObjectMappers = ImmutableOpenMap.builder(this.fullPathObjectMappers);
-            for (ObjectMapper mapper : docMapper.objectMappers().values()) {
-                ObjectMappers mappers = fullPathObjectMappers.get(mapper.fullPath());
-                if (mappers != null) {
-                    mappers = mappers.remove(mapper);
-                    if (mappers.isEmpty()) {
-                        fullPathObjectMappers.remove(mapper.fullPath());
-                    } else {
-                        fullPathObjectMappers.put(mapper.fullPath(), mappers);
-                    }
-                }
+        for (ObjectMapper newObjectMapper : objectMappers) {
+            ObjectMapper existingObjectMapper = fullPathObjectMappers.get(newObjectMapper.fullPath());
+            if (existingObjectMapper != null) {
+                // simulate a merge and ignore the result, we are just interested
+                // in exceptions here
+                existingObjectMapper.merge(newObjectMapper, updateAllTypes);
             }
-
-            this.fullPathObjectMappers = fullPathObjectMappers.build();
         }
     }
 
-    public DocumentMapper parse(String mappingType, CompressedString mappingSource, boolean applyDefault) throws MapperParsingException {
+    private void checkNestedFieldsLimit(Map<String, ObjectMapper> fullPathObjectMappers) {
+        long allowedNestedFields = indexSettingsService.getSettings().getAsLong(INDEX_MAPPING_NESTED_FIELDS_LIMIT_SETTING, 50L);
+        long actualNestedFields = 0;
+        for (ObjectMapper objectMapper : fullPathObjectMappers.values()) {
+            if (objectMapper.nested().isNested()) {
+                actualNestedFields++;
+            }
+        }
+        if (allowedNestedFields >= 0 && actualNestedFields > allowedNestedFields) {
+            throw new IllegalArgumentException("Limit of nested fields [" + allowedNestedFields + "] in index [" + index().name() + "] has been exceeded");
+        }
+    }
+
+    public DocumentMapper parse(String mappingType, CompressedXContent mappingSource, boolean applyDefault) throws MapperParsingException {
         String defaultMappingSource;
         if (PercolatorService.TYPE_NAME.equals(mappingType)) {
             defaultMappingSource = this.defaultPercolatorMappingSource;
         }  else {
             defaultMappingSource = this.defaultMappingSource;
         }
-        return documentParser.parseCompressed(mappingType, mappingSource, applyDefault ? defaultMappingSource : null);
+        return documentParser.parse(mappingType, mappingSource, applyDefault ? defaultMappingSource : null);
     }
 
     public boolean hasMapping(String mappingType) {
         return mappers.containsKey(mappingType);
     }
 
+    /**
+     * Return the set of concrete types that have a mapping.
+     * NOTE: this does not return the default mapping.
+     */
     public Collection<String> types() {
-        return mappers.keySet();
+        final Set<String> types = new HashSet<>(mappers.keySet());
+        types.remove(DEFAULT_MAPPING);
+        return Collections.unmodifiableSet(types);
     }
 
+    /**
+     * Return the {@link DocumentMapper} for the given type. By using the special
+     * {@value #DEFAULT_MAPPING} type, you can get a {@link DocumentMapper} for
+     * the default mapping.
+     */
     public DocumentMapper documentMapper(String type) {
         return mappers.get(type);
     }
 
     /**
-     * Returns the document mapper created, including if the document mapper ended up
-     * being actually created or not in the second tuple value.
+     * Returns the document mapper created, including a mapping update if the
+     * type has been dynamically created.
      */
-    public Tuple<DocumentMapper, Boolean> documentMapperWithAutoCreate(String type) {
+    public DocumentMapperForType documentMapperWithAutoCreate(String type) {
         DocumentMapper mapper = mappers.get(type);
         if (mapper != null) {
-            return Tuple.tuple(mapper, Boolean.FALSE);
+            return new DocumentMapperForType(mapper, null);
         }
         if (!dynamic) {
             throw new TypeMissingException(index, type, "trying to auto create mapping, but dynamic mapping is disabled");
         }
-        // go ahead and dynamically create it
-        synchronized (typeMutex) {
-            mapper = mappers.get(type);
-            if (mapper != null) {
-                return Tuple.tuple(mapper, Boolean.FALSE);
-            }
-            merge(type, null, true);
-            return Tuple.tuple(mappers.get(type), Boolean.TRUE);
-        }
+        mapper = parse(type, null, true);
+        return new DocumentMapperForType(mapper, mapper.mapping());
     }
 
     /**
      * A filter for search. If a filter is required, will return it, otherwise, will return <tt>null</tt>.
      */
     @Nullable
-    public Filter searchFilter(String... types) {
+    public Query searchFilter(String... types) {
         boolean filterPercolateType = hasMapping(PercolatorService.TYPE_NAME);
         if (types != null && filterPercolateType) {
             for (String type : types) {
@@ -489,18 +561,21 @@ public class MapperService extends AbstractIndexComponent  {
                 }
             }
         }
-        Filter excludePercolatorType = null;
+        Query percolatorType = null;
         if (filterPercolateType) {
-            excludePercolatorType = new NotFilter(documentMapper(PercolatorService.TYPE_NAME).typeFilter());
+            percolatorType = documentMapper(PercolatorService.TYPE_NAME).typeFilter();
         }
 
         if (types == null || types.length == 0) {
             if (hasNested && filterPercolateType) {
-                return new AndFilter(ImmutableList.of(excludePercolatorType, NonNestedDocsFilter.INSTANCE));
+                BooleanQuery.Builder bq = new BooleanQuery.Builder();
+                bq.add(percolatorType, Occur.MUST_NOT);
+                bq.add(Queries.newNonNestedFilter(), Occur.MUST);
+                return new ConstantScoreQuery(bq.build());
             } else if (hasNested) {
-                return NonNestedDocsFilter.INSTANCE;
+                return Queries.newNonNestedFilter();
             } else if (filterPercolateType) {
-                return excludePercolatorType;
+                return new ConstantScoreQuery(Queries.not(percolatorType));
             } else {
                 return null;
             }
@@ -509,9 +584,12 @@ public class MapperService extends AbstractIndexComponent  {
         // since they have different types (starting with __)
         if (types.length == 1) {
             DocumentMapper docMapper = documentMapper(types[0]);
-            Filter filter = docMapper != null ? docMapper.typeFilter() : new TermFilter(new Term(types[0]));
-            if (hasNested) {
-                return new AndFilter(ImmutableList.of(filter, NonNestedDocsFilter.INSTANCE));
+            Query filter = docMapper != null ? docMapper.typeFilter() : new TermQuery(new Term(TypeFieldMapper.NAME, types[0]));
+            if (filterPercolateType) {
+                BooleanQuery.Builder bq = new BooleanQuery.Builder();
+                bq.add(percolatorType, Occur.MUST_NOT);
+                bq.add(filter, Occur.MUST);
+                return new ConstantScoreQuery(bq.build());
             } else {
                 return filter;
             }
@@ -536,356 +614,119 @@ public class MapperService extends AbstractIndexComponent  {
             for (int i = 0; i < typesBytes.length; i++) {
                 typesBytes[i] = new BytesRef(types[i]);
             }
-            TermsFilter termsFilter = new TermsFilter(TypeFieldMapper.NAME, typesBytes);
+            TermsQuery termsFilter = new TermsQuery(TypeFieldMapper.NAME, typesBytes);
             if (filterPercolateType) {
-                return new AndFilter(ImmutableList.of(excludePercolatorType, termsFilter));
+                BooleanQuery.Builder bq = new BooleanQuery.Builder();
+                bq.add(percolatorType, Occur.MUST_NOT);
+                bq.add(termsFilter, Occur.MUST);
+                return new ConstantScoreQuery(bq.build());
             } else {
                 return termsFilter;
             }
         } else {
-            // Current bool filter requires that at least one should clause matches, even with a must clause.
-            XBooleanFilter bool = new XBooleanFilter();
+            BooleanQuery.Builder typesBool = new BooleanQuery.Builder();
             for (String type : types) {
                 DocumentMapper docMapper = documentMapper(type);
                 if (docMapper == null) {
-                    bool.add(new FilterClause(new TermFilter(new Term(TypeFieldMapper.NAME, type)), BooleanClause.Occur.SHOULD));
+                    typesBool.add(new TermQuery(new Term(TypeFieldMapper.NAME, type)), BooleanClause.Occur.SHOULD);
                 } else {
-                    bool.add(new FilterClause(docMapper.typeFilter(), BooleanClause.Occur.SHOULD));
+                    typesBool.add(docMapper.typeFilter(), BooleanClause.Occur.SHOULD);
                 }
             }
+            BooleanQuery.Builder bool = new BooleanQuery.Builder();
+            bool.add(typesBool.build(), Occur.MUST);
             if (filterPercolateType) {
-                bool.add(excludePercolatorType, BooleanClause.Occur.MUST);
+                bool.add(percolatorType, BooleanClause.Occur.MUST_NOT);
             }
             if (hasNested) {
-                bool.add(NonNestedDocsFilter.INSTANCE, BooleanClause.Occur.MUST);
+                bool.add(Queries.newNonNestedFilter(), BooleanClause.Occur.MUST);
             }
 
-            return bool;
+            return new ConstantScoreQuery(bool.build());
         }
     }
 
     /**
-     * Returns {@link FieldMappers} for all the {@link FieldMapper}s that are registered
-     * under the given name across all the different {@link DocumentMapper} types.
+     * Returns an {@link MappedFieldType} which has the given index name.
      *
-     * @param name The name to return all the {@link FieldMappers} for across all {@link DocumentMapper}s.
-     * @return All the {@link FieldMappers} for across all {@link DocumentMapper}s
+     * If multiple types have fields with the same index name, the first is returned.
      */
-    public FieldMappers name(String name) {
-        return fieldMappers.name(name);
+    public MappedFieldType indexName(String indexName) {
+        return fieldTypes.getByIndexName(indexName);
     }
 
     /**
-     * Returns {@link FieldMappers} for all the {@link FieldMapper}s that are registered
-     * under the given indexName across all the different {@link DocumentMapper} types.
+     * Returns the {@link MappedFieldType} for the give fullName.
      *
-     * @param indexName The indexName to return all the {@link FieldMappers} for across all {@link DocumentMapper}s.
-     * @return All the {@link FieldMappers} across all {@link DocumentMapper}s for the given indexName.
+     * If multiple types have fields with the same full name, the first is returned.
      */
-    public FieldMappers indexName(String indexName) {
-        return fieldMappers.indexName(indexName);
-    }
-
-    /**
-     * Returns the {@link FieldMappers} of all the {@link FieldMapper}s that are
-     * registered under the give fullName across all the different {@link DocumentMapper} types.
-     *
-     * @param fullName The full name
-     * @return All teh {@link FieldMappers} across all the {@link DocumentMapper}s for the given fullName.
-     */
-    public FieldMappers fullName(String fullName) {
-        return fieldMappers.fullName(fullName);
-    }
-
-    /**
-     * Returns objects mappers based on the full path of the object.
-     */
-    public ObjectMappers objectMapper(String path) {
-        return fullPathObjectMappers.get(path);
-    }
-
-    /**
-     * Returns all the fields that match the given pattern, with an optional narrowing
-     * based on a list of types.
-     */
-    public List<String> simpleMatchToIndexNames(String pattern, @Nullable String[] types) {
-        if (types == null || types.length == 0) {
-            return simpleMatchToIndexNames(pattern);
-        }
-        if (types.length == 1 && types[0].equals("_all")) {
-            return simpleMatchToIndexNames(pattern);
-        }
-        if (!Regex.isSimpleMatchPattern(pattern)) {
-            return ImmutableList.of(pattern);
-        }
-        List<String> fields = Lists.newArrayList();
-        for (String type : types) {
-            DocumentMapper possibleDocMapper = mappers.get(type);
-            if (possibleDocMapper != null) {
-                for (String indexName : possibleDocMapper.mappers().simpleMatchToIndexNames(pattern)) {
-                    fields.add(indexName);
-                }
-            }
-        }
-        return fields;
+    public MappedFieldType fullName(String fullName) {
+        return fieldTypes.get(fullName);
     }
 
     /**
      * Returns all the fields that match the given pattern. If the pattern is prefixed with a type
      * then the fields will be returned with a type prefix.
      */
-    public List<String> simpleMatchToIndexNames(String pattern) {
-        if (!Regex.isSimpleMatchPattern(pattern)) {
-            return ImmutableList.of(pattern);
+    public Collection<String> simpleMatchToIndexNames(String pattern) {
+        if (Regex.isSimpleMatchPattern(pattern) == false) {
+            // no wildcards
+            return Collections.singletonList(pattern);
         }
-        int dotIndex = pattern.indexOf('.');
-        if (dotIndex != -1) {
-            String possibleType = pattern.substring(0, dotIndex);
-            DocumentMapper possibleDocMapper = mappers.get(possibleType);
-            if (possibleDocMapper != null) {
-                List<String> typedFields = Lists.newArrayList();
-                for (String indexName : possibleDocMapper.mappers().simpleMatchToIndexNames(pattern)) {
-                    typedFields.add(possibleType + "." + indexName);
-                }
-                return typedFields;
-            }
-        }
-        return fieldMappers.simpleMatchToIndexNames(pattern);
+        return fieldTypes.simpleMatchToIndexNames(pattern);
     }
 
-    public SmartNameObjectMapper smartNameObjectMapper(String smartName, @Nullable String[] types) {
-        if (types == null || types.length == 0) {
-            return smartNameObjectMapper(smartName);
-        }
-        if (types.length == 1 && types[0].equals("_all")) {
-            return smartNameObjectMapper(smartName);
-        }
-        for (String type : types) {
-            DocumentMapper possibleDocMapper = mappers.get(type);
-            if (possibleDocMapper != null) {
-                ObjectMapper mapper = possibleDocMapper.objectMappers().get(smartName);
-                if (mapper != null) {
-                    return new SmartNameObjectMapper(mapper, possibleDocMapper);
-                }
-            }
-        }
-        // did not find one, see if its prefixed by type
-        int dotIndex = smartName.indexOf('.');
-        if (dotIndex != -1) {
-            String possibleType = smartName.substring(0, dotIndex);
-            DocumentMapper possibleDocMapper = mappers.get(possibleType);
-            if (possibleDocMapper != null) {
-                String possiblePath = smartName.substring(dotIndex + 1);
-                ObjectMapper mapper = possibleDocMapper.objectMappers().get(possiblePath);
-                if (mapper != null) {
-                    return new SmartNameObjectMapper(mapper, possibleDocMapper);
-                }
-            }
-        }
-        // did not explicitly find one under the types provided, or prefixed by type...
-        return null;
+    // TODO: remove this since the underlying index names are now the same across all types
+    public Collection<String> simpleMatchToIndexNames(String pattern, @Nullable String[] types) {
+        return simpleMatchToIndexNames(pattern);
     }
 
-    public SmartNameObjectMapper smartNameObjectMapper(String smartName) {
-        int dotIndex = smartName.indexOf('.');
-        if (dotIndex != -1) {
-            String possibleType = smartName.substring(0, dotIndex);
-            DocumentMapper possibleDocMapper = mappers.get(possibleType);
-            if (possibleDocMapper != null) {
-                String possiblePath = smartName.substring(dotIndex + 1);
-                ObjectMapper mapper = possibleDocMapper.objectMappers().get(possiblePath);
-                if (mapper != null) {
-                    return new SmartNameObjectMapper(mapper, possibleDocMapper);
-                }
-            }
-        }
-        ObjectMappers mappers = objectMapper(smartName);
-        if (mappers != null) {
-            return new SmartNameObjectMapper(mappers.mapper(), null);
-        }
-        return null;
+    // TODO: remove types param, since the object mapper must be the same across all types
+    public ObjectMapper getObjectMapper(String name, @Nullable String[] types) {
+        return fullPathObjectMappers.get(name);
     }
 
-    /**
-     * Same as {@link #smartNameFieldMappers(String)} but returns the first field mapper for it. Returns
-     * <tt>null</tt> if there is none.
-     */
-    public FieldMapper smartNameFieldMapper(String smartName) {
-        FieldMappers fieldMappers = smartNameFieldMappers(smartName);
-        if (fieldMappers != null) {
-            return fieldMappers.mapper();
+    public MappedFieldType smartNameFieldType(String smartName) {
+        MappedFieldType fieldType = fullName(smartName);
+        if (fieldType != null) {
+            return fieldType;
         }
-        return null;
+        return indexName(smartName);
     }
 
-    public FieldMapper smartNameFieldMapper(String smartName, @Nullable String[] types) {
-        FieldMappers fieldMappers = smartNameFieldMappers(smartName, types);
-        if (fieldMappers != null) {
-            return fieldMappers.mapper();
-        }
-        return null;
-    }
-
-    public FieldMappers smartNameFieldMappers(String smartName, @Nullable String[] types) {
-        if (types == null || types.length == 0) {
-            return smartNameFieldMappers(smartName);
-        }
-        for (String type : types) {
-            DocumentMapper documentMapper = mappers.get(type);
-            // we found a mapper
-            if (documentMapper != null) {
-                // see if we find a field for it
-                FieldMappers mappers = documentMapper.mappers().smartName(smartName);
-                if (mappers != null) {
-                    return mappers;
-                }
-            }
-        }
-        // did not find explicit field in the type provided, see if its prefixed with type
-        int dotIndex = smartName.indexOf('.');
-        if (dotIndex != -1) {
-            String possibleType = smartName.substring(0, dotIndex);
-            DocumentMapper possibleDocMapper = mappers.get(possibleType);
-            if (possibleDocMapper != null) {
-                String possibleName = smartName.substring(dotIndex + 1);
-                FieldMappers mappers = possibleDocMapper.mappers().smartName(possibleName);
-                if (mappers != null) {
-                    return mappers;
-                }
-            }
-        }
-        // we did not find the field mapping in any of the types, so don't go and try to find
-        // it in other types...
-        return null;
-    }
-
-    /**
-     * Same as {@link #smartName(String)}, except it returns just the field mappers.
-     */
-    public FieldMappers smartNameFieldMappers(String smartName) {
-        int dotIndex = smartName.indexOf('.');
-        if (dotIndex != -1) {
-            String possibleType = smartName.substring(0, dotIndex);
-            DocumentMapper possibleDocMapper = mappers.get(possibleType);
-            if (possibleDocMapper != null) {
-                String possibleName = smartName.substring(dotIndex + 1);
-                FieldMappers mappers = possibleDocMapper.mappers().smartName(possibleName);
-                if (mappers != null) {
-                    return mappers;
-                }
-            }
-        }
-        FieldMappers mappers = fullName(smartName);
-        if (mappers != null) {
-            return mappers;
-        }
-        mappers = indexName(smartName);
-        if (mappers != null) {
-            return mappers;
-        }
-        return name(smartName);
-    }
-
-    public SmartNameFieldMappers smartName(String smartName, @Nullable String[] types) {
-        if (types == null || types.length == 0) {
-            return smartName(smartName);
-        }
-        if (types.length == 1 && types[0].equals("_all")) {
-            return smartName(smartName);
-        }
-        for (String type : types) {
-            DocumentMapper documentMapper = mappers.get(type);
-            // we found a mapper
-            if (documentMapper != null) {
-                // see if we find a field for it
-                FieldMappers mappers = documentMapper.mappers().smartName(smartName);
-                if (mappers != null) {
-                    return new SmartNameFieldMappers(this, mappers, documentMapper, false);
-                }
-            }
-        }
-        // did not find explicit field in the type provided, see if its prefixed with type
-        int dotIndex = smartName.indexOf('.');
-        if (dotIndex != -1) {
-            String possibleType = smartName.substring(0, dotIndex);
-            DocumentMapper possibleDocMapper = mappers.get(possibleType);
-            if (possibleDocMapper != null) {
-                String possibleName = smartName.substring(dotIndex + 1);
-                FieldMappers mappers = possibleDocMapper.mappers().smartName(possibleName);
-                if (mappers != null) {
-                    return new SmartNameFieldMappers(this, mappers, possibleDocMapper, true);
-                }
-            }
-        }
-        // we did not find the field mapping in any of the types, so don't go and try to find
-        // it in other types...
-        return null;
-    }
-
-    /**
-     * Returns smart field mappers based on a smart name. A smart name is one that can optionally be prefixed
-     * with a type (and then a '.'). If it is, then the {@link MapperService.SmartNameFieldMappers}
-     * will have the doc mapper set.
-     * <p/>
-     * <p>It also (without the optional type prefix) try and find the {@link FieldMappers} for the specific
-     * name. It will first try to find it based on the full name (with the dots if its a compound name). If
-     * it is not found, will try and find it based on the indexName (which can be controlled in the mapping),
-     * and last, will try it based no the name itself.
-     * <p/>
-     * <p>If nothing is found, returns null.
-     */
-    public SmartNameFieldMappers smartName(String smartName) {
-        int dotIndex = smartName.indexOf('.');
-        if (dotIndex != -1) {
-            String possibleType = smartName.substring(0, dotIndex);
-            DocumentMapper possibleDocMapper = mappers.get(possibleType);
-            if (possibleDocMapper != null) {
-                String possibleName = smartName.substring(dotIndex + 1);
-                FieldMappers mappers = possibleDocMapper.mappers().smartName(possibleName);
-                if (mappers != null) {
-                    return new SmartNameFieldMappers(this, mappers, possibleDocMapper, true);
-                }
-            }
-        }
-        FieldMappers fieldMappers = fullName(smartName);
-        if (fieldMappers != null) {
-            return new SmartNameFieldMappers(this, fieldMappers, null, false);
-        }
-        fieldMappers = indexName(smartName);
-        if (fieldMappers != null) {
-            return new SmartNameFieldMappers(this, fieldMappers, null, false);
-        }
-        fieldMappers = name(smartName);
-        if (fieldMappers != null) {
-            return new SmartNameFieldMappers(this, fieldMappers, null, false);
-        }
-        return null;
+    // TODO: remove this since the underlying index names are now the same across all types
+    public MappedFieldType smartNameFieldType(String smartName, @Nullable String[] types) {
+        return smartNameFieldType(smartName);
     }
 
     /**
      * Given a type (eg. long, string, ...), return an anonymous field mapper that can be used for search operations.
      */
-    public FieldMapper<?> unmappedFieldMapper(String type) {
-        final ImmutableMap<String, FieldMapper<?>> unmappedFieldMappers = this.unmappedFieldMappers;
-        FieldMapper<?> mapper = unmappedFieldMappers.get(type);
-        if (mapper == null) {
-            final Mapper.TypeParser.ParserContext parserContext = documentMapperParser().parserContext();
+    public MappedFieldType unmappedFieldType(String type) {
+        final ImmutableMap<String, MappedFieldType> unmappedFieldMappers = this.unmappedFieldTypes;
+        MappedFieldType fieldType = unmappedFieldMappers.get(type);
+        if (fieldType == null) {
+            final Mapper.TypeParser.ParserContext parserContext = documentMapperParser().parserContext(type);
             Mapper.TypeParser typeParser = parserContext.typeParser(type);
             if (typeParser == null) {
-                throw new ElasticsearchIllegalArgumentException("No mapper found for type [" + type + "]");
+                throw new IllegalArgumentException("No mapper found for type [" + type + "]");
             }
             final Mapper.Builder<?, ?> builder = typeParser.parse("__anonymous_" + type, ImmutableMap.<String, Object>of(), parserContext);
             final BuilderContext builderContext = new BuilderContext(indexSettings, new ContentPath(1));
-            mapper = (FieldMapper<?>) builder.build(builderContext);
+            fieldType = ((FieldMapper)builder.build(builderContext)).fieldType();
 
             // There is no need to synchronize writes here. In the case of concurrent access, we could just
             // compute some mappers several times, which is not a big deal
-            this.unmappedFieldMappers = ImmutableMap.<String, FieldMapper<?>>builder()
+            this.unmappedFieldTypes = ImmutableMap.<String, MappedFieldType>builder()
                     .putAll(unmappedFieldMappers)
-                    .put(type, mapper)
+                    .put(type, fieldType)
                     .build();
         }
-        return mapper;
+        return fieldType;
+    }
+
+    public Analyzer indexAnalyzer() {
+        return this.indexAnalyzer;
     }
 
     public Analyzer searchAnalyzer() {
@@ -895,15 +736,6 @@ public class MapperService extends AbstractIndexComponent  {
     public Analyzer searchQuoteAnalyzer() {
         return this.searchQuoteAnalyzer;
     }
-
-    public Analyzer fieldSearchAnalyzer(String field) {
-        return this.searchAnalyzer.getWrappedAnalyzer(field);
-    }
-
-    public Analyzer fieldSearchQuoteAnalyzer(String field) {
-        return this.searchQuoteAnalyzer.getWrappedAnalyzer(field);
-    }
-
 
     /**
      * Resolves the closest inherited {@link ObjectMapper} that is nested.
@@ -915,18 +747,14 @@ public class MapperService extends AbstractIndexComponent  {
         } else {
             do {
                 String objectPath = fieldName.substring(0, indexOf);
-                ObjectMappers objectMappers = objectMapper(objectPath);
-                if (objectMappers == null) {
+                ObjectMapper objectMapper = fullPathObjectMappers.get(objectPath);
+                if (objectMapper == null) {
                     indexOf = objectPath.lastIndexOf('.');
                     continue;
                 }
 
-                if (objectMappers.hasNested()) {
-                    for (ObjectMapper objectMapper : objectMappers) {
-                        if (objectMapper.nested().isNested()) {
-                            return objectMapper;
-                        }
-                    }
+                if (objectMapper.nested().isNested()) {
+                    return objectMapper;
                 }
 
                 indexOf = objectPath.lastIndexOf('.');
@@ -936,6 +764,10 @@ public class MapperService extends AbstractIndexComponent  {
         return null;
     }
 
+    public Set<String> getParentTypes() {
+        return parentTypes;
+    }
+
     /**
      * @return Whether a field is a metadata field.
      */
@@ -943,208 +775,32 @@ public class MapperService extends AbstractIndexComponent  {
         return META_FIELDS.contains(fieldName);
     }
 
-    public static class SmartNameObjectMapper {
-        private final ObjectMapper mapper;
-        private final DocumentMapper docMapper;
-
-        public SmartNameObjectMapper(ObjectMapper mapper, @Nullable DocumentMapper docMapper) {
-            this.mapper = mapper;
-            this.docMapper = docMapper;
-        }
-
-        public boolean hasMapper() {
-            return mapper != null;
-        }
-
-        public ObjectMapper mapper() {
-            return mapper;
-        }
-
-        public boolean hasDocMapper() {
-            return docMapper != null;
-        }
-
-        public DocumentMapper docMapper() {
-            return docMapper;
-        }
+    public static String[] getAllMetaFields() {
+        return META_FIELDS.toArray(String.class);
     }
 
-    public static class SmartNameFieldMappers {
-        private final MapperService mapperService;
-        private final FieldMappers fieldMappers;
-        private final DocumentMapper docMapper;
-        private final boolean explicitTypeInName;
-
-        public SmartNameFieldMappers(MapperService mapperService, FieldMappers fieldMappers, @Nullable DocumentMapper docMapper, boolean explicitTypeInName) {
-            this.mapperService = mapperService;
-            this.fieldMappers = fieldMappers;
-            this.docMapper = docMapper;
-            this.explicitTypeInName = explicitTypeInName;
-        }
-
-        /**
-         * Has at least one mapper for the field.
-         */
-        public boolean hasMapper() {
-            return !fieldMappers.isEmpty();
-        }
-
-        /**
-         * The first mapper for the smart named field.
-         */
-        public FieldMapper mapper() {
-            return fieldMappers.mapper();
-        }
-
-        /**
-         * All the field mappers for the smart name field.
-         */
-        public FieldMappers fieldMappers() {
-            return fieldMappers;
-        }
-
-        /**
-         * If the smart name was a typed field, with a type that we resolved, will return
-         * <tt>true</tt>.
-         */
-        public boolean hasDocMapper() {
-            return docMapper != null;
-        }
-
-        /**
-         * If the smart name was a typed field, with a type that we resolved, will return
-         * the document mapper for it.
-         */
-        public DocumentMapper docMapper() {
-            return docMapper;
-        }
-
-        /**
-         * Returns <tt>true</tt> if the type is explicitly specified in the name.
-         */
-        public boolean explicitTypeInName() {
-            return this.explicitTypeInName;
-        }
-
-        public boolean explicitTypeInNameWithDocMapper() {
-            return explicitTypeInName && docMapper != null;
-        }
-
-        /**
-         * The best effort search analyzer associated with this field.
-         */
-        public Analyzer searchAnalyzer() {
-            if (hasMapper()) {
-                Analyzer analyzer = mapper().searchAnalyzer();
-                if (analyzer != null) {
-                    return analyzer;
-                }
-            }
-            if (docMapper != null && docMapper.searchAnalyzer() != null) {
-                return docMapper.searchAnalyzer();
-            }
-            return mapperService.searchAnalyzer();
-        }
-
-        public Analyzer searchQuoteAnalyzer() {
-            if (hasMapper()) {
-                Analyzer analyzer = mapper().searchQuoteAnalyzer();
-                if (analyzer != null) {
-                    return analyzer;
-                }
-            }
-            if (docMapper != null && docMapper.searchQuotedAnalyzer() != null) {
-                return docMapper.searchQuotedAnalyzer();
-            }
-            return mapperService.searchQuoteAnalyzer();
-        }
-    }
-
-    final class SmartIndexNameSearchAnalyzer extends DelegatingAnalyzerWrapper {
+    /** An analyzer wrapper that can lookup fields within the index mappings */
+    final class MapperAnalyzerWrapper extends DelegatingAnalyzerWrapper {
 
         private final Analyzer defaultAnalyzer;
+        private final Function<MappedFieldType, Analyzer> extractAnalyzer;
 
-        SmartIndexNameSearchAnalyzer(Analyzer defaultAnalyzer) {
+        MapperAnalyzerWrapper(Analyzer defaultAnalyzer, Function<MappedFieldType, Analyzer> extractAnalyzer) {
             super(Analyzer.PER_FIELD_REUSE_STRATEGY);
             this.defaultAnalyzer = defaultAnalyzer;
+            this.extractAnalyzer = extractAnalyzer;
         }
 
         @Override
         protected Analyzer getWrappedAnalyzer(String fieldName) {
-            int dotIndex = fieldName.indexOf('.');
-            if (dotIndex != -1) {
-                String possibleType = fieldName.substring(0, dotIndex);
-                DocumentMapper possibleDocMapper = mappers.get(possibleType);
-                if (possibleDocMapper != null) {
-                    return possibleDocMapper.mappers().searchAnalyzer();
+            MappedFieldType fieldType = smartNameFieldType(fieldName);
+            if (fieldType != null) {
+                Analyzer analyzer = extractAnalyzer.apply(fieldType);
+                if (analyzer != null) {
+                    return analyzer;
                 }
             }
-            FieldMappers mappers = fieldMappers.fullName(fieldName);
-            if (mappers != null && mappers.mapper() != null && mappers.mapper().searchAnalyzer() != null) {
-                return mappers.mapper().searchAnalyzer();
-            }
-
-            mappers = fieldMappers.indexName(fieldName);
-            if (mappers != null && mappers.mapper() != null && mappers.mapper().searchAnalyzer() != null) {
-                return mappers.mapper().searchAnalyzer();
-            }
             return defaultAnalyzer;
-        }
-    }
-
-    final class SmartIndexNameSearchQuoteAnalyzer extends DelegatingAnalyzerWrapper {
-
-        private final Analyzer defaultAnalyzer;
-
-        SmartIndexNameSearchQuoteAnalyzer(Analyzer defaultAnalyzer) {
-            super(Analyzer.PER_FIELD_REUSE_STRATEGY);
-            this.defaultAnalyzer = defaultAnalyzer;
-        }
-
-        @Override
-        protected Analyzer getWrappedAnalyzer(String fieldName) {
-            int dotIndex = fieldName.indexOf('.');
-            if (dotIndex != -1) {
-                String possibleType = fieldName.substring(0, dotIndex);
-                DocumentMapper possibleDocMapper = mappers.get(possibleType);
-                if (possibleDocMapper != null) {
-                    return possibleDocMapper.mappers().searchQuoteAnalyzer();
-                }
-            }
-            FieldMappers mappers = fieldMappers.fullName(fieldName);
-            if (mappers != null && mappers.mapper() != null && mappers.mapper().searchQuoteAnalyzer() != null) {
-                return mappers.mapper().searchQuoteAnalyzer();
-            }
-
-            mappers = fieldMappers.indexName(fieldName);
-            if (mappers != null && mappers.mapper() != null && mappers.mapper().searchQuoteAnalyzer() != null) {
-                return mappers.mapper().searchQuoteAnalyzer();
-            }
-            return defaultAnalyzer;
-        }
-    }
-
-    class InternalFieldMapperListener extends FieldMapperListener {
-        @Override
-        public void fieldMapper(FieldMapper<?> fieldMapper) {
-            addFieldMappers(Collections.<FieldMapper<?>>singletonList(fieldMapper));
-        }
-
-        @Override
-        public void fieldMappers(List<FieldMapper<?>> fieldMappers) {
-            addFieldMappers(fieldMappers);
-        }
-    }
-
-    class InternalObjectMapperListener extends ObjectMapperListener {
-        @Override
-        public void objectMapper(ObjectMapper objectMapper) {
-            addObjectMappers(new ObjectMapper[]{objectMapper});
-        }
-
-        @Override
-        public void objectMappers(ObjectMapper... objectMappers) {
-            addObjectMappers(objectMappers);
         }
     }
 }

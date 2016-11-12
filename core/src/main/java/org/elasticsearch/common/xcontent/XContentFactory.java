@@ -275,11 +275,7 @@ public class XContentFactory {
             return XContentType.CBOR;
         }
 
-        int jsonStart = 0;
-        // JSON may be preceded by UTF-8 BOM
-        if (length > 3 && first == (byte) 0xEF && bytes.get(1) == (byte) 0xBB && bytes.get(2) == (byte) 0xBF) {
-            jsonStart = 3;
-        }
+        int jsonStart = getJsonStart(bytes, length, first);
 
         // a last chance for JSON
         for (int i = jsonStart; i < length; i++) {
@@ -292,5 +288,14 @@ public class XContentFactory {
             }
         }
         return null;
+    }
+
+    private static int getJsonStart(BytesReference bytes, int length, byte first) {
+        int jsonStart = 0;
+        // JSON may be preceded by UTF-8 BOM
+        if (length > 3 && first == (byte) 0xEF && bytes.get(1) == (byte) 0xBB && bytes.get(2) == (byte) 0xBF) {
+            jsonStart = 3;
+        }
+        return jsonStart;
     }
 }

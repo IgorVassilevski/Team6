@@ -42,6 +42,7 @@ public class GetFieldMappingsIndexRequest extends SingleShardRequest<GetFieldMap
     }
 
     GetFieldMappingsIndexRequest(GetFieldMappingsRequest other, String index, boolean probablySingleFieldRequest) {
+        super(other);
         this.probablySingleFieldRequest = probablySingleFieldRequest;
         this.includeDefaults = other.includeDefaults();
         this.types = other.types();

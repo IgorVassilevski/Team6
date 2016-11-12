@@ -19,18 +19,17 @@
 
 package org.elasticsearch.index.mapper.murmur3;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
 import org.elasticsearch.env.NodeEnvironment;
 import org.elasticsearch.plugin.mapper.MapperMurmur3Plugin;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.metrics.cardinality.Cardinality;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.InternalTestCluster;
 import org.elasticsearch.test.hamcrest.ElasticsearchAssertions;
 
 import java.io.IOException;
@@ -47,13 +46,12 @@ public class Murmur3FieldMapperUpgradeTests extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Collections.singleton(MapperMurmur3Plugin.class);
+        return Collections.<Class<? extends Plugin>>singleton(MapperMurmur3Plugin.class);
     }
 
-    public void testUpgradeOldMapping() throws IOException, ExecutionException, InterruptedException {
-        final String indexName = "index-mapper-murmur3-2.0.0";
-        final String indexUUID = "1VzJds59TTK7lRu17W0mcg";
-        InternalTestCluster.Async<String> master = internalCluster().startNodeAsync();
+    private void dotestUpgradeOldMapping(String version) throws IOException, ExecutionException, InterruptedException {
+        ListenableFuture<String> master = internalCluster().startNodeAsync();
+        final String indexName = "index-mapper-murmur3-" + version;
         Path unzipDir = createTempDir();
         Path unzipDataDir = unzipDir.resolve("data");
         Path backwardsIndex = getBwcIndicesPath().resolve(indexName + ".zip");
@@ -64,7 +62,7 @@ public class Murmur3FieldMapperUpgradeTests extends ESIntegTestCase {
 
         Path dataPath = createTempDir();
         Settings settings = Settings.builder()
-                .put(Environment.PATH_DATA_SETTING.getKey(), dataPath)
+                .put("path.data", dataPath)
                 .build();
         final String node = internalCluster().startDataOnlyNode(settings); // workaround for dangling index loading issue when node is master
         Path[] nodePaths = internalCluster().getInstance(NodeEnvironment.class, node).nodeDataPaths();
@@ -73,7 +71,6 @@ public class Murmur3FieldMapperUpgradeTests extends ESIntegTestCase {
         assertFalse(Files.exists(dataPath));
         Path src = unzipDataDir.resolve(indexName + "/nodes/0/indices");
         Files.move(src, dataPath);
-        Files.move(dataPath.resolve(indexName), dataPath.resolve(indexUUID));
 
         master.get();
         // force reloading dangling indices with a cluster state republish
@@ -86,5 +83,13 @@ public class Murmur3FieldMapperUpgradeTests extends ESIntegTestCase {
                 AggregationBuilders.cardinality("card").field("foo.hash")).get();
         Cardinality cardinality = cardinalityResponse.getAggregations().get("card");
         assertEquals(3L, cardinality.getValue());
+    }
+
+    public void testUpgradeOldMapping200() throws IOException, ExecutionException, InterruptedException {
+        dotestUpgradeOldMapping("2.0.0");
+    }
+
+    public void testUpgradeOldMapping173() throws IOException, ExecutionException, InterruptedException {
+        dotestUpgradeOldMapping("1.7.3");
     }
 }

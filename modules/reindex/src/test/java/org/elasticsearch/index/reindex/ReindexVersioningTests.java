@@ -33,62 +33,62 @@ public class ReindexVersioningTests extends ReindexTestCase {
 
     public void testExternalVersioningCreatesWhenAbsentAndSetsVersion() throws Exception {
         setupSourceAbsent();
-        assertThat(reindexExternal(), matcher().created(1));
+        assertThat(reindexExternal(), responseMatcher().created(1));
         assertDest("source", SOURCE_VERSION);
     }
 
     public void testExternalVersioningUpdatesOnOlderAndSetsVersion() throws Exception {
         setupDestOlder();
-        assertThat(reindexExternal(), matcher().updated(1));
+        assertThat(reindexExternal(), responseMatcher().updated(1));
         assertDest("source", SOURCE_VERSION);
     }
 
     public void testExternalVersioningVersionConflictsOnNewer() throws Exception {
         setupDestNewer();
-        assertThat(reindexExternal(), matcher().versionConflicts(1));
+        assertThat(reindexExternal(), responseMatcher().versionConflicts(1));
         assertDest("dest", NEWER_VERSION);
     }
 
     public void testInternalVersioningCreatesWhenAbsent() throws Exception {
         setupSourceAbsent();
-        assertThat(reindexInternal(), matcher().created(1));
+        assertThat(reindexInternal(), responseMatcher().created(1));
         assertDest("source", 1);
     }
 
     public void testInternalVersioningUpdatesOnOlder() throws Exception {
         setupDestOlder();
-        assertThat(reindexInternal(), matcher().updated(1));
+        assertThat(reindexInternal(), responseMatcher().updated(1));
         assertDest("source", OLDER_VERSION + 1);
     }
 
     public void testInternalVersioningUpdatesOnNewer() throws Exception {
         setupDestNewer();
-        assertThat(reindexInternal(), matcher().updated(1));
+        assertThat(reindexInternal(), responseMatcher().updated(1));
         assertDest("source", NEWER_VERSION + 1);
     }
 
     public void testCreateCreatesWhenAbsent() throws Exception {
         setupSourceAbsent();
-        assertThat(reindexCreate(), matcher().created(1));
+        assertThat(reindexCreate(), responseMatcher().created(1));
         assertDest("source", 1);
     }
 
     public void testCreateVersionConflictsOnOlder() throws Exception {
         setupDestOlder();
-        assertThat(reindexCreate(), matcher().versionConflicts(1));
+        assertThat(reindexCreate(), responseMatcher().versionConflicts(1));
         assertDest("dest", OLDER_VERSION);
     }
 
     public void testCreateVersionConflictsOnNewer() throws Exception {
         setupDestNewer();
-        assertThat(reindexCreate(), matcher().versionConflicts(1));
+        assertThat(reindexCreate(), responseMatcher().versionConflicts(1));
         assertDest("dest", NEWER_VERSION);
     }
 
     /**
      * Perform a reindex with EXTERNAL versioning which has "refresh" semantics.
      */
-    private BulkIndexByScrollResponse reindexExternal() {
+    private ReindexResponse reindexExternal() {
         ReindexRequestBuilder reindex =  reindex().source("source").destination("dest").abortOnVersionConflict(false);
         reindex.destination().setVersionType(EXTERNAL);
         return reindex.get();
@@ -97,7 +97,7 @@ public class ReindexVersioningTests extends ReindexTestCase {
     /**
      * Perform a reindex with INTERNAL versioning which has "overwrite" semantics.
      */
-    private BulkIndexByScrollResponse reindexInternal() {
+    private ReindexResponse reindexInternal() {
         ReindexRequestBuilder reindex =  reindex().source("source").destination("dest").abortOnVersionConflict(false);
         reindex.destination().setVersionType(INTERNAL);
         return reindex.get();
@@ -106,7 +106,7 @@ public class ReindexVersioningTests extends ReindexTestCase {
     /**
      * Perform a reindex with CREATE OpType which has "create" semantics.
      */
-    private BulkIndexByScrollResponse reindexCreate() {
+    private ReindexResponse reindexCreate() {
         ReindexRequestBuilder reindex =  reindex().source("source").destination("dest").abortOnVersionConflict(false);
         reindex.destination().setOpType(CREATE);
         return reindex.get();

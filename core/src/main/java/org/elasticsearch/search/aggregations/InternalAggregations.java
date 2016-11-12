@@ -18,11 +18,17 @@
  */
 package org.elasticsearch.search.aggregations;
 
+import com.google.common.base.Function;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Maps;
+import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.search.aggregations.InternalAggregation.ReduceContext;
 import org.elasticsearch.search.aggregations.support.AggregationPath;
 
@@ -33,20 +39,26 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.unmodifiableMap;
+import static com.google.common.collect.Maps.newHashMap;
+import static org.elasticsearch.common.util.CollectionUtils.eagerTransform;
+
 /**
  * An internal implementation of {@link Aggregations}.
  */
 public class InternalAggregations implements Aggregations, ToXContent, Streamable {
 
-    public static final InternalAggregations EMPTY = new InternalAggregations();
+    public final static InternalAggregations EMPTY = new InternalAggregations();
+    private static final Function<InternalAggregation, Aggregation> SUPERTYPE_CAST = new Function<InternalAggregation, Aggregation>() {
+        @Override
+        public Aggregation apply(InternalAggregation input) {
+            return input;
+        }
+    };
 
     private List<InternalAggregation> aggregations = Collections.emptyList();
 
-    private Map<String, Aggregation> aggregationsAsMap;
+    private Map<String, InternalAggregation> aggregationsAsMap;
 
     private InternalAggregations() {
     }
@@ -63,7 +75,7 @@ public class InternalAggregations implements Aggregations, ToXContent, Streamabl
      */
     @Override
     public Iterator<Aggregation> iterator() {
-        return aggregations.stream().map((p) -> (Aggregation) p).iterator();
+        return Iterators.transform(aggregations.iterator(), SUPERTYPE_CAST);
     }
 
     /**
@@ -71,7 +83,7 @@ public class InternalAggregations implements Aggregations, ToXContent, Streamabl
      */
     @Override
     public List<Aggregation> asList() {
-        return aggregations.stream().map((p) -> (Aggregation) p).collect(Collectors.toList());
+        return eagerTransform(aggregations, SUPERTYPE_CAST);
     }
 
     /**
@@ -88,13 +100,13 @@ public class InternalAggregations implements Aggregations, ToXContent, Streamabl
     @Override
     public Map<String, Aggregation> getAsMap() {
         if (aggregationsAsMap == null) {
-            Map<String, InternalAggregation> newAggregationsAsMap = new HashMap<>();
+            Map<String, InternalAggregation> aggregationsAsMap = newHashMap();
             for (InternalAggregation aggregation : aggregations) {
-                newAggregationsAsMap.put(aggregation.getName(), aggregation);
+                aggregationsAsMap.put(aggregation.getName(), aggregation);
             }
-            this.aggregationsAsMap = unmodifiableMap(newAggregationsAsMap);
+            this.aggregationsAsMap = aggregationsAsMap;
         }
-        return aggregationsAsMap;
+        return Maps.transformValues(aggregationsAsMap, SUPERTYPE_CAST);
     }
 
     /**
@@ -162,7 +174,7 @@ public class InternalAggregations implements Aggregations, ToXContent, Streamabl
 
     /** The fields required to write this addAggregation to xcontent */
     static class Fields {
-        public static final String AGGREGATIONS = "aggregations";
+        public static final XContentBuilderString AGGREGATIONS = new XContentBuilderString("aggregations");
     }
 
     @Override
@@ -192,20 +204,33 @@ public class InternalAggregations implements Aggregations, ToXContent, Streamabl
     }
 
     public static InternalAggregations readOptionalAggregations(StreamInput in) throws IOException {
-        return in.readOptionalStreamable(InternalAggregations::new);
+        return in.readOptionalStreamable(new InternalAggregations());
     }
 
     @Override
     public void readFrom(StreamInput in) throws IOException {
-        aggregations = in.readList(stream -> in.readNamedWriteable(InternalAggregation.class));
-        if (aggregations.isEmpty()) {
-            aggregationsAsMap = emptyMap();
+        int size = in.readVInt();
+        if (size == 0) {
+            aggregations = Collections.emptyList();
+            aggregationsAsMap = ImmutableMap.of();
+        } else {
+            aggregations = new ArrayList<>(size);
+            for (int i = 0; i < size; i++) {
+                BytesReference type = in.readBytesReference();
+                InternalAggregation aggregation = AggregationStreams.stream(type).readResult(in);
+                aggregations.add(aggregation);
+            }
         }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeNamedWriteableList(aggregations);
+        out.writeVInt(aggregations.size());
+        for (Aggregation aggregation : aggregations) {
+            InternalAggregation internal = (InternalAggregation) aggregation;
+            out.writeBytesReference(internal.type().stream());
+            internal.writeTo(out);
+        }
     }
 
 }

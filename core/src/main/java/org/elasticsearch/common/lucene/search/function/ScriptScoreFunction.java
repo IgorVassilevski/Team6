@@ -26,11 +26,10 @@ import org.apache.lucene.search.Scorer;
 import org.elasticsearch.script.ExplainableSearchScript;
 import org.elasticsearch.script.LeafSearchScript;
 import org.elasticsearch.script.Script;
-import org.elasticsearch.script.GeneralScriptException;
+import org.elasticsearch.script.ScriptException;
 import org.elasticsearch.script.SearchScript;
 
 import java.io.IOException;
-import java.util.Objects;
 
 public class ScriptScoreFunction extends ScoreFunction {
 
@@ -87,7 +86,7 @@ public class ScriptScoreFunction extends ScoreFunction {
                 scorer.score = subQueryScore;
                 double result = leafScript.runAsDouble();
                 if (Double.isNaN(result)) {
-                    throw new GeneralScriptException("script_score returned NaN");
+                    throw new ScriptException("script_score returned NaN");
                 }
                 return result;
             }
@@ -128,14 +127,4 @@ public class ScriptScoreFunction extends ScoreFunction {
         return "script" + sScript.toString();
     }
 
-    @Override
-    protected boolean doEquals(ScoreFunction other) {
-        ScriptScoreFunction scriptScoreFunction = (ScriptScoreFunction) other;
-        return Objects.equals(this.sScript, scriptScoreFunction.sScript);
-    }
-
-    @Override
-    protected int doHashCode() {
-        return Objects.hash(sScript);
-    }
 }

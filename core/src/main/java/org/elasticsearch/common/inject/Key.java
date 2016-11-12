@@ -22,7 +22,9 @@ import org.elasticsearch.common.inject.internal.ToStringBuilder;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Binding key consisting of an injection type and an optional annotation.
@@ -41,7 +43,7 @@ import java.util.Objects;
  * TypeLiteral}.
  * <p>
  * Keys do not differentiate between primitive types (int, char, etc.) and
- * their corresponding wrapper types (Integer, Character, etc.). Primitive
+ * their correpsonding wrapper types (Integer, Character, etc.). Primitive
  * types will be replaced with their wrapper types when keys are created.
  *
  * @author crazybob@google.com (Bob Lee)
@@ -333,19 +335,19 @@ public class Key<T> {
      * Returns {@code true} if the given annotation type has no attributes.
      */
     static boolean isMarker(Class<? extends Annotation> annotationType) {
-        return annotationType.getMethods().length == 0;
+        return annotationType.getDeclaredMethods().length == 0;
     }
 
     /**
      * Gets the strategy for an annotation.
      */
     static AnnotationStrategy strategyFor(Annotation annotation) {
-        Objects.requireNonNull(annotation, "annotation");
+        checkNotNull(annotation, "annotation");
         Class<? extends Annotation> annotationType = annotation.annotationType();
         ensureRetainedAtRuntime(annotationType);
         ensureIsBindingAnnotation(annotationType);
 
-        if (annotationType.getMethods().length == 0) {
+        if (annotationType.getDeclaredMethods().length == 0) {
             return new AnnotationTypeStrategy(annotationType, annotation);
         }
 
@@ -356,7 +358,7 @@ public class Key<T> {
      * Gets the strategy for an annotation type.
      */
     static AnnotationStrategy strategyFor(Class<? extends Annotation> annotationType) {
-        Objects.requireNonNull(annotationType, "annotation type");
+        checkNotNull(annotationType, "annotation type");
         ensureRetainedAtRuntime(annotationType);
         ensureIsBindingAnnotation(annotationType);
         return new AnnotationTypeStrategy(annotationType, null);
@@ -364,20 +366,16 @@ public class Key<T> {
 
     private static void ensureRetainedAtRuntime(
             Class<? extends Annotation> annotationType) {
-        if (!Annotations.isRetainedAtRuntime(annotationType)) {
-            throw new IllegalArgumentException(
-                    annotationType.getName() + " is not retained at runtime. Please annotate it with @Retention(RUNTIME)."
-            );
-        }
+        checkArgument(Annotations.isRetainedAtRuntime(annotationType),
+                "%s is not retained at runtime. Please annotate it with @Retention(RUNTIME).",
+                annotationType.getName());
     }
 
     private static void ensureIsBindingAnnotation(
             Class<? extends Annotation> annotationType) {
-        if (!isBindingAnnotation(annotationType)) {
-            throw new IllegalArgumentException(
-                    annotationType.getName() + " is not a binding annotation. Please annotate it with @BindingAnnotation."
-            );
-        }
+        checkArgument(isBindingAnnotation(annotationType),
+                "%s is not a binding annotation. Please annotate it with @BindingAnnotation.",
+                annotationType.getName());
     }
 
     static enum NullAnnotationStrategy implements AnnotationStrategy {
@@ -415,7 +413,7 @@ public class Key<T> {
         final Annotation annotation;
 
         AnnotationInstanceStrategy(Annotation annotation) {
-            this.annotation = Objects.requireNonNull(annotation, "annotation");
+            this.annotation = checkNotNull(annotation, "annotation");
         }
 
         @Override
@@ -468,7 +466,7 @@ public class Key<T> {
 
         AnnotationTypeStrategy(Class<? extends Annotation> annotationType,
                                Annotation annotation) {
-            this.annotationType = Objects.requireNonNull(annotationType, "annotation type");
+            this.annotationType = checkNotNull(annotationType, "annotation type");
             this.annotation = annotation;
         }
 

@@ -19,26 +19,12 @@
 
 package org.elasticsearch.index.similarity;
 
-import org.apache.lucene.search.similarities.AfterEffect;
-import org.apache.lucene.search.similarities.AfterEffectB;
-import org.apache.lucene.search.similarities.AfterEffectL;
-import org.apache.lucene.search.similarities.BasicModel;
-import org.apache.lucene.search.similarities.BasicModelBE;
-import org.apache.lucene.search.similarities.BasicModelD;
-import org.apache.lucene.search.similarities.BasicModelG;
-import org.apache.lucene.search.similarities.BasicModelIF;
-import org.apache.lucene.search.similarities.BasicModelIn;
-import org.apache.lucene.search.similarities.BasicModelIne;
-import org.apache.lucene.search.similarities.BasicModelP;
-import org.apache.lucene.search.similarities.DFRSimilarity;
-import org.apache.lucene.search.similarities.Normalization;
-import org.apache.lucene.search.similarities.Similarity;
+import com.google.common.collect.ImmutableMap;
+import org.apache.lucene.search.similarities.*;
+import org.elasticsearch.common.collect.MapBuilder;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-
-import java.util.HashMap;
-import java.util.Map;
-
-import static java.util.Collections.unmodifiableMap;
 
 /**
  * {@link SimilarityProvider} for {@link DFRSimilarity}.
@@ -52,11 +38,11 @@ import static java.util.Collections.unmodifiableMap;
  * @see DFRSimilarity For more information about configuration
  */
 public class DFRSimilarityProvider extends AbstractSimilarityProvider {
-    private static final Map<String, BasicModel> BASIC_MODELS;
-    private static final Map<String, AfterEffect> AFTER_EFFECTS;
+    private static final ImmutableMap<String, BasicModel> BASIC_MODELS;
+    private static final ImmutableMap<String, AfterEffect> AFTER_EFFECTS;
 
     static {
-        Map<String, BasicModel> models = new HashMap<>();
+        MapBuilder<String, BasicModel> models = MapBuilder.newMapBuilder();
         models.put("be", new BasicModelBE());
         models.put("d", new BasicModelD());
         models.put("g", new BasicModelG());
@@ -64,18 +50,19 @@ public class DFRSimilarityProvider extends AbstractSimilarityProvider {
         models.put("in", new BasicModelIn());
         models.put("ine", new BasicModelIne());
         models.put("p", new BasicModelP());
-        BASIC_MODELS = unmodifiableMap(models);
+        BASIC_MODELS = models.immutableMap();
 
-        Map<String, AfterEffect> effects = new HashMap<>();
+        MapBuilder<String, AfterEffect> effects = MapBuilder.newMapBuilder();
         effects.put("no", new AfterEffect.NoAfterEffect());
         effects.put("b", new AfterEffectB());
         effects.put("l", new AfterEffectL());
-        AFTER_EFFECTS = unmodifiableMap(effects);
+        AFTER_EFFECTS = effects.immutableMap();
     }
 
     private final DFRSimilarity similarity;
 
-    public DFRSimilarityProvider(String name, Settings settings) {
+    @Inject
+    public DFRSimilarityProvider(@Assisted String name, @Assisted Settings settings) {
         super(name);
         BasicModel basicModel = parseBasicModel(settings);
         AfterEffect afterEffect = parseAfterEffect(settings);

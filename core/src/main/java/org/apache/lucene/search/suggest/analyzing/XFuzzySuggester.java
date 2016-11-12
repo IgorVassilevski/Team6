@@ -23,12 +23,7 @@ import org.apache.lucene.analysis.TokenStreamToAutomaton;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.UnicodeUtil;
-import org.apache.lucene.util.automaton.Automata;
-import org.apache.lucene.util.automaton.Automaton;
-import org.apache.lucene.util.automaton.FiniteStringsIterator;
-import org.apache.lucene.util.automaton.LevenshteinAutomata;
-import org.apache.lucene.util.automaton.Operations;
-import org.apache.lucene.util.automaton.UTF32ToUTF8;
+import org.apache.lucene.util.automaton.*;
 import org.apache.lucene.util.fst.FST;
 import org.apache.lucene.util.fst.PairOutputs;
 
@@ -126,10 +121,8 @@ public final class XFuzzySuggester extends XAnalyzingSuggester {
      *           Analyzer that will be used for analyzing query text during lookup
      */
     public XFuzzySuggester(Analyzer indexAnalyzer, Analyzer queryAnalyzer) {
-        this(indexAnalyzer, null, queryAnalyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1,
-            DEFAULT_MAX_EDITS, DEFAULT_TRANSPOSITIONS,
-            DEFAULT_NON_FUZZY_PREFIX, DEFAULT_MIN_FUZZY_LENGTH, DEFAULT_UNICODE_AWARE,
-            null, false, 0, SEP_LABEL, PAYLOAD_SEP, END_BYTE, HOLE_CHARACTER);
+        this(indexAnalyzer, null, queryAnalyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, DEFAULT_MAX_EDITS, DEFAULT_TRANSPOSITIONS,
+                DEFAULT_NON_FUZZY_PREFIX, DEFAULT_MIN_FUZZY_LENGTH, DEFAULT_UNICODE_AWARE, null, false, 0, SEP_LABEL, PAYLOAD_SEP, END_BYTE, HOLE_CHARACTER);
 
     }
 
@@ -158,16 +151,13 @@ public final class XFuzzySuggester extends XAnalyzingSuggester {
      * @param payloadSep payload separator byte
      * @param endByte end byte marker byte
      */
-    public XFuzzySuggester(Analyzer indexAnalyzer, Automaton queryPrefix, Analyzer queryAnalyzer,
-                           int options, int maxSurfaceFormsPerAnalyzedForm, int maxGraphExpansions,
-                           int maxEdits, boolean transpositions, int nonFuzzyPrefix, int minFuzzyLength,
-                           boolean unicodeAware, FST<PairOutputs.Pair<Long, BytesRef>> fst, boolean hasPayloads,
-                           int maxAnalyzedPathsForOneInput, int sepLabel, int payloadSep, int endByte, int holeCharacter) {
-        super(indexAnalyzer, queryPrefix, queryAnalyzer, options, maxSurfaceFormsPerAnalyzedForm, maxGraphExpansions,
-            true, fst, hasPayloads, maxAnalyzedPathsForOneInput, sepLabel, payloadSep, endByte, holeCharacter);
+    public XFuzzySuggester(Analyzer indexAnalyzer, Automaton queryPrefix, Analyzer queryAnalyzer, int options, int maxSurfaceFormsPerAnalyzedForm, int maxGraphExpansions,
+                           int maxEdits, boolean transpositions, int nonFuzzyPrefix, int minFuzzyLength, boolean unicodeAware,
+                           FST<PairOutputs.Pair<Long, BytesRef>> fst, boolean hasPayloads, int maxAnalyzedPathsForOneInput,
+                           int sepLabel, int payloadSep, int endByte, int holeCharacter) {
+        super(indexAnalyzer, queryPrefix, queryAnalyzer, options, maxSurfaceFormsPerAnalyzedForm, maxGraphExpansions, true, fst, hasPayloads, maxAnalyzedPathsForOneInput, sepLabel, payloadSep, endByte, holeCharacter);
         if (maxEdits < 0 || maxEdits > LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE) {
-            throw new IllegalArgumentException(
-                "maxEdits must be between 0 and " + LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE);
+            throw new IllegalArgumentException("maxEdits must be between 0 and " + LevenshteinAutomata.MAXIMUM_SUPPORTED_DISTANCE);
         }
         if (nonFuzzyPrefix < 0) {
             throw new IllegalArgumentException("nonFuzzyPrefix must not be >= 0 (got " + nonFuzzyPrefix + ")");
@@ -184,9 +174,9 @@ public final class XFuzzySuggester extends XAnalyzingSuggester {
     }
 
     @Override
-    protected List<FSTUtil.Path<PairOutputs.Pair<Long,BytesRef>>> getFullPrefixPaths(
-        List<FSTUtil.Path<PairOutputs.Pair<Long,BytesRef>>> prefixPaths, Automaton lookupAutomaton,
-        FST<PairOutputs.Pair<Long,BytesRef>> fst)
+    protected List<FSTUtil.Path<PairOutputs.Pair<Long,BytesRef>>> getFullPrefixPaths(List<FSTUtil.Path<PairOutputs.Pair<Long,BytesRef>>> prefixPaths,
+                                                                                     Automaton lookupAutomaton,
+                                                                                     FST<PairOutputs.Pair<Long,BytesRef>> fst)
             throws IOException {
 
         // TODO: right now there's no penalty for fuzzy/edits,
@@ -243,8 +233,7 @@ public final class XFuzzySuggester extends XAnalyzingSuggester {
             // to allow the trailing dedup bytes to be
             // edited... but then 0 byte is "in general" allowed
             // on input (but not in UTF8).
-            LevenshteinAutomata lev = new LevenshteinAutomata(
-                ints, unicodeAware ? Character.MAX_CODE_POINT : 255, transpositions);
+            LevenshteinAutomata lev = new LevenshteinAutomata(ints, unicodeAware ? Character.MAX_CODE_POINT : 255, transpositions);
             subs.add(lev.toAutomaton(maxEdits, UnicodeUtil.newString(string.ints, string.offset, nonFuzzyPrefix)));
           }
         }

@@ -34,15 +34,6 @@ public final class IndexNotFoundException extends ResourceNotFoundException {
         setIndex(index);
     }
 
-    public IndexNotFoundException(Index index) {
-        this(index, null);
-    }
-
-    public IndexNotFoundException(Index index, Throwable cause) {
-        super("no such index", cause);
-        setIndex(index);
-    }
-
     public IndexNotFoundException(StreamInput in) throws IOException {
         super(in);
     }

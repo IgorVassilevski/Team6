@@ -27,12 +27,13 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.google.common.collect.Maps.newHashMap;
+
 /**
- * A response for the upgrade action.
+ * A response for optimize action.
  *
  *
  */
@@ -53,7 +54,7 @@ public class UpgradeResponse extends BroadcastResponse {
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         int size = in.readVInt();
-        versions = new HashMap<>();
+        versions = newHashMap();
         for (int i=0; i<size; i++) {
             String index = in.readString();
             Version upgradeVersion = Version.readVersion(in);

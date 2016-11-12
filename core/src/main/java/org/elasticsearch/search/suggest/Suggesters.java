@@ -18,23 +18,45 @@
  */
 package org.elasticsearch.search.suggest;
 
-import java.util.Map;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.util.ExtensionPoint;
+import org.elasticsearch.script.ScriptService;
+import org.elasticsearch.search.suggest.completion.CompletionSuggester;
+import org.elasticsearch.search.suggest.phrase.PhraseSuggester;
+import org.elasticsearch.search.suggest.term.TermSuggester;
+
+import java.util.*;
 
 /**
- * Registry of Suggesters. This is only its own class to make Guice happy.
+ *
  */
-public final class Suggesters {
-    private final Map<String, Suggester<?>> suggesters;
+public final class Suggesters extends ExtensionPoint.ClassMap<Suggester> {
+    private final Map<String, Suggester> parsers;
 
-    public Suggesters(Map<String, Suggester<?>> suggesters) {
-        this.suggesters = suggesters;
+    public Suggesters() {
+        this(Collections.EMPTY_MAP);
     }
 
-    public Suggester<?> getSuggester(String suggesterName) {
-        Suggester<?> suggester = suggesters.get(suggesterName);
-        if (suggester == null) {
-            throw new IllegalArgumentException("suggester with name [" + suggesterName + "] not supported");
-        }
-        return suggester;
+    public Suggesters(Map<String, Suggester> suggesters) {
+        super("suggester", Suggester.class, new HashSet<>(Arrays.asList("phrase", "term", "completion")), Suggesters.class, SuggestParseElement.class, SuggestPhase.class);
+        this.parsers = Collections.unmodifiableMap(suggesters);
+    }
+
+    @Inject
+    public Suggesters(Map<String, Suggester> suggesters, ScriptService scriptService) {
+        this(addBuildIns(suggesters, scriptService));
+    }
+
+    private static Map<String, Suggester> addBuildIns(Map<String, Suggester> suggesters, ScriptService scriptService) {
+        final Map<String, Suggester> map = new HashMap<>();
+        map.put("phrase", new PhraseSuggester(scriptService));
+        map.put("term", new TermSuggester());
+        map.put("completion", new CompletionSuggester());
+        map.putAll(suggesters);
+        return map;
+    }
+
+    public Suggester get(String type) {
+        return parsers.get(type);
     }
 }

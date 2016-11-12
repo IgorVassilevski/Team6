@@ -19,15 +19,18 @@
 
 package org.elasticsearch.indices.recovery;
 
+import com.google.common.collect.Maps;
+import org.elasticsearch.Version;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.cluster.routing.RecoverySource;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.store.Store;
+import org.elasticsearch.index.store.StoreFileMetaData;
 import org.elasticsearch.transport.TransportRequest;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  *
@@ -42,9 +45,11 @@ public class StartRecoveryRequest extends TransportRequest {
 
     private DiscoveryNode targetNode;
 
+    private boolean markAsRelocated;
+
     private Store.MetadataSnapshot metadataSnapshot;
 
-    private boolean primaryRelocation;
+    private RecoveryState.Type recoveryType;
 
     public StartRecoveryRequest() {
     }
@@ -55,13 +60,14 @@ public class StartRecoveryRequest extends TransportRequest {
      * @param sourceNode       The node to recover from
      * @param targetNode       The node to recover to
      */
-    public StartRecoveryRequest(ShardId shardId, DiscoveryNode sourceNode, DiscoveryNode targetNode, Store.MetadataSnapshot metadataSnapshot, boolean primaryRelocation, long recoveryId) {
+    public StartRecoveryRequest(ShardId shardId, DiscoveryNode sourceNode, DiscoveryNode targetNode, boolean markAsRelocated, Store.MetadataSnapshot metadataSnapshot, RecoveryState.Type recoveryType, long recoveryId) {
         this.recoveryId = recoveryId;
         this.shardId = shardId;
         this.sourceNode = sourceNode;
         this.targetNode = targetNode;
+        this.markAsRelocated = markAsRelocated;
+        this.recoveryType = recoveryType;
         this.metadataSnapshot = metadataSnapshot;
-        this.primaryRelocation = primaryRelocation;
     }
 
     public long recoveryId() {
@@ -80,8 +86,12 @@ public class StartRecoveryRequest extends TransportRequest {
         return targetNode;
     }
 
-    public boolean isPrimaryRelocation() {
-        return primaryRelocation;
+    public boolean markAsRelocated() {
+        return markAsRelocated;
+    }
+
+    public RecoveryState.Type recoveryType() {
+        return recoveryType;
     }
 
     public Store.MetadataSnapshot metadataSnapshot() {
@@ -93,10 +103,12 @@ public class StartRecoveryRequest extends TransportRequest {
         super.readFrom(in);
         recoveryId = in.readLong();
         shardId = ShardId.readShardId(in);
-        sourceNode = new DiscoveryNode(in);
-        targetNode = new DiscoveryNode(in);
+        sourceNode = DiscoveryNode.readNode(in);
+        targetNode = DiscoveryNode.readNode(in);
+        markAsRelocated = in.readBoolean();
         metadataSnapshot = new Store.MetadataSnapshot(in);
-        primaryRelocation = in.readBoolean();
+        recoveryType = RecoveryState.Type.fromId(in.readByte());
+
     }
 
     @Override
@@ -106,8 +118,9 @@ public class StartRecoveryRequest extends TransportRequest {
         shardId.writeTo(out);
         sourceNode.writeTo(out);
         targetNode.writeTo(out);
+        out.writeBoolean(markAsRelocated);
         metadataSnapshot.writeTo(out);
-        out.writeBoolean(primaryRelocation);
+        out.writeByte(recoveryType.id());
     }
 
 }

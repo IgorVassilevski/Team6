@@ -16,7 +16,11 @@
 
 package org.elasticsearch.common.inject.internal;
 
-import java.util.concurrent.ConcurrentHashMap;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+
+import java.util.concurrent.ExecutionException;
 
 /**
  * Lazily creates (and caches) values for keys. If creating the value fails (with errors), an
@@ -26,38 +30,35 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public abstract class FailableCache<K, V> {
 
-    private final ConcurrentHashMap<K, Object> cache = new ConcurrentHashMap<>();
+    private final LoadingCache<K, Object> delegate = CacheBuilder.newBuilder().build(new CacheLoader<K, Object>() {
+        @Override
+        public Object load(K key) throws Exception {
+            Errors errors = new Errors();
+            V result = null;
+            try {
+                result = FailableCache.this.create(key, errors);
+            } catch (ErrorsException e) {
+                errors.merge(e.getErrors());
+            }
+            return errors.hasErrors() ? errors : result;
+        }
+    });
 
     protected abstract V create(K key, Errors errors) throws ErrorsException;
 
     public V get(K key, Errors errors) throws ErrorsException {
-        Object resultOrError = cache.get(key);
-        if (resultOrError == null) {
-            synchronized (this) {
-                resultOrError = load(key);
-                // we can't use cache.computeIfAbsent since this might be recursively call this API
-                cache.putIfAbsent(key, resultOrError);
-            }
-        }
-        if (resultOrError instanceof Errors) {
-            errors.merge((Errors) resultOrError);
-            throw errors.toException();
-        } else {
-            @SuppressWarnings("unchecked") // create returned a non-error result, so this is safe
-            V result = (V) resultOrError;
-            return result;
-        }
-    }
-
-
-    private Object load(K key) {
-        Errors errors = new Errors();
-        V result = null;
         try {
-            result = create(key, errors);
-        } catch (ErrorsException e) {
-            errors.merge(e.getErrors());
+            Object resultOrError = delegate.get(key);
+            if (resultOrError instanceof Errors) {
+                errors.merge((Errors) resultOrError);
+                throw errors.toException();
+            } else {
+                @SuppressWarnings("unchecked") // create returned a non-error result, so this is safe
+                        V result = (V) resultOrError;
+                return result;
+            }
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
         }
-        return errors.hasErrors() ? errors : result;
     }
 }

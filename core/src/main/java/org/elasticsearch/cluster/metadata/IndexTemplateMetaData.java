@@ -20,7 +20,7 @@ package org.elasticsearch.cluster.metadata;
 
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
-
+import com.google.common.collect.Sets;
 import org.elasticsearch.cluster.AbstractDiffable;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.collect.MapBuilder;
@@ -29,7 +29,6 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.settings.loader.SettingsLoader;
-import org.elasticsearch.common.util.set.Sets;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
@@ -317,7 +316,7 @@ public class IndexTemplateMetaData extends AbstractDiffable<IndexTemplateMetaDat
 
         @SuppressWarnings("unchecked")
         public static void toXContent(IndexTemplateMetaData indexTemplateMetaData, XContentBuilder builder, ToXContent.Params params) throws IOException {
-            builder.startObject(indexTemplateMetaData.name());
+            builder.startObject(indexTemplateMetaData.name(), XContentBuilder.FieldCaseConversion.NONE);
 
             builder.field("order", indexTemplateMetaData.order());
             builder.field("template", indexTemplateMetaData.template());
@@ -330,10 +329,8 @@ public class IndexTemplateMetaData extends AbstractDiffable<IndexTemplateMetaDat
                 builder.startObject("mappings");
                 for (ObjectObjectCursor<String, CompressedXContent> cursor : indexTemplateMetaData.mappings()) {
                     byte[] mappingSource = cursor.value.uncompressed();
-                    Map<String, Object> mapping;
-                    try (XContentParser parser = XContentFactory.xContent(mappingSource).createParser(mappingSource)) {;
-                        mapping = parser.map();
-                    }
+                    XContentParser parser = XContentFactory.xContent(mappingSource).createParser(mappingSource);
+                    Map<String, Object> mapping = parser.map();
                     if (mapping.size() == 1 && mapping.containsKey(cursor.key)) {
                         // the type name is the root value, reduce it
                         mapping = (Map<String, Object>) mapping.get(cursor.key);
@@ -355,7 +352,7 @@ public class IndexTemplateMetaData extends AbstractDiffable<IndexTemplateMetaDat
             }
 
             for (ObjectObjectCursor<String, IndexMetaData.Custom> cursor : indexTemplateMetaData.customs()) {
-                builder.startObject(cursor.key);
+                builder.startObject(cursor.key, XContentBuilder.FieldCaseConversion.NONE);
                 cursor.value.toXContent(builder, params);
                 builder.endObject();
             }
@@ -379,7 +376,7 @@ public class IndexTemplateMetaData extends AbstractDiffable<IndexTemplateMetaDat
                     currentFieldName = parser.currentName();
                 } else if (token == XContentParser.Token.START_OBJECT) {
                     if ("settings".equals(currentFieldName)) {
-                        Settings.Builder templateSettingsBuilder = Settings.builder();
+                        Settings.Builder templateSettingsBuilder = Settings.settingsBuilder();
                         templateSettingsBuilder.put(SettingsLoader.Helper.loadNestedFromMap(parser.mapOrdered())).normalizePrefix(IndexMetaData.INDEX_SETTING_PREFIX);
                         builder.settings(templateSettingsBuilder.build());
                     } else if ("mappings".equals(currentFieldName)) {

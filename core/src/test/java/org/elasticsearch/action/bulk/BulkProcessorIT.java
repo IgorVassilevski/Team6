@@ -20,19 +20,20 @@
 package org.elasticsearch.action.bulk;
 
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
+
 import org.elasticsearch.action.get.MultiGetItemResponse;
 import org.elasticsearch.action.get.MultiGetRequestBuilder;
 import org.elasticsearch.action.get.MultiGetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.env.Environment;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.transport.MockTransportClient;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -44,16 +45,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
-import static org.hamcrest.Matchers.both;
-import static org.hamcrest.Matchers.either;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.*;
 
 public class BulkProcessorIT extends ESIntegTestCase {
+
+    @Test
     public void testThatBulkProcessorCountIsCorrect() throws InterruptedException {
+
         final CountDownLatch latch = new CountDownLatch(1);
         BulkProcessorTestListener listener = new BulkProcessorTestListener(latch);
 
@@ -76,6 +74,7 @@ public class BulkProcessorIT extends ESIntegTestCase {
         }
     }
 
+    @Test
     public void testBulkProcessorFlush() throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(1);
         BulkProcessorTestListener listener = new BulkProcessorTestListener(latch);
@@ -102,10 +101,11 @@ public class BulkProcessorIT extends ESIntegTestCase {
         }
     }
 
+    @Test
     public void testBulkProcessorConcurrentRequests() throws Exception {
         int bulkActions = randomIntBetween(10, 100);
         int numDocs = randomIntBetween(bulkActions, bulkActions + 100);
-        int concurrentRequests = randomIntBetween(0, 7);
+        int concurrentRequests = randomIntBetween(0, 10);
 
         int expectedBulkActions = numDocs / bulkActions;
 
@@ -141,7 +141,7 @@ public class BulkProcessorIT extends ESIntegTestCase {
 
         Set<String> ids = new HashSet<>();
         for (BulkItemResponse bulkItemResponse : listener.bulkItems) {
-            assertThat(bulkItemResponse.getFailureMessage(), bulkItemResponse.isFailed(), equalTo(false));
+            assertThat(bulkItemResponse.isFailed(), equalTo(false));
             assertThat(bulkItemResponse.getIndex(), equalTo("test"));
             assertThat(bulkItemResponse.getType(), equalTo("test"));
             //with concurrent requests > 1 we can't rely on the order of the bulk requests
@@ -153,13 +153,14 @@ public class BulkProcessorIT extends ESIntegTestCase {
         assertMultiGetResponse(multiGetRequestBuilder.get(), numDocs);
     }
 
-    //https://github.com/elastic/elasticsearch/issues/5038
+    @Test
+    //https://github.com/elasticsearch/elasticsearch/issues/5038
     public void testBulkProcessorConcurrentRequestsNoNodeAvailableException() throws Exception {
         //we create a transport client with no nodes to make sure it throws NoNodeAvailableException
         Settings settings = Settings.builder()
-                .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir().toString())
+                .put("path.home", createTempDir().toString())
                 .build();
-        Client transportClient = new MockTransportClient(settings);
+        Client transportClient = TransportClient.builder().settings(settings).build();
 
         int bulkActions = randomIntBetween(10, 100);
         int numDocs = randomIntBetween(bulkActions, bulkActions + 100);
@@ -195,6 +196,7 @@ public class BulkProcessorIT extends ESIntegTestCase {
         transportClient.close();
     }
 
+    @Test
     public void testBulkProcessorWaitOnClose() throws Exception {
         BulkProcessorTestListener listener = new BulkProcessorTestListener();
 
@@ -203,7 +205,7 @@ public class BulkProcessorIT extends ESIntegTestCase {
                 //let's make sure that the bulk action limit trips, one single execution will index all the documents
                 .setConcurrentRequests(randomIntBetween(0, 1)).setBulkActions(numDocs)
                 .setFlushInterval(TimeValue.timeValueHours(24)).setBulkSize(new ByteSizeValue(randomIntBetween(1, 10),
-                        RandomPicks.randomFrom(random(), ByteSizeUnit.values())))
+                        (ByteSizeUnit)RandomPicks.randomFrom(getRandom(), ByteSizeUnit.values())))
                 .build();
 
         MultiGetRequestBuilder multiGetRequestBuilder = indexDocs(client(), processor, numDocs);
@@ -225,6 +227,7 @@ public class BulkProcessorIT extends ESIntegTestCase {
         assertMultiGetResponse(multiGetRequestBuilder.get(), numDocs);
     }
 
+    @Test
     public void testBulkProcessorConcurrentRequestsReadOnlyIndex() throws Exception {
         createIndex("test-ro");
         assertAcked(client().admin().indices().prepareUpdateSettings("test-ro")

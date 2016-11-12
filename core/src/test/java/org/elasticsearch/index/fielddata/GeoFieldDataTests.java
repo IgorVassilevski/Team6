@@ -18,12 +18,11 @@
  */
 package org.elasticsearch.index.fielddata;
 
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.*;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
 import org.elasticsearch.index.fielddata.plain.AbstractAtomicGeoPointFieldData;
+import org.junit.Test;
 
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
@@ -35,8 +34,8 @@ public class GeoFieldDataTests extends AbstractGeoFieldDataTestCase {
     private static String FIELD_NAME = "value";
 
     @Override
-    protected String getFieldDataType() {
-        return "geo_point";
+    protected FieldDataType getFieldDataType() {
+        return new FieldDataType("geo_point");
     }
 
     @Override
@@ -150,6 +149,7 @@ public class GeoFieldDataTests extends AbstractGeoFieldDataTestCase {
     }
 
     @Override
+    @Test
     public void testSingleValueAllSet() throws Exception {
         fillSingleValueAllSet();
         IndexFieldData indexFieldData = getForField("value");
@@ -164,6 +164,7 @@ public class GeoFieldDataTests extends AbstractGeoFieldDataTestCase {
     }
 
     @Override
+    @Test
     public void testSingleValueWithMissing() throws Exception {
         fillSingleValueWithMissing();
         IndexFieldData indexFieldData = getForField("value");
@@ -178,6 +179,7 @@ public class GeoFieldDataTests extends AbstractGeoFieldDataTestCase {
     }
 
     @Override
+    @Test
     public void testMultiValueAllSet() throws Exception {
         fillMultiValueAllSet();
         IndexFieldData indexFieldData = getForField("value");
@@ -192,6 +194,7 @@ public class GeoFieldDataTests extends AbstractGeoFieldDataTestCase {
     }
 
     @Override
+    @Test
     public void testMultiValueWithMissing() throws Exception {
         fillMultiValueWithMissing();
         IndexFieldData indexFieldData = getForField("value");

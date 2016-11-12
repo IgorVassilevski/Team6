@@ -22,16 +22,16 @@ package org.elasticsearch.action.admin.cluster.snapshots.restore;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.master.TransportMasterNodeAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
+import org.elasticsearch.cluster.metadata.SnapshotId;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.snapshots.RestoreInfo;
 import org.elasticsearch.snapshots.RestoreService;
-import org.elasticsearch.snapshots.Snapshot;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
@@ -45,7 +45,7 @@ public class TransportRestoreSnapshotAction extends TransportMasterNodeAction<Re
     public TransportRestoreSnapshotAction(Settings settings, TransportService transportService, ClusterService clusterService,
                                           ThreadPool threadPool, RestoreService restoreService, ActionFilters actionFilters,
                                           IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, RestoreSnapshotAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, RestoreSnapshotRequest::new);
+        super(settings, RestoreSnapshotAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, RestoreSnapshotRequest.class);
         this.restoreService = restoreService;
     }
 
@@ -72,29 +72,30 @@ public class TransportRestoreSnapshotAction extends TransportMasterNodeAction<Re
     }
 
     @Override
-    protected void masterOperation(final RestoreSnapshotRequest request, final ClusterState state, final ActionListener<RestoreSnapshotResponse> listener) {
-        RestoreService.RestoreRequest restoreRequest = new RestoreService.RestoreRequest(request.repository(), request.snapshot(),
+    protected void masterOperation(final RestoreSnapshotRequest request, ClusterState state, final ActionListener<RestoreSnapshotResponse> listener) {
+        RestoreService.RestoreRequest restoreRequest = new RestoreService.RestoreRequest(
+                "restore_snapshot[" + request.snapshot() + "]", request.repository(), request.snapshot(),
                 request.indices(), request.indicesOptions(), request.renamePattern(), request.renameReplacement(),
                 request.settings(), request.masterNodeTimeout(), request.includeGlobalState(), request.partial(), request.includeAliases(),
-                request.indexSettings(), request.ignoreIndexSettings(), "restore_snapshot[" + request.snapshot() + "]");
+                request.indexSettings(), request.ignoreIndexSettings());
 
         restoreService.restoreSnapshot(restoreRequest, new ActionListener<RestoreInfo>() {
             @Override
             public void onResponse(RestoreInfo restoreInfo) {
                 if (restoreInfo == null && request.waitForCompletion()) {
                     restoreService.addListener(new ActionListener<RestoreService.RestoreCompletionResponse>() {
+                        SnapshotId snapshotId = new SnapshotId(request.repository(), request.snapshot());
+
                         @Override
                         public void onResponse(RestoreService.RestoreCompletionResponse restoreCompletionResponse) {
-                            final Snapshot snapshot = restoreCompletionResponse.getSnapshot();
-                            if (snapshot.getRepository().equals(request.repository()) &&
-                                    snapshot.getSnapshotId().getName().equals(request.snapshot())) {
+                            if (this.snapshotId.equals(restoreCompletionResponse.getSnapshotId())) {
                                 listener.onResponse(new RestoreSnapshotResponse(restoreCompletionResponse.getRestoreInfo()));
                                 restoreService.removeListener(this);
                             }
                         }
 
                         @Override
-                        public void onFailure(Exception e) {
+                        public void onFailure(Throwable e) {
                             listener.onFailure(e);
                         }
                     });
@@ -104,7 +105,7 @@ public class TransportRestoreSnapshotAction extends TransportMasterNodeAction<Re
             }
 
             @Override
-            public void onFailure(Exception t) {
+            public void onFailure(Throwable t) {
                 listener.onFailure(t);
             }
         });

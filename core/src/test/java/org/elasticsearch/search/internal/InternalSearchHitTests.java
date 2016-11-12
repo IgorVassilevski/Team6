@@ -22,7 +22,6 @@ package org.elasticsearch.search.internal;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.InputStreamStreamInput;
 import org.elasticsearch.common.text.Text;
-import org.elasticsearch.index.Index;
 import org.elasticsearch.search.SearchShardTarget;
 import org.elasticsearch.test.ESTestCase;
 
@@ -37,7 +36,7 @@ import static org.hamcrest.Matchers.nullValue;
 public class InternalSearchHitTests extends ESTestCase {
 
     public void testSerializeShardTarget() throws Exception {
-        SearchShardTarget target = new SearchShardTarget("_node_id", new Index("_index", "_na_"), 0);
+        SearchShardTarget target = new SearchShardTarget("_node_id", "_index", 0);
 
         Map<String, InternalSearchHits> innerHits = new HashMap<>();
         InternalSearchHit innerHit1 = new InternalSearchHit(0, "_id", new Text("_type"), null);
@@ -67,7 +66,7 @@ public class InternalSearchHitTests extends ESTestCase {
         context.streamShardTarget(InternalSearchHits.StreamContext.ShardTargetType.STREAM);
         BytesStreamOutput output = new BytesStreamOutput();
         hits.writeTo(output, context);
-        InputStream input = output.bytes().streamInput();
+        InputStream input = new ByteArrayInputStream(output.bytes().toBytes());
         context = new InternalSearchHits.StreamContext();
         context.streamShardTarget(InternalSearchHits.StreamContext.ShardTargetType.STREAM);
         InternalSearchHits results = InternalSearchHits.readSearchHits(new InputStreamStreamInput(input), context);

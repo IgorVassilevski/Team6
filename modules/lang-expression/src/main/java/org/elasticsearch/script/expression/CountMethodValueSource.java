@@ -19,43 +19,36 @@
 
 package org.elasticsearch.script.expression;
 
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.queries.function.FunctionValues;
+import org.apache.lucene.queries.function.ValueSource;
+import org.elasticsearch.index.fielddata.AtomicFieldData;
+import org.elasticsearch.index.fielddata.AtomicNumericFieldData;
+import org.elasticsearch.index.fielddata.IndexFieldData;
+import org.elasticsearch.search.MultiValueMode;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.queries.function.FunctionValues;
-import org.apache.lucene.queries.function.ValueSource;
-import org.apache.lucene.queries.function.docvalues.DoubleDocValues;
-import org.elasticsearch.index.fielddata.AtomicNumericFieldData;
-import org.elasticsearch.index.fielddata.IndexFieldData;
-import org.elasticsearch.index.fielddata.SortedNumericDoubleValues;
-
 /**
  * A ValueSource to create FunctionValues to get the count of the number of values in a field for a document.
  */
-final class CountMethodValueSource extends ValueSource {
-    IndexFieldData<?> fieldData;
+public class CountMethodValueSource extends ValueSource {
+    protected IndexFieldData<?> fieldData;
 
-    CountMethodValueSource(IndexFieldData<?> fieldData) {
+    protected CountMethodValueSource(IndexFieldData<?> fieldData) {
         Objects.requireNonNull(fieldData);
 
         this.fieldData = fieldData;
     }
 
     @Override
-    @SuppressWarnings("rawtypes") // ValueSource uses a rawtype
     public FunctionValues getValues(Map context, LeafReaderContext leaf) throws IOException {
-        AtomicNumericFieldData leafData = (AtomicNumericFieldData) fieldData.load(leaf);
-        final SortedNumericDoubleValues values = leafData.getDoubleValues();
+        AtomicFieldData leafData = fieldData.load(leaf);
+        assert(leafData instanceof AtomicNumericFieldData);
 
-        return new DoubleDocValues(this) {
-          @Override
-          public double doubleVal(int doc) {
-            values.setDocument(doc);
-            return values.count();
-          }
-        };
+        return new CountMethodFunctionValues(this, (AtomicNumericFieldData)leafData);
     }
 
     @Override
@@ -70,11 +63,11 @@ final class CountMethodValueSource extends ValueSource {
 
     @Override
     public int hashCode() {
-        return 31 * getClass().hashCode() + fieldData.hashCode();
+        return fieldData.hashCode();
     }
 
     @Override
     public String description() {
-        return "count: field(" + fieldData.getFieldName() + ")";
+        return "count: field(" + fieldData.getFieldNames().toString() + ")";
     }
 }

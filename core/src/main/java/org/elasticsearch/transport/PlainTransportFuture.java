@@ -30,8 +30,7 @@ import java.util.concurrent.TimeoutException;
 /**
  *
  */
-public class PlainTransportFuture<V extends TransportResponse> extends BaseFuture<V>
-    implements TransportFuture<V>, TransportResponseHandler<V> {
+public class PlainTransportFuture<V extends TransportResponse> extends BaseFuture<V> implements TransportFuture<V>, TransportResponseHandler<V> {
 
     private final TransportResponseHandler<V> handler;
 
@@ -60,7 +59,7 @@ public class PlainTransportFuture<V extends TransportResponse> extends BaseFutur
         try {
             return get(timeout, unit);
         } catch (TimeoutException e) {
-            throw new ElasticsearchTimeoutException(e);
+            throw new ElasticsearchTimeoutException(e.getMessage());
         } catch (InterruptedException e) {
             throw new IllegalStateException("Future got interrupted", e);
         } catch (ExecutionException e) {
@@ -87,8 +86,8 @@ public class PlainTransportFuture<V extends TransportResponse> extends BaseFutur
         try {
             handler.handleResponse(response);
             set(response);
-        } catch (Exception e) {
-            handleException(new ResponseHandlerFailureTransportException(e));
+        } catch (Throwable t) {
+            handleException(new ResponseHandlerFailureTransportException(t));
         }
     }
 

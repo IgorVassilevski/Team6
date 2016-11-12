@@ -4,14 +4,14 @@
             "file":{
                 "type":"attachment",
                 "fields" : {
-                    "content" : {"store" : true},
-                    "title" : {"store" : true},
-                    "date" : {"store" : true},
+                    "content" : {"store" : "yes"},
+                    "title" : {"store" : "yes"},
+                    "date" : {"store" : "yes"},
                     "author" : {"analyzer" : "standard"},
-                    "keywords" : {"store" : true},
-                    "content_type" : {"store" : true},
-                    "content_length" : {"store" : true},
-                    "language" : {"store" : true}
+                    "keywords" : {"store" : "yes"},
+                    "content_type" : {"store" : "yes"},
+                    "content_length" : {"store" : "yes"},
+                    "language" : {"store" : "yes"}
                 }
             }
         }

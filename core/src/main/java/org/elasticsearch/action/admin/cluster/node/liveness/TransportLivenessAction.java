@@ -19,27 +19,28 @@
 
 package org.elasticsearch.action.admin.cluster.node.liveness;
 
-import org.elasticsearch.cluster.service.ClusterService;
+import org.elasticsearch.cluster.ClusterName;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.transport.TransportChannel;
-import org.elasticsearch.transport.TransportRequestHandler;
-import org.elasticsearch.transport.TransportService;
+import org.elasticsearch.transport.*;
 
-public final class TransportLivenessAction implements TransportRequestHandler<LivenessRequest> {
+public final class TransportLivenessAction extends TransportRequestHandler<LivenessRequest> {
 
     private final ClusterService clusterService;
+    private final ClusterName clusterName;
     public static final String NAME = "cluster:monitor/nodes/liveness";
 
     @Inject
-    public TransportLivenessAction(ClusterService clusterService, TransportService transportService) {
+    public TransportLivenessAction(ClusterName clusterName,
+                                   ClusterService clusterService, TransportService transportService) {
         this.clusterService = clusterService;
-        transportService.registerRequestHandler(NAME, LivenessRequest::new, ThreadPool.Names.SAME,
-            false, false /*can not trip circuit breaker*/, this);
+        this.clusterName = clusterName;
+        transportService.registerRequestHandler(NAME, LivenessRequest.class, ThreadPool.Names.SAME, this);
     }
 
     @Override
     public void messageReceived(LivenessRequest request, TransportChannel channel) throws Exception {
-        channel.sendResponse(new LivenessResponse(clusterService.getClusterName(), clusterService.localNode()));
+        channel.sendResponse(new LivenessResponse(clusterName, clusterService.localNode()));
     }
 }

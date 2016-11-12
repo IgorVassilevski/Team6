@@ -19,54 +19,50 @@
 
 package org.elasticsearch.plugin.analysis.kuromoji;
 
-import org.apache.lucene.analysis.Analyzer;
-import org.elasticsearch.index.analysis.AnalyzerProvider;
-import org.elasticsearch.index.analysis.CharFilterFactory;
+import org.elasticsearch.common.inject.Module;
+import org.elasticsearch.index.analysis.AnalysisModule;
 import org.elasticsearch.index.analysis.JapaneseStopTokenFilterFactory;
 import org.elasticsearch.index.analysis.KuromojiAnalyzerProvider;
 import org.elasticsearch.index.analysis.KuromojiBaseFormFilterFactory;
 import org.elasticsearch.index.analysis.KuromojiIterationMarkCharFilterFactory;
 import org.elasticsearch.index.analysis.KuromojiKatakanaStemmerFactory;
-import org.elasticsearch.index.analysis.KuromojiNumberFilterFactory;
 import org.elasticsearch.index.analysis.KuromojiPartOfSpeechFilterFactory;
 import org.elasticsearch.index.analysis.KuromojiReadingFormFilterFactory;
 import org.elasticsearch.index.analysis.KuromojiTokenizerFactory;
-import org.elasticsearch.index.analysis.TokenFilterFactory;
-import org.elasticsearch.index.analysis.TokenizerFactory;
-import org.elasticsearch.indices.analysis.AnalysisModule.AnalysisProvider;
-import org.elasticsearch.plugins.AnalysisPlugin;
+import org.elasticsearch.indices.analysis.KuromojiIndicesAnalysisModule;
 import org.elasticsearch.plugins.Plugin;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Collection;
+import java.util.Collections;
 
-import static java.util.Collections.singletonMap;
+/**
+ *
+ */
+public class AnalysisKuromojiPlugin extends Plugin {
 
-public class AnalysisKuromojiPlugin extends Plugin implements AnalysisPlugin {
     @Override
-    public Map<String, AnalysisProvider<CharFilterFactory>> getCharFilters() {
-        return singletonMap("kuromoji_iteration_mark", KuromojiIterationMarkCharFilterFactory::new);
+    public String name() {
+        return "analysis-kuromoji";
     }
 
     @Override
-    public Map<String, AnalysisProvider<TokenFilterFactory>> getTokenFilters() {
-        Map<String, AnalysisProvider<TokenFilterFactory>> extra = new HashMap<>();
-        extra.put("kuromoji_baseform", KuromojiBaseFormFilterFactory::new);
-        extra.put("kuromoji_part_of_speech", KuromojiPartOfSpeechFilterFactory::new);
-        extra.put("kuromoji_readingform", KuromojiReadingFormFilterFactory::new);
-        extra.put("kuromoji_stemmer", KuromojiKatakanaStemmerFactory::new);
-        extra.put("ja_stop", JapaneseStopTokenFilterFactory::new);
-        extra.put("kuromoji_number", KuromojiNumberFilterFactory::new);
-        return extra;
+    public String description() {
+        return "Kuromoji analysis support";
     }
 
     @Override
-    public Map<String, AnalysisProvider<TokenizerFactory>> getTokenizers() {
-        return singletonMap("kuromoji_tokenizer", KuromojiTokenizerFactory::new);
+    public Collection<Module> nodeModules() {
+        return Collections.<Module>singletonList(new KuromojiIndicesAnalysisModule());
     }
 
-    @Override
-    public Map<String, AnalysisProvider<AnalyzerProvider<? extends Analyzer>>> getAnalyzers() {
-        return singletonMap("kuromoji", KuromojiAnalyzerProvider::new);
+    public void onModule(AnalysisModule module) {
+        module.addCharFilter("kuromoji_iteration_mark", KuromojiIterationMarkCharFilterFactory.class);
+        module.addAnalyzer("kuromoji", KuromojiAnalyzerProvider.class);
+        module.addTokenizer("kuromoji_tokenizer", KuromojiTokenizerFactory.class);
+        module.addTokenFilter("kuromoji_baseform", KuromojiBaseFormFilterFactory.class);
+        module.addTokenFilter("kuromoji_part_of_speech", KuromojiPartOfSpeechFilterFactory.class);
+        module.addTokenFilter("kuromoji_readingform", KuromojiReadingFormFilterFactory.class);
+        module.addTokenFilter("kuromoji_stemmer", KuromojiKatakanaStemmerFactory.class);
+        module.addTokenFilter("ja_stop", JapaneseStopTokenFilterFactory.class);
     }
 }

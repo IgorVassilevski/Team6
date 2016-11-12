@@ -19,6 +19,7 @@
 
 package org.elasticsearch.cluster.metadata;
 
+import com.google.common.collect.UnmodifiableIterator;
 import org.elasticsearch.common.collect.Tuple;
 
 import java.util.ArrayList;
@@ -105,7 +106,7 @@ public interface AliasOrIndex {
             return new Iterable<Tuple<String, AliasMetaData>>() {
                 @Override
                 public Iterator<Tuple<String, AliasMetaData>> iterator() {
-                    return new Iterator<Tuple<String,AliasMetaData>>() {
+                    return new UnmodifiableIterator<Tuple<String,AliasMetaData>>() {
 
                         int index = 0;
 
@@ -117,12 +118,7 @@ public interface AliasOrIndex {
                         @Override
                         public Tuple<String, AliasMetaData> next() {
                             IndexMetaData indexMetaData = referenceIndexMetaDatas.get(index++);
-                            return new Tuple<>(indexMetaData.getIndex().getName(), indexMetaData.getAliases().get(aliasName));
-                        }
-
-                        @Override
-                        public final void remove() {
-                            throw new UnsupportedOperationException();
+                            return new Tuple<>(indexMetaData.getIndex(), indexMetaData.getAliases().get(aliasName));
                         }
 
                     };

@@ -16,6 +16,7 @@
 
 package org.elasticsearch.common.inject.internal;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.Key;
 import org.elasticsearch.common.inject.Module;
@@ -30,12 +31,9 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
 
-import static java.util.Collections.unmodifiableSet;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Creates bindings to methods annotated with {@literal @}{@link Provides}. Use the scope and
@@ -49,7 +47,7 @@ public final class ProviderMethodsModule implements Module {
     private final TypeLiteral<?> typeLiteral;
 
     private ProviderMethodsModule(Object delegate) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.delegate = checkNotNull(delegate, "delegate");
         this.typeLiteral = TypeLiteral.get(this.delegate.getClass());
     }
 
@@ -83,7 +81,7 @@ public final class ProviderMethodsModule implements Module {
     public List<ProviderMethod<?>> getProviderMethods(Binder binder) {
         List<ProviderMethod<?>> result = new ArrayList<>();
         for (Class<?> c = delegate.getClass(); c != Object.class; c = c.getSuperclass()) {
-            for (Method method : c.getMethods()) {
+            for (Method method : c.getDeclaredMethods()) {
                 if (method.getAnnotation(Provides.class) != null) {
                     result.add(createProviderMethod(binder, method));
                 }
@@ -97,7 +95,7 @@ public final class ProviderMethodsModule implements Module {
         Errors errors = new Errors(method);
 
         // prepare the parameter providers
-        Set<Dependency<?>> dependencies = new HashSet<>();
+        List<Dependency<?>> dependencies = new ArrayList<>();
         List<Provider<?>> parameterProviders = new ArrayList<>();
         List<TypeLiteral<?>> parameterTypes = typeLiteral.getParameterTypes(method);
         Annotation[][] parameterAnnotations = method.getParameterAnnotations();
@@ -118,7 +116,7 @@ public final class ProviderMethodsModule implements Module {
             binder.addError(message);
         }
 
-        return new ProviderMethod<>(key, method, delegate, unmodifiableSet(dependencies),
+        return new ProviderMethod<>(key, method, delegate, ImmutableSet.copyOf(dependencies),
                 parameterProviders, scopeAnnotation);
     }
 

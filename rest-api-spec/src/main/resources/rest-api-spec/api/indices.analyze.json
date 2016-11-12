@@ -1,6 +1,6 @@
 {
   "indices.analyze": {
-    "documentation": "http://www.elastic.co/guide/en/elasticsearch/reference/master/indices-analyze.html",
+    "documentation": "http://www.elastic.co/guide/en/elasticsearch/reference/2.3/indices-analyze.html",
     "methods": ["GET", "POST"],
     "url": {
       "path": "/_analyze",
@@ -16,6 +16,10 @@
           "type" : "string",
           "description" : "The name of the analyzer to use"
         },
+        "char_filters": {
+          "type" : "list",
+          "description" : "Deprecated : A comma-separated list of character filters to use for the analysis"
+        },
         "char_filter": {
           "type" : "list",
           "description" : "A comma-separated list of character filters to use for the analysis"
@@ -23,6 +27,10 @@
         "field": {
           "type" : "string",
           "description" : "Use the analyzer configured for this field (instead of passing the analyzer name)"
+        },
+        "filters": {
+          "type" : "list",
+          "description" : "Deprecated : A comma-separated list of filters to use for the analysis"
         },
         "filter": {
           "type" : "list",

@@ -19,8 +19,7 @@
 
 package org.elasticsearch.gateway;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ClusterStateUpdateTask;
 import org.elasticsearch.cluster.block.ClusterBlocks;
@@ -31,7 +30,6 @@ import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.RoutingTable;
 import org.elasticsearch.cluster.routing.allocation.AllocationService;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -39,13 +37,7 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.discovery.MasterNotDiscoveredException;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.transport.TransportChannel;
-import org.elasticsearch.transport.TransportException;
-import org.elasticsearch.transport.TransportRequest;
-import org.elasticsearch.transport.TransportRequestHandler;
-import org.elasticsearch.transport.TransportResponse;
-import org.elasticsearch.transport.TransportResponseHandler;
-import org.elasticsearch.transport.TransportService;
+import org.elasticsearch.transport.*;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -73,12 +65,12 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
         this.clusterService = clusterService;
         this.allocationService = allocationService;
         this.metaDataIndexUpgradeService = metaDataIndexUpgradeService;
-        transportService.registerRequestHandler(ACTION_NAME, AllocateDangledRequest::new, ThreadPool.Names.SAME, new AllocateDangledRequestHandler());
+        transportService.registerRequestHandler(ACTION_NAME, AllocateDangledRequest.class, ThreadPool.Names.SAME, new AllocateDangledRequestHandler());
     }
 
     public void allocateDangled(Collection<IndexMetaData> indices, final Listener listener) {
         ClusterState clusterState = clusterService.state();
-        DiscoveryNode masterNode = clusterState.nodes().getMasterNode();
+        DiscoveryNode masterNode = clusterState.nodes().masterNode();
         if (masterNode == null) {
             listener.onFailure(new MasterNotDiscoveredException("no master to send allocate dangled request"));
             return;
@@ -107,18 +99,18 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
         });
     }
 
-    public interface Listener {
+    public static interface Listener {
         void onResponse(AllocateDangledResponse response);
 
         void onFailure(Throwable e);
     }
 
-    class AllocateDangledRequestHandler implements TransportRequestHandler<AllocateDangledRequest> {
+    class AllocateDangledRequestHandler extends TransportRequestHandler<AllocateDangledRequest> {
         @Override
         public void messageReceived(final AllocateDangledRequest request, final TransportChannel channel) throws Exception {
             String[] indexNames = new String[request.indices.length];
             for (int i = 0; i < request.indices.length; i++) {
-                indexNames[i] = request.indices[i].getIndex().getName();
+                indexNames[i] = request.indices[i].getIndex();
             }
             clusterService.submitStateUpdateTask("allocation dangled indices " + Arrays.toString(indexNames), new ClusterStateUpdateTask() {
                 @Override
@@ -133,10 +125,10 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
                     boolean importNeeded = false;
                     StringBuilder sb = new StringBuilder();
                     for (IndexMetaData indexMetaData : request.indices) {
-                        if (currentState.metaData().hasIndex(indexMetaData.getIndex().getName())) {
+                        if (currentState.metaData().hasIndex(indexMetaData.getIndex())) {
                             continue;
                         }
-                        if (currentState.metaData().hasAlias(indexMetaData.getIndex().getName())) {
+                        if (currentState.metaData().hasAlias(indexMetaData.getIndex())) {
                             logger.warn("ignoring dangled index [{}] on node [{}] due to an existing alias with the same name",
                                     indexMetaData.getIndex(), request.fromNode);
                             continue;
@@ -150,7 +142,8 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
                             upgradedIndexMetaData = metaDataIndexUpgradeService.upgradeIndexMetaData(indexMetaData);
                         } catch (Exception ex) {
                             // upgrade failed - adding index as closed
-                            logger.warn((Supplier<?>) () -> new ParameterizedMessage("found dangled index [{}] on node [{}]. This index cannot be upgraded to the latest version, adding as closed", indexMetaData.getIndex(), request.fromNode), ex);
+                            logger.warn("found dangled index [{}] on node [{}]. This index cannot be upgraded to the latest version, adding as closed", ex,
+                                    indexMetaData.getIndex(), request.fromNode);
                             upgradedIndexMetaData = IndexMetaData.builder(indexMetaData).state(IndexMetaData.State.CLOSE).version(indexMetaData.getVersion() + 1).build();
                         }
                         metaData.put(upgradedIndexMetaData, false);
@@ -165,24 +158,22 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
                     }
                     logger.info("auto importing dangled indices {} from [{}]", sb.toString(), request.fromNode);
 
-                    RoutingTable routingTable = routingTableBuilder.build();
-                    ClusterState updatedState = ClusterState.builder(currentState).metaData(metaData).blocks(blocks).routingTable(routingTable).build();
+                    ClusterState updatedState = ClusterState.builder(currentState).metaData(metaData).blocks(blocks).routingTable(routingTableBuilder).build();
 
                     // now, reroute
                     RoutingAllocation.Result routingResult = allocationService.reroute(
-                            ClusterState.builder(updatedState).routingTable(routingTable).build(), "dangling indices allocated");
+                            ClusterState.builder(updatedState).routingTable(routingTableBuilder).build(), "dangling indices allocated");
 
                     return ClusterState.builder(updatedState).routingResult(routingResult).build();
                 }
 
                 @Override
-                public void onFailure(String source, Exception e) {
-                    logger.error((Supplier<?>) () -> new ParameterizedMessage("unexpected failure during [{}]", source), e);
+                public void onFailure(String source, Throwable t) {
+                    logger.error("unexpected failure during [{}]", t, source);
                     try {
-                        channel.sendResponse(e);
-                    } catch (Exception inner) {
-                        inner.addSuppressed(e);
-                        logger.warn("failed send response for allocating dangled", inner);
+                        channel.sendResponse(t);
+                    } catch (Exception e) {
+                        logger.warn("failed send response for allocating dangled", e);
                     }
                 }
 
@@ -214,7 +205,7 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
         @Override
         public void readFrom(StreamInput in) throws IOException {
             super.readFrom(in);
-            fromNode = new DiscoveryNode(in);
+            fromNode = DiscoveryNode.readNode(in);
             indices = new IndexMetaData[in.readVInt()];
             for (int i = 0; i < indices.length; i++) {
                 indices[i] = IndexMetaData.Builder.readFrom(in);

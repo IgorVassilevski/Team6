@@ -19,6 +19,7 @@
 
 package org.elasticsearch.common.util;
 
+import com.google.common.base.Preconditions;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.RamUsageEstimator;
 
@@ -70,7 +71,7 @@ final class BigLongArray extends AbstractBigArray implements LongArray {
 
     @Override
     protected int numBytesPerElement() {
-        return Long.BYTES;
+        return RamUsageEstimator.NUM_BYTES_LONG;
     }
 
     /** Change the size of this array. Content between indexes <code>0</code> and <code>min(size(), newSize)</code> will be preserved. */
@@ -92,9 +93,7 @@ final class BigLongArray extends AbstractBigArray implements LongArray {
 
     @Override
     public void fill(long fromIndex, long toIndex, long value) {
-        if (fromIndex > toIndex) {
-            throw new IllegalArgumentException();
-        }
+        Preconditions.checkArgument(fromIndex <= toIndex);
         if (fromIndex == toIndex) {
             return; // empty range
         }

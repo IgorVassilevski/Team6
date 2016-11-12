@@ -19,14 +19,13 @@
 
 package org.elasticsearch;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.IndexFormatTooNewException;
 import org.apache.lucene.index.IndexFormatTooOldException;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.index.Index;
 import org.elasticsearch.rest.RestStatus;
 
 import java.io.IOException;
@@ -37,22 +36,25 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ *
+ */
 public final class ExceptionsHelper {
 
-    private static final Logger logger = Loggers.getLogger(ExceptionsHelper.class);
+    private static final ESLogger logger = Loggers.getLogger(ExceptionsHelper.class);
 
-    public static RuntimeException convertToRuntime(Exception e) {
-        if (e instanceof RuntimeException) {
-            return (RuntimeException) e;
+    public static RuntimeException convertToRuntime(Throwable t) {
+        if (t instanceof RuntimeException) {
+            return (RuntimeException) t;
         }
-        return new ElasticsearchException(e);
+        return new ElasticsearchException(t.getMessage(), t);
     }
 
-    public static ElasticsearchException convertToElastic(Exception e) {
-        if (e instanceof ElasticsearchException) {
-            return (ElasticsearchException) e;
+    public static ElasticsearchException convertToElastic(Throwable t) {
+        if (t instanceof ElasticsearchException) {
+            return (ElasticsearchException) t;
         }
-        return new ElasticsearchException(e);
+        return new ElasticsearchException(t.getMessage(), t);
     }
 
     public static RestStatus status(Throwable t) {
@@ -86,14 +88,15 @@ public final class ExceptionsHelper {
         return result;
     }
 
-    /**
-     * @deprecated Don't swallow exceptions, allow them to propagate.
-     */
-    @Deprecated
     public static String detailedMessage(Throwable t) {
+        return detailedMessage(t, false, 0);
+    }
+
+    public static String detailedMessage(Throwable t, boolean newLines, int initialCounter) {
         if (t == null) {
             return "Unknown";
         }
+        int counter = initialCounter + 1;
         if (t.getCause() != null) {
             StringBuilder sb = new StringBuilder();
             while (t != null) {
@@ -103,11 +106,21 @@ public final class ExceptionsHelper {
                     sb.append(t.getMessage());
                     sb.append("]");
                 }
-                sb.append("; ");
+                if (!newLines) {
+                    sb.append("; ");
+                }
                 t = t.getCause();
                 if (t != null) {
-                    sb.append("nested: ");
+                    if (newLines) {
+                        sb.append("\n");
+                        for (int i = 0; i < counter; i++) {
+                            sb.append("\t");
+                        }
+                    } else {
+                        sb.append("nested: ");
+                    }
                 }
+                counter++;
             }
             return sb.toString();
         } else {
@@ -147,7 +160,7 @@ public final class ExceptionsHelper {
             main = useOrSuppress(main, ex);
         }
         if (main != null) {
-            throw new ElasticsearchException(main);
+            throw new ElasticsearchException(main.getMessage(), main);
         }
     }
 
@@ -161,8 +174,8 @@ public final class ExceptionsHelper {
     }
 
     public static IOException unwrapCorruption(Throwable t) {
-        return (IOException) unwrap(t, CorruptIndexException.class,
-                                       IndexFormatTooOldException.class,
+        return (IOException) unwrap(t, CorruptIndexException.class, 
+                                       IndexFormatTooOldException.class, 
                                        IndexFormatTooNewException.class);
     }
 
@@ -180,6 +193,19 @@ public final class ExceptionsHelper {
     }
 
     /**
+     * Returns <code>true</code> iff the given throwable is and OutOfMemoryException, otherwise <code>false</code>
+     */
+    public static boolean isOOM(Throwable t) {
+        return t != null
+                && (t instanceof OutOfMemoryError
+                    || (t instanceof IllegalStateException
+                        && t.getMessage() != null
+                        && t.getMessage().contains("OutOfMemoryError")
+                        )
+                    );
+    }
+
+    /**
      * Throws the specified exception. If null if specified then <code>true</code> is returned.
      */
     public static boolean reThrowIfNotNull(@Nullable Throwable e) {
@@ -192,6 +218,7 @@ public final class ExceptionsHelper {
         }
         return true;
     }
+
 
     /**
      * Deduplicate the failures by exception message and index.
@@ -216,12 +243,7 @@ public final class ExceptionsHelper {
 
         public GroupBy(Throwable t) {
             if (t instanceof ElasticsearchException) {
-                final Index index = ((ElasticsearchException) t).getIndex();
-                if (index != null) {
-                    this.index = index.getName();
-                } else {
-                    this.index = null;
-                }
+                index = ((ElasticsearchException) t).getIndex();
             } else {
                 index = null;
             }

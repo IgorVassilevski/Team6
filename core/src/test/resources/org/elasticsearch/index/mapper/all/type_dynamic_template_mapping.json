@@ -11,7 +11,7 @@
     ],
     "properties": {
         "foo": {
-            "type": "text"
+            "type": "string"
         }
     }
 }

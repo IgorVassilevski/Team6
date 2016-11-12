@@ -22,18 +22,17 @@ package org.elasticsearch.index.suggest.stats;
 import org.elasticsearch.action.admin.cluster.node.stats.NodeStats;
 import org.elasticsearch.action.admin.cluster.node.stats.NodesStatsResponse;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
-import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.suggest.SuggestRequestBuilder;
+import org.elasticsearch.action.suggest.SuggestResponse;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.routing.GroupShardsIterator;
 import org.elasticsearch.cluster.routing.ShardIterator;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.search.stats.SearchStats;
-import org.elasticsearch.search.suggest.SuggestBuilder;
 import org.elasticsearch.search.suggest.phrase.PhraseSuggestionBuilder;
 import org.elasticsearch.search.suggest.term.TermSuggestionBuilder;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -42,20 +41,19 @@ import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_NUMBER_OF
 import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_NUMBER_OF_SHARDS;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAllSuccessful;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.*;
 
 /**
  */
 @ESIntegTestCase.ClusterScope(minNumDataNodes = 2)
 public class SuggestStatsIT extends ESIntegTestCase {
+
     @Override
     protected int numberOfReplicas() {
         return 0;
     }
 
+    @Test
     public void testSimpleStats() throws Exception {
         // clear all stats first
         client().admin().indices().prepareStats().clear().execute().actionGet();
@@ -68,11 +66,11 @@ public class SuggestStatsIT extends ESIntegTestCase {
         assertAcked(prepareCreate("test1").setSettings(Settings.builder()
                 .put(SETTING_NUMBER_OF_SHARDS, shardsIdx1)
                 .put(SETTING_NUMBER_OF_REPLICAS, 0))
-                .addMapping("type", "f", "type=text"));
+                .addMapping("type", "f", "type=string"));
         assertAcked(prepareCreate("test2").setSettings(Settings.builder()
                 .put(SETTING_NUMBER_OF_SHARDS, shardsIdx2)
                 .put(SETTING_NUMBER_OF_REPLICAS, 0))
-                .addMapping("type", "f", "type=text"));
+                .addMapping("type", "f", "type=string"));
         assertThat(shardsIdx1 + shardsIdx2, equalTo(numAssignedShards("test1", "test2")));
         assertThat(numAssignedShards("test1", "test2"), greaterThanOrEqualTo(2));
         ensureGreen();
@@ -88,49 +86,49 @@ public class SuggestStatsIT extends ESIntegTestCase {
 
         long startTime = System.currentTimeMillis();
         for (int i = 0; i < suggestAllIdx; i++) {
-            SearchResponse suggestResponse = addSuggestions(internalCluster().coordOnlyNodeClient().prepareSearch(), i).get();
+            SuggestResponse suggestResponse = addSuggestions(internalCluster().clientNodeClient().prepareSuggest(), i).get();
             assertAllSuccessful(suggestResponse);
         }
         for (int i = 0; i < suggestIdx1; i++) {
-            SearchResponse suggestResponse = addSuggestions(internalCluster().coordOnlyNodeClient().prepareSearch("test1"), i).get();
+            SuggestResponse suggestResponse = addSuggestions(internalCluster().clientNodeClient().prepareSuggest("test1"), i).get();
             assertAllSuccessful(suggestResponse);
         }
         for (int i = 0; i < suggestIdx2; i++) {
-            SearchResponse suggestResponse = addSuggestions(internalCluster().coordOnlyNodeClient().prepareSearch("test2"), i).get();
+            SuggestResponse suggestResponse = addSuggestions(internalCluster().clientNodeClient().prepareSuggest("test2"), i).get();
             assertAllSuccessful(suggestResponse);
         }
         long endTime = System.currentTimeMillis();
 
         IndicesStatsResponse indicesStats = client().admin().indices().prepareStats().execute().actionGet();
-        final SearchStats.Stats suggest = indicesStats.getTotal().getSearch().getTotal();
 
         // check current
-        assertThat(suggest.getSuggestCurrent(), equalTo(0L));
+        assertThat(indicesStats.getTotal().getSuggest().getCurrent(), equalTo(0l));
 
         // check suggest count
-        assertThat(suggest.getSuggestCount(), equalTo((long) (suggestAllIdx * totalShards + suggestIdx1 * shardsIdx1 + suggestIdx2 * shardsIdx2)));
-        assertThat(indicesStats.getIndices().get("test1").getTotal().getSearch().getTotal().getSuggestCount(), equalTo((long) ((suggestAllIdx + suggestIdx1) * shardsIdx1)));
-        assertThat(indicesStats.getIndices().get("test2").getTotal().getSearch().getTotal().getSuggestCount(), equalTo((long) ((suggestAllIdx + suggestIdx2) * shardsIdx2)));
+        assertThat(indicesStats.getTotal().getSuggest().getCount(), equalTo((long) (suggestAllIdx * totalShards + suggestIdx1 * shardsIdx1 + suggestIdx2 * shardsIdx2)));
+        assertThat(indicesStats.getIndices().get("test1").getTotal().getSuggest().getCount(), equalTo((long) ((suggestAllIdx + suggestIdx1) * shardsIdx1)));
+        assertThat(indicesStats.getIndices().get("test2").getTotal().getSuggest().getCount(), equalTo((long) ((suggestAllIdx + suggestIdx2) * shardsIdx2)));
 
         logger.info("iter {}, iter1 {}, iter2 {}, {}", suggestAllIdx, suggestIdx1, suggestIdx2, endTime - startTime);
         // check suggest time
-        assertThat(suggest.getSuggestTimeInMillis(), greaterThan(0L));
+        assertThat(indicesStats.getTotal().getSuggest().getTimeInMillis(), greaterThan(0l));
         // the upperbound is num shards * total time since we do searches in parallel
-        assertThat(suggest.getSuggestTimeInMillis(), lessThanOrEqualTo(totalShards * (endTime - startTime)));
+        assertThat(indicesStats.getTotal().getSuggest().getTimeInMillis(), lessThanOrEqualTo(totalShards * (endTime - startTime)));
 
         NodesStatsResponse nodeStats = client().admin().cluster().prepareNodesStats().execute().actionGet();
+        NodeStats[] nodes = nodeStats.getNodes();
         Set<String> nodeIdsWithIndex = nodeIdsWithIndex("test1", "test2");
         int num = 0;
-        for (NodeStats stat : nodeStats.getNodes()) {
-            SearchStats.Stats suggestStats = stat.getIndices().getSearch().getTotal();
+        for (NodeStats stat : nodes) {
+            SuggestStats suggestStats = stat.getIndices().getSuggest();
             logger.info("evaluating {}", stat.getNode());
             if (nodeIdsWithIndex.contains(stat.getNode().getId())) {
-                assertThat(suggestStats.getSuggestCount(), greaterThan(0L));
-                assertThat(suggestStats.getSuggestTimeInMillis(), greaterThan(0L));
+                assertThat(suggestStats.getCount(), greaterThan(0l));
+                assertThat(suggestStats.getTimeInMillis(), greaterThan(0l));
                 num++;
             } else {
-                assertThat(suggestStats.getSuggestCount(), equalTo(0L));
-                assertThat(suggestStats.getSuggestTimeInMillis(), equalTo(0L));
+                assertThat(suggestStats.getCount(), equalTo(0l));
+                assertThat(suggestStats.getTimeInMillis(), equalTo(0l));
             }
         }
 
@@ -138,16 +136,15 @@ public class SuggestStatsIT extends ESIntegTestCase {
 
     }
 
-    private SearchRequestBuilder addSuggestions(SearchRequestBuilder request, int i) {
-        final SuggestBuilder suggestBuilder = new SuggestBuilder();
+    private SuggestRequestBuilder addSuggestions(SuggestRequestBuilder request, int i) {
         for (int s = 0; s < randomIntBetween(2, 10); s++) {
             if (randomBoolean()) {
-                suggestBuilder.addSuggestion("s" + s, new PhraseSuggestionBuilder("f").text("test" + i + " test" + (i - 1)));
+                request.addSuggestion(new PhraseSuggestionBuilder("s" + s).field("f").text("test" + i + " test" + (i - 1)));
             } else {
-                suggestBuilder.addSuggestion("s" + s, new TermSuggestionBuilder("f").text("test" + i));
+                request.addSuggestion(new TermSuggestionBuilder("s" + s).field("f").text("test" + i));
             }
         }
-        return request.suggest(suggestBuilder);
+        return request;
     }
 
     private Set<String> nodeIdsWithIndex(String... indices) {

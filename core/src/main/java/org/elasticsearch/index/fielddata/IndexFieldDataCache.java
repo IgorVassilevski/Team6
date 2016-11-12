@@ -21,7 +21,9 @@ package org.elasticsearch.index.fielddata;
 
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.util.Accountable;
+import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.shard.ShardId;
 
 /**
@@ -48,12 +50,12 @@ public interface IndexFieldDataCache {
         /**
          * Called after the fielddata is loaded during the cache phase
          */
-        default void onCache(ShardId shardId, String fieldName, Accountable ramUsage){}
+        void onCache(ShardId shardId, MappedFieldType.Names fieldNames, FieldDataType fieldDataType, Accountable ramUsage);
 
         /**
          * Called after the fielddata is unloaded
          */
-        default void onRemoval(ShardId shardId, String fieldName, boolean wasEvicted, long sizeInBytes){}
+        void onRemoval(ShardId shardId, MappedFieldType.Names fieldNames, FieldDataType fieldDataType, boolean wasEvicted, long sizeInBytes);
     }
 
     class None implements IndexFieldDataCache {

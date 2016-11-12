@@ -7,7 +7,7 @@
 ---
 "junk in body fails":
   - do:
-      catch: /unknown field \[junk\]/
+      catch: /Unknown object field \[junk\]/
       reindex:
         body:
           junk:
@@ -16,16 +16,25 @@
 ---
 "junk in source fails":
   - do:
-      catch: /Unknown key for a START_OBJECT in \[junk\]./
+      index:
+        index:   source
+        type:    foo
+        id:      1
+        body:    { "text": "test" }
+  - do:
+      catch: /unknown search element \[junk\]./
       reindex:
         body:
           source:
+            index: source
             junk: {}
+          dest:
+            index: dest
 
 ---
 "junk in dest fails":
   - do:
-      catch: /unknown field \[junk\]/
+      catch: /Unknown object field \[junk\]/
       reindex:
         body:
           dest:
@@ -59,29 +68,25 @@
 ---
 "search size fails if not a number":
   - do:
-      catch: '/number_format_exception.*For input string: \"cat\"/'
-      reindex:
-        body:
-          source:
-            size: cat
-          dest:
-            index: dest
-
----
-"search from is not supported":
+      index:
+        index:   source
+        type:    foo
+        id:      1
+        body:    { "text": "test" }
   - do:
-      catch: /from is not supported in this context/
+      catch: '/For input string: "cat"/'
       reindex:
         body:
           source:
-            from: 1
+            index: source
+            size: cat
           dest:
             index: dest
 
 ---
 "overwriting version is not supported":
   - do:
-      catch: /.*\[dest\] unknown field \[version\].*/
+      catch: /Unknown value field \[version\].*/
       reindex:
         body:
           dest:
@@ -148,134 +153,3 @@
           dest:
             index: dest
             timestamp: "123"
-
----
-"requests_per_second cannot be an empty string":
-  - do:
-      catch: /\[requests_per_second\] must be a float greater than 0. Use -1 to disable throttling./
-      reindex:
-        requests_per_second: ""
-        body:
-          source:
-            index: test
-          dest:
-            index: dest
-
----
-"requests_per_second cannot be negative":
-  - do:
-      catch: /\[requests_per_second\] must be a float greater than 0. Use -1 to disable throttling./
-      reindex:
-        requests_per_second: -12
-        body:
-          source:
-            index: test
-          dest:
-            index: dest
-
----
-"requests_per_second cannot be zero":
-  - do:
-      catch: /\[requests_per_second\] must be a float greater than 0. Use -1 to disable throttling./
-      reindex:
-        requests_per_second: 0
-        body:
-          source:
-            index: test
-          dest:
-            index: dest
-
----
-"requests_per_second cannot be unlimited":
-  - do:
-      catch: /\[requests_per_second\] must be a float greater than 0. Use -1 to disable throttling./
-      reindex:
-        requests_per_second: unlimited
-        body:
-          source:
-            index: test
-          dest:
-            index: dest
-
----
-"reindex without source gives useful error message":
-  - do:
-      indices.create:
-        index: test
-        body:
-          mappings:
-            test:
-              _source:
-                enabled: false
-  - do:
-      index:
-        index:  test
-        type:   test
-        id:     1
-        body:   { age: 23 }
-  - do:
-      indices.refresh: {}
-
-  - do:
-      catch: /\[test\]\[test\]\[1\] didn't store _source/
-      reindex:
-        body:
-          source:
-            index: test
-          dest:
-            index: dest
-
----
-"source fields may not be modified":
-  - do:
-      catch: /stored_fields is not supported in this context/
-      reindex:
-        body:
-          source:
-            index: test
-            stored_fields: [_id]
-          dest:
-            index: dest
-
----
-"unwhitelisted remote host fails":
-  - do:
-      catch: /\[badremote:9200\] not whitelisted in reindex.remote.whitelist/
-      reindex:
-        body:
-          source:
-            remote:
-              host: http://badremote:9200
-            index: test
-          dest:
-            index: dest
-
----
-"badly formatted remote host fails":
-  - do:
-      catch: /\[host\] must be of the form \[scheme\].//\[host\].\[port\]/
-      reindex:
-        body:
-          source:
-            remote:
-              host: badremote
-              weird: stuff
-              badkey: is bad
-            index: test
-          dest:
-            index: dest
-
----
-"junk in remote fails":
-  - do:
-      catch: /Unsupported fields in \[remote\]. \[weird,badkey\]/
-      reindex:
-        body:
-          source:
-            remote:
-              host: http://okremote:9200
-              weird: stuff
-              badkey: is bad
-            index: test
-          dest:
-            index: dest

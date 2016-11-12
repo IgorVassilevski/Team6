@@ -23,15 +23,16 @@ import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.util.Arrays;
 
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_READ;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_WRITE;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_READ_ONLY;
+import static org.elasticsearch.cluster.metadata.IndexMetaData.*;
 import static org.hamcrest.Matchers.equalTo;
 
 public class IndicesExistsIT extends ESIntegTestCase {
+
+    @Test
     // Indices exists never throws IndexMissingException, the indices options control its behaviour (return true or false)
     public void testIndicesExists() throws Exception {
         assertThat(client().admin().indices().prepareExists("foo").get().isExists(), equalTo(false));
@@ -41,6 +42,7 @@ public class IndicesExistsIT extends ESIntegTestCase {
         assertThat(client().admin().indices().prepareExists("_all").get().isExists(), equalTo(false));
 
         createIndex("foo", "foobar", "bar", "barbaz");
+        ensureYellow();
 
         assertThat(client().admin().indices().prepareExists("foo*").get().isExists(), equalTo(true));
         assertThat(client().admin().indices().prepareExists("foobar").get().isExists(), equalTo(true));
@@ -49,8 +51,10 @@ public class IndicesExistsIT extends ESIntegTestCase {
         assertThat(client().admin().indices().prepareExists("_all").get().isExists(), equalTo(true));
     }
 
+    @Test
     public void testIndicesExistsWithBlocks() {
         createIndex("ro");
+        ensureYellow();
 
         // Request is not blocked
         for (String blockSetting : Arrays.asList(SETTING_BLOCKS_READ, SETTING_BLOCKS_WRITE, SETTING_READ_ONLY)) {

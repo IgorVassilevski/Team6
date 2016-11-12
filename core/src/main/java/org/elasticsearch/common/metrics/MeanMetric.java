@@ -19,7 +19,7 @@
 
 package org.elasticsearch.common.metrics;
 
-import java.util.concurrent.atomic.LongAdder;
+import com.twitter.jsr166e.LongAdder;
 
 /**
  */

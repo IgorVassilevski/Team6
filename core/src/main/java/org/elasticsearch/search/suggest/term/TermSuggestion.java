@@ -23,7 +23,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.search.suggest.SortBy;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.search.suggest.Suggest.Suggestion;
 import org.elasticsearch.search.suggest.Suggest.Suggestion.Entry.Option;
 
@@ -37,17 +37,6 @@ public class TermSuggestion extends Suggestion<TermSuggestion.Entry> {
 
     public static final Comparator<Suggestion.Entry.Option> SCORE = new Score();
     public static final Comparator<Suggestion.Entry.Option> FREQUENCY = new Frequency();
-    public static final int TYPE = 1;
-
-    private SortBy sort;
-
-    public TermSuggestion() {
-    }
-
-    public TermSuggestion(String name, int size, SortBy sort) {
-        super(name, size);
-        this.sort = sort;
-    }
 
     // Same behaviour as comparators in suggest module, but for SuggestedWord
     // Highest score first, then highest freq first, then lowest term first
@@ -90,6 +79,17 @@ public class TermSuggestion extends Suggestion<TermSuggestion.Entry> {
 
     }
 
+    public static final int TYPE = 1;
+    private Sort sort;
+
+    public TermSuggestion() {
+    }
+
+    public TermSuggestion(String name, int size, Sort sort) {
+        super(name, size);
+        this.sort = sort;
+    }
+
     @Override
     public int getType() {
         return TYPE;
@@ -110,13 +110,13 @@ public class TermSuggestion extends Suggestion<TermSuggestion.Entry> {
     @Override
     protected void innerReadFrom(StreamInput in) throws IOException {
         super.innerReadFrom(in);
-        sort = SortBy.readFromStream(in);
+        sort = Sort.fromId(in.readByte());
     }
 
     @Override
     public void innerWriteTo(StreamOutput out) throws IOException {
         super.innerWriteTo(out);
-        sort.writeTo(out);
+        out.writeByte(sort.id());
     }
 
     @Override
@@ -148,7 +148,7 @@ public class TermSuggestion extends Suggestion<TermSuggestion.Entry> {
         public static class Option extends org.elasticsearch.search.suggest.Suggest.Suggestion.Entry.Option {
 
             static class Fields {
-                static final String FREQ = "freq";
+                static final XContentBuilderString FREQ = new XContentBuilderString("freq");
             }
 
             private int freq;

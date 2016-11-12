@@ -4,7 +4,8 @@
 [partintro]
 --
 The indices APIs are used to manage individual indices,
-index settings, aliases, mappings, and index templates.
+index settings, aliases, mappings, index templates
+and warmers.
 
 [float]
 [[index-management]]
@@ -15,8 +16,6 @@ index settings, aliases, mappings, and index templates.
 * <<indices-get-index>>
 * <<indices-exists>>
 * <<indices-open-close>>
-* <<indices-shrink-index>>
-* <<indices-rollover-index>>
 
 [float]
 [[mapping-management]]
@@ -39,6 +38,7 @@ index settings, aliases, mappings, and index templates.
 * <<indices-get-settings>>
 * <<indices-analyze>>
 * <<indices-templates>>
+* <<indices-warmers>>
 
 [float]
 [[shadow-replicas]]
@@ -74,10 +74,6 @@ include::indices/indices-exists.asciidoc[]
 
 include::indices/open-close.asciidoc[]
 
-include::indices/shrink-index.asciidoc[]
-
-include::indices/rollover-index.asciidoc[]
-
 include::indices/put-mapping.asciidoc[]
 
 include::indices/get-mapping.asciidoc[]
@@ -96,6 +92,8 @@ include::indices/analyze.asciidoc[]
 
 include::indices/templates.asciidoc[]
 
+include::indices/warmers.asciidoc[]
+
 include::indices/shadow-replicas.asciidoc[]
 
 include::indices/stats.asciidoc[]
@@ -113,6 +111,8 @@ include::indices/flush.asciidoc[]
 include::indices/refresh.asciidoc[]
 
 include::indices/forcemerge.asciidoc[]
+
+include::indices/optimize.asciidoc[]
 
 include::indices/upgrade.asciidoc[]
 

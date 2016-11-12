@@ -23,8 +23,7 @@ import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.transport.TransportRequestOptions;
-import org.elasticsearch.transport.TransportService;
+import org.elasticsearch.transport.*;
 
 /**
  * A generic proxy that will execute the given action against a specific node.
@@ -35,6 +34,7 @@ public class TransportActionNodeProxy<Request extends ActionRequest, Response ex
     private final GenericAction<Request, Response> action;
     private final TransportRequestOptions transportOptions;
 
+    @Inject
     public TransportActionNodeProxy(Settings settings, GenericAction<Request, Response> action, TransportService transportService) {
         super(settings);
         this.action = action;
@@ -48,7 +48,11 @@ public class TransportActionNodeProxy<Request extends ActionRequest, Response ex
             listener.onFailure(validationException);
             return;
         }
-        transportService.sendRequest(node, action.name(), request, transportOptions,
-            new ActionListenerResponseHandler<>(listener, action::newResponse));
+        transportService.sendRequest(node, action.name(), request, transportOptions, new ActionListenerResponseHandler<Response>(listener) {
+            @Override
+            public Response newInstance() {
+                return action.newResponse();
+            }
+        });
     }
 }

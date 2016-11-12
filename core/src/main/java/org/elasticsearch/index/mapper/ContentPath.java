@@ -19,9 +19,16 @@
 
 package org.elasticsearch.index.mapper;
 
-public final class ContentPath {
+public class ContentPath {
 
-    private static final char DELIMITER = '.';
+    public enum Type {
+        JUST_NAME,
+        FULL,
+    }
+
+    private Type pathType;
+
+    private final char delimiter;
 
     private final StringBuilder sb;
 
@@ -40,8 +47,13 @@ public final class ContentPath {
      * number of path elements to not be included in {@link #pathAsText(String)}.
      */
     public ContentPath(int offset) {
+        this.delimiter = '.';
         this.sb = new StringBuilder();
         this.offset = offset;
+        reset();
+    }
+
+    public void reset() {
         this.index = 0;
     }
 
@@ -59,11 +71,26 @@ public final class ContentPath {
     }
 
     public String pathAsText(String name) {
+        if (pathType == Type.JUST_NAME) {
+            return name;
+        }
+        return fullPathAsText(name);
+    }
+
+    public String fullPathAsText(String name) {
         sb.setLength(0);
         for (int i = offset; i < index; i++) {
-            sb.append(path[i]).append(DELIMITER);
+            sb.append(path[i]).append(delimiter);
         }
         sb.append(name);
         return sb.toString();
+    }
+
+    public Type pathType() {
+        return pathType;
+    }
+
+    public void pathType(Type type) {
+        this.pathType = type;
     }
 }

@@ -23,10 +23,11 @@ import org.elasticsearch.common.inject.matcher.Matcher;
 import org.elasticsearch.common.inject.spi.Message;
 import org.elasticsearch.common.inject.spi.TypeConverter;
 import org.elasticsearch.common.inject.spi.TypeListener;
-import org.elasticsearch.common.settings.SettingsModule;
 
 import java.lang.annotation.Annotation;
-import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 /**
  * A support class for {@link Module}s which reduces repetition and results in
@@ -52,10 +53,9 @@ public abstract class AbstractModule implements Module {
 
     @Override
     public final synchronized void configure(Binder builder) {
-        if (this.binder != null) {
-            throw new IllegalStateException("Re-entry is not allowed.");
-        }
-        this.binder = Objects.requireNonNull(builder, "builder");
+        checkState(this.binder == null, "Re-entry is not allowed.");
+
+        this.binder = checkNotNull(builder, "builder");
         try {
             configure();
         } finally {
@@ -70,6 +70,8 @@ public abstract class AbstractModule implements Module {
 
     /**
      * Gets direct access to the underlying {@code Binder}.
+     *
+     * @return The underlying {@link Binder}
      */
     protected Binder binder() {
         return binder;

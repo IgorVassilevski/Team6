@@ -19,21 +19,21 @@
 
 package org.elasticsearch.indices.analysis;
 
+import com.google.common.collect.Maps;
+
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.elasticsearch.Version;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.test.ESBackcompatTestCase;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.InternalSettingsPlugin;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -44,14 +44,17 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
 @ESIntegTestCase.ClusterScope(scope = ESIntegTestCase.Scope.SUITE)
+@ESIntegTestCase.CompatibilityVersion(version = Version.V_1_2_0_ID) // we throw an exception if we create an index with _field_names that is 1.3
 public class PreBuiltAnalyzerIntegrationIT extends ESIntegTestCase {
+
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(DummyAnalysisPlugin.class, InternalSettingsPlugin.class);
+        return pluginList(DummyAnalysisPlugin.class);
     }
 
+    @Test
     public void testThatPreBuiltAnalyzersAreNotClosedOnIndexClose() throws Exception {
-        Map<PreBuiltAnalyzers, List<Version>> loadedAnalyzers = new HashMap<>();
+        Map<PreBuiltAnalyzers, List<Version>> loadedAnalyzers = Maps.newHashMap();
         List<String> indexNames = new ArrayList<>();
         final int numIndices = scaledRandomIntBetween(2, 4);
         for (int i = 0; i < numIndices; i++) {
@@ -72,7 +75,7 @@ public class PreBuiltAnalyzerIntegrationIT extends ESIntegTestCase {
                 .startObject("type")
                     .startObject("properties")
                         .startObject("foo")
-                            .field("type", "text")
+                            .field("type", "string")
                             .field("analyzer", name)
                         .endObject()
                     .endObject()
@@ -91,7 +94,7 @@ public class PreBuiltAnalyzerIntegrationIT extends ESIntegTestCase {
             String randomIndex = indexNames.get(randomInt(indexNames.size()-1));
             String randomId = randomInt() + "";
 
-            Map<String, Object> data = new HashMap<>();
+            Map<String, Object> data = Maps.newHashMap();
             data.put("foo", randomAsciiOfLength(scaledRandomIntBetween(5, 50)));
 
             index(randomIndex, "type", randomId, data);
@@ -111,24 +114,25 @@ public class PreBuiltAnalyzerIntegrationIT extends ESIntegTestCase {
         // check that all above configured analyzers have been loaded
         assertThatAnalyzersHaveBeenLoaded(loadedAnalyzers);
 
-        // check that all of the prebuilt analyzers are still open
+        // check that all of the prebuiltanalyzers are still open
         assertLuceneAnalyzersAreNotClosed(loadedAnalyzers);
     }
 
     /**
      * Test case for #5030: Upgrading analysis plugins fails
-     * See https://github.com/elastic/elasticsearch/issues/5030
+     * See https://github.com/elasticsearch/elasticsearch/issues/5030
      */
+    @Test
     public void testThatPluginAnalyzersCanBeUpdated() throws Exception {
         final XContentBuilder mapping = jsonBuilder().startObject()
             .startObject("type")
                 .startObject("properties")
                     .startObject("foo")
-                        .field("type", "text")
+                        .field("type", "string")
                         .field("analyzer", "dummy")
                     .endObject()
                     .startObject("bar")
-                        .field("type", "text")
+                        .field("type", "string")
                         .field("analyzer", "my_dummy")
                     .endObject()
                 .endObject()

@@ -23,22 +23,21 @@ import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.lucene.search.function.FieldValueFactorFunction;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
-import static org.elasticsearch.index.query.QueryBuilders.functionScoreQuery;
-import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
-import static org.elasticsearch.index.query.QueryBuilders.simpleQueryStringQuery;
+import static org.elasticsearch.index.query.QueryBuilders.*;
 import static org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders.fieldValueFactorFunction;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertFailures;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertOrderedSearchHits;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.*;
 
 /**
  * Tests for the {@code field_value_factor} function in a function_score query.
  */
 public class FunctionScoreFieldValueIT extends ESIntegTestCase {
+
+    @Test
     public void testFieldValueFactor() throws IOException {
         assertAcked(prepareCreate("test").addMapping(
                 "type1",
@@ -50,11 +49,12 @@ public class FunctionScoreFieldValueIT extends ESIntegTestCase {
                         .field("type", randomFrom(new String[]{"short", "float", "long", "integer", "double"}))
                         .endObject()
                         .startObject("body")
-                        .field("type", "text")
+                        .field("type", "string")
                         .endObject()
                         .endObject()
                         .endObject()
                         .endObject()).get());
+        ensureYellow();
 
         client().prepareIndex("test", "type1", "1").setSource("test", 5, "body", "foo").get();
         client().prepareIndex("test", "type1", "2").setSource("test", 17, "body", "foo").get();
@@ -125,5 +125,34 @@ public class FunctionScoreFieldValueIT extends ESIntegTestCase {
             // This is fine, the query will throw an exception if executed
             // locally, instead of just having failures
         }
+
+        // don't permit an array of factors
+        try {
+          String querySource = "{" +
+            "\"query\": {" +
+            "  \"function_score\": {" +
+            "    \"query\": {" +
+            "      \"match\": {\"name\": \"foo\"}" +
+            "      }," +
+            "      \"functions\": [" +
+            "        {" +
+            "          \"field_value_factor\": {" +
+            "            \"field\": \"test\"," +
+            "            \"factor\": [1.2,2]" +
+            "          }" +
+            "        }" +
+            "      ]" +
+            "    }" +
+            "  }" +
+            "}";
+          response = client().prepareSearch("test")
+          .setSource(querySource)
+          .get();
+          assertFailures(response);
+        } catch (SearchPhaseExecutionException e) {
+          // This is fine, the query will throw an exception if executed
+          // locally, instead of just having failures
+        }
+
     }
 }

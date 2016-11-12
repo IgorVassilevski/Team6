@@ -51,8 +51,4 @@ public class DocLookup {
     public LeafDocLookup getLeafDocLookup(LeafReaderContext context) {
         return new LeafDocLookup(mapperService, fieldDataService, types, context);
     }
-
-    public String[] getTypes() {
-        return types;
-    }
 }

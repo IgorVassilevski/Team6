@@ -20,6 +20,7 @@
 package org.elasticsearch.search.aggregations.support;
 
 import com.carrotsearch.randomizedtesting.generators.RandomStrings;
+
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.script.LeafSearchScript;
@@ -27,6 +28,7 @@ import org.elasticsearch.search.aggregations.support.values.ScriptBytesValues;
 import org.elasticsearch.search.aggregations.support.values.ScriptDoubleValues;
 import org.elasticsearch.search.aggregations.support.values.ScriptLongValues;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -34,10 +36,10 @@ import java.util.Map;
 public class ScriptValuesTests extends ESTestCase {
 
     private static class FakeSearchScript implements LeafSearchScript {
-
+        
         private final Object[][] values;
         int index;
-
+        
         FakeSearchScript(Object[][] values) {
             this.values = values;
             index = -1;
@@ -76,6 +78,11 @@ public class ScriptValuesTests extends ESTestCase {
         }
 
         @Override
+        public float runAsFloat() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public long runAsLong() {
             throw new UnsupportedOperationException();
         }
@@ -87,7 +94,8 @@ public class ScriptValuesTests extends ESTestCase {
 
     }
 
-    public void testLongs() {
+    @Test
+    public void longs() {
         final Object[][] values = new Long[randomInt(10)][];
         for (int i = 0; i < values.length; ++i) {
             Long[] longs = new Long[randomInt(8)];
@@ -108,7 +116,8 @@ public class ScriptValuesTests extends ESTestCase {
         }
     }
 
-    public void testDoubles() {
+    @Test
+    public void doubles() {
         final Object[][] values = new Double[randomInt(10)][];
         for (int i = 0; i < values.length; ++i) {
             Double[] doubles = new Double[randomInt(8)];
@@ -129,12 +138,13 @@ public class ScriptValuesTests extends ESTestCase {
         }
     }
 
-    public void testBytes() {
+    @Test
+    public void bytes() {
         final String[][] values = new String[randomInt(10)][];
         for (int i = 0; i < values.length; ++i) {
             String[] strings = new String[randomInt(8)];
             for (int j = 0; j < strings.length; ++j) {
-                strings[j] = RandomStrings.randomAsciiOfLength(random(), 5);
+                strings[j] = RandomStrings.randomAsciiOfLength(getRandom(), 5);
             }
             Arrays.sort(strings);
             values[i] = strings;

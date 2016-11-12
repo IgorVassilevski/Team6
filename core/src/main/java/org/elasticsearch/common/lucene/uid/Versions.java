@@ -19,6 +19,7 @@
 
 package org.elasticsearch.common.lucene.uid;
 
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReader.CoreClosedListener;
@@ -26,7 +27,7 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.util.CloseableThreadLocal;
 import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
-import org.elasticsearch.index.mapper.UidFieldMapper;
+import org.elasticsearch.index.mapper.internal.UidFieldMapper;
 
 import java.io.IOException;
 import java.util.List;
@@ -35,19 +36,14 @@ import java.util.concurrent.ConcurrentMap;
 /** Utility class to resolve the Lucene doc ID and version for a given uid. */
 public class Versions {
 
-    /** used to indicate the write operation should succeed regardless of current version **/
-    public static final long MATCH_ANY = -3L;
-
-    /** indicates that the current document was not found in lucene and in the version map */
+    public static final long MATCH_ANY = -3L; // Version was not specified by the user
     public static final long NOT_FOUND = -1L;
 
-    // -2 was used for docs that can be found in the index but do not have a version
-
     /**
-     * used to indicate that the write operation should be executed if the document is currently deleted
-     * i.e., not found in the index and/or found as deleted (with version) in the version map
+     * used when the document is old and doesn't contain any version information in the index
+     * see {@link PerThreadIDAndVersionLookup#lookup}
      */
-    public static final long MATCH_DELETED = -4L;
+    public static final long NOT_SET = -2L;
 
     // TODO: is there somewhere else we can store these?
     static final ConcurrentMap<Object, CloseableThreadLocal<PerThreadIDAndVersionLookup>> lookupStates = ConcurrentCollections.newConcurrentMapWithAggressiveConcurrency();
@@ -110,7 +106,7 @@ public class Versions {
     /**
      * Load the internal doc ID and version for the uid from the reader, returning<ul>
      * <li>null if the uid wasn't found,
-     * <li>a doc ID and a version otherwise
+     * <li>a doc ID and a version otherwise, the version being potentially set to {@link #NOT_SET} if the uid has no associated version
      * </ul>
      */
     public static DocIdAndVersion loadDocIdAndVersion(IndexReader reader, Term term) throws IOException {
@@ -136,6 +132,7 @@ public class Versions {
     /**
      * Load the version for the uid from the reader, returning<ul>
      * <li>{@link #NOT_FOUND} if no matching doc exists,
+     * <li>{@link #NOT_SET} if no version is available,
      * <li>the version associated with the provided uid otherwise
      * </ul>
      */

@@ -76,7 +76,7 @@ public class MultiGetRequestBuilder extends ActionRequestBuilder<MultiGetRequest
         return this;
     }
 
-    public MultiGetRequestBuilder setRealtime(boolean realtime) {
+    public MultiGetRequestBuilder setRealtime(Boolean realtime) {
         request.realtime(realtime);
         return this;
     }

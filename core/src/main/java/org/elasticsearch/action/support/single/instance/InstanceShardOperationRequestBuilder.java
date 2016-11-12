@@ -22,6 +22,7 @@ package org.elasticsearch.action.support.single.instance;
 import org.elasticsearch.action.Action;
 import org.elasticsearch.action.ActionRequestBuilder;
 import org.elasticsearch.action.ActionResponse;
+import org.elasticsearch.client.Client;
 import org.elasticsearch.client.ElasticsearchClient;
 import org.elasticsearch.common.unit.TimeValue;
 

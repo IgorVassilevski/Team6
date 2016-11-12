@@ -21,7 +21,6 @@ package org.elasticsearch.common.util.concurrent;
 import org.elasticsearch.common.Priority;
 
 import java.util.concurrent.TimeUnit;
-import java.util.function.LongSupplier;
 
 /**
  *
@@ -32,12 +31,23 @@ public abstract class PrioritizedRunnable implements Runnable, Comparable<Priori
     private final long creationDate;
     private final LongSupplier relativeTimeProvider;
 
+    interface LongSupplier {
+        long getAsLong();
+    }
+
+    private static final LongSupplier SYSTEM_NANO_TIME = new LongSupplier() {
+        @Override
+        public long getAsLong() {
+            return System.nanoTime();
+        }
+    };
+
     public static PrioritizedRunnable wrap(Runnable runnable, Priority priority) {
         return new Wrapped(runnable, priority);
     }
 
     protected PrioritizedRunnable(Priority priority) {
-        this(priority, System::nanoTime);
+        this(priority, SYSTEM_NANO_TIME);
     }
 
     // package visible for testing
@@ -51,14 +61,6 @@ public abstract class PrioritizedRunnable implements Runnable, Comparable<Priori
         return creationDate;
     }
 
-    /**
-     * The elapsed time in milliseconds since this instance was created,
-     * as calculated by the difference between {@link System#nanoTime()}
-     * at the time of creation, and {@link System#nanoTime()} at the
-     * time of invocation of this method
-     *
-     * @return the age in milliseconds calculated
-     */
     public long getAgeInMillis() {
         return TimeUnit.MILLISECONDS.convert(relativeTimeProvider.getAsLong() - creationDate, TimeUnit.NANOSECONDS);
     }

@@ -24,14 +24,14 @@ import org.elasticsearch.tasks.Task;
 /**
  *
  */
-public interface TransportRequestHandler<T extends TransportRequest> {
+public abstract class TransportRequestHandler<T extends TransportRequest> {
 
     /**
      * Override this method if access to the Task parameter is needed
      */
-    default void messageReceived(final T request, final TransportChannel channel, Task task) throws Exception {
+    public void messageReceived(final T request, final TransportChannel channel, Task task) throws Exception {
         messageReceived(request, channel);
     }
 
-    void messageReceived(T request, TransportChannel channel) throws Exception;
+    public abstract void messageReceived(T request, TransportChannel channel) throws Exception;
 }

@@ -23,7 +23,6 @@ def create_index(plugin, mapping, docs):
   logging.getLogger('urllib3').setLevel(logging.WARN)
 
   tmp_dir = tempfile.mkdtemp()
-  plugin_installed = False
   node = None
   try:
     data_dir = os.path.join(tmp_dir, 'data')
@@ -31,7 +30,7 @@ def create_index(plugin, mapping, docs):
     logging.info('Temp data dir: %s' % data_dir)
     logging.info('Temp repo dir: %s' % repo_dir)
 
-    version = '2.0.0'
+    version = '1.7.3'
     classifier = '%s-%s' %(plugin, version)
     index_name = 'index-%s' % classifier
 
@@ -40,8 +39,6 @@ def create_index(plugin, mapping, docs):
     if not os.path.exists(release_dir):
       fetch_version(version)
 
-    create_bwc_index.install_plugin(version, release_dir, plugin)
-    plugin_installed = True
     node = create_bwc_index.start_node(version, release_dir, data_dir, repo_dir, cluster_name=index_name)
     client = create_bwc_index.create_client()
     put_plugin_mappings(client, index_name, mapping, docs)
@@ -53,8 +50,6 @@ def create_index(plugin, mapping, docs):
   finally:
     if node is not None:
       create_bwc_index.shutdown_node(node)
-    if plugin_installed:
-      create_bwc_index.remove_plugin(version, release_dir, plugin)
     shutil.rmtree(tmp_dir)
 
 def put_plugin_mappings(client, index_name, mapping, docs):

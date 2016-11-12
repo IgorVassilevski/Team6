@@ -30,7 +30,7 @@ public class FilterIndexOutput extends IndexOutput {
     protected final IndexOutput out;
 
     public FilterIndexOutput(String resourceDescription, IndexOutput out) {
-        super(resourceDescription, out.getName());
+        super(resourceDescription);
         this.out = out;
     }
 

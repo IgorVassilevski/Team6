@@ -19,19 +19,13 @@ package org.elasticsearch.common.inject;
 import org.elasticsearch.common.inject.internal.MoreTypes;
 import org.elasticsearch.common.inject.util.Types;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
-import java.lang.reflect.WildcardType;
+import java.lang.reflect.*;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.elasticsearch.common.inject.internal.MoreTypes.canonicalize;
 
 /**
@@ -90,7 +84,7 @@ public class TypeLiteral<T> {
      */
     @SuppressWarnings("unchecked")
     TypeLiteral(Type type) {
-        this.type = canonicalize(Objects.requireNonNull(type, "type"));
+        this.type = canonicalize(checkNotNull(type, "type"));
         this.rawType = (Class<? super T>) MoreTypes.getRawType(this.type);
         this.hashCode = MoreTypes.hashCode(this.type);
     }
@@ -263,9 +257,8 @@ public class TypeLiteral<T> {
      * @since 2.0
      */
     public TypeLiteral<?> getSupertype(Class<?> supertype) {
-        if (!supertype.isAssignableFrom(rawType)) {
-            throw new IllegalArgumentException(supertype + " is not a supertype of " + type);
-        }
+        checkArgument(supertype.isAssignableFrom(rawType),
+                "%s is not a supertype of %s", supertype, this.type);
         return resolve(MoreTypes.getGenericSupertype(type, rawType, supertype));
     }
 
@@ -276,9 +269,8 @@ public class TypeLiteral<T> {
      * @since 2.0
      */
     public TypeLiteral<?> getFieldType(Field field) {
-        if (!field.getDeclaringClass().isAssignableFrom(rawType)) {
-            throw new IllegalArgumentException(field + " is not defined by a supertype of " + type);
-        }
+        checkArgument(field.getDeclaringClass().isAssignableFrom(rawType),
+                "%s is not defined by a supertype of %s", field, type);
         return resolve(field.getGenericType());
     }
 
@@ -293,17 +285,14 @@ public class TypeLiteral<T> {
 
         if (methodOrConstructor instanceof Method) {
             Method method = (Method) methodOrConstructor;
-            if (!method.getDeclaringClass().isAssignableFrom(rawType)) {
-                throw new IllegalArgumentException(method + " is not defined by a supertype of " + type);
-            }
+            checkArgument(method.getDeclaringClass().isAssignableFrom(rawType),
+                    "%s is not defined by a supertype of %s", method, type);
             genericParameterTypes = method.getGenericParameterTypes();
 
         } else if (methodOrConstructor instanceof Constructor) {
             Constructor constructor = (Constructor) methodOrConstructor;
-            if (!constructor.getDeclaringClass().isAssignableFrom(rawType)) {
-                throw new IllegalArgumentException(constructor + " does not construct a supertype of " + type);
-            }
-
+            checkArgument(constructor.getDeclaringClass().isAssignableFrom(rawType),
+                    "%s does not construct a supertype of %s", constructor, type);
             genericParameterTypes = constructor.getGenericParameterTypes();
 
         } else {
@@ -324,17 +313,14 @@ public class TypeLiteral<T> {
 
         if (methodOrConstructor instanceof Method) {
             Method method = (Method) methodOrConstructor;
-            if (!method.getDeclaringClass().isAssignableFrom(rawType)) {
-                throw new IllegalArgumentException(method + " is not defined by a supertype of " + type);
-            }
-
+            checkArgument(method.getDeclaringClass().isAssignableFrom(rawType),
+                    "%s is not defined by a supertype of %s", method, type);
             genericExceptionTypes = method.getGenericExceptionTypes();
 
         } else if (methodOrConstructor instanceof Constructor) {
             Constructor<?> constructor = (Constructor<?>) methodOrConstructor;
-            if (!constructor.getDeclaringClass().isAssignableFrom(rawType)) {
-                throw new IllegalArgumentException(constructor + " does not construct a supertype of " + type);
-            }
+            checkArgument(constructor.getDeclaringClass().isAssignableFrom(rawType),
+                    "%s does not construct a supertype of %s", constructor, type);
             genericExceptionTypes = constructor.getGenericExceptionTypes();
 
         } else {
@@ -351,10 +337,8 @@ public class TypeLiteral<T> {
      * @since 2.0
      */
     public TypeLiteral<?> getReturnType(Method method) {
-        if (!method.getDeclaringClass().isAssignableFrom(rawType)) {
-            throw new IllegalArgumentException(method + " is not defined by a supertype of " + type);
-        }
-
+        checkArgument(method.getDeclaringClass().isAssignableFrom(rawType),
+                "%s is not defined by a supertype of %s", method, type);
         return resolve(method.getGenericReturnType());
     }
 }

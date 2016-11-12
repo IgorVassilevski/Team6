@@ -24,63 +24,60 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.script.ScriptService;
-import org.elasticsearch.script.ScriptService.ScriptType;
-import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 
 import static org.hamcrest.Matchers.containsString;
 
 //TODO: please convert to unit tests!
 public class IndexedExpressionTests extends ESIntegTestCase {
+    
     @Override
     protected Settings nodeSettings(int nodeOrdinal) {
         Settings.Builder builder = Settings.builder().put(super.nodeSettings(nodeOrdinal));
-        builder.put("script.engine.expression.stored.update", "false");
-        builder.put("script.engine.expression.stored.search", "false");
+        builder.put("script.engine.expression.indexed.update", "off");
+        builder.put("script.engine.expression.indexed.search", "off");
+        builder.put("script.engine.expression.indexed.aggs", "off");
+        builder.put("script.engine.expression.indexed.mapping", "off");
         return builder.build();
     }
-
+    
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Collections.singleton(ExpressionPlugin.class);
+        return pluginList(ExpressionPlugin.class);
     }
 
+    @Test
     public void testAllOpsDisabledIndexedScripts() throws IOException {
-        client().admin().cluster().preparePutStoredScript()
-                .setScriptLang(ExpressionScriptEngineService.NAME)
-                .setId("script1")
-                .setSource(new BytesArray("{\"script\":\"2\"}"))
-                .get();
+        if (randomBoolean()) {
+            client().preparePutIndexedScript(ExpressionScriptEngineService.NAME, "script1", "{\"script\":\"2\"}").get();
+        } else {
+            client().prepareIndex(ScriptService.SCRIPT_INDEX, ExpressionScriptEngineService.NAME, "script1").setSource("{\"script\":\"2\"}").get();
+        }
         client().prepareIndex("test", "scriptTest", "1").setSource("{\"theField\":\"foo\"}").get();
         try {
             client().prepareUpdate("test", "scriptTest", "1")
-                    .setScript(new Script("script1", ScriptService.ScriptType.STORED, ExpressionScriptEngineService.NAME, null)).get();
+                    .setScript(new Script("script1", ScriptService.ScriptType.INDEXED, ExpressionScriptEngineService.NAME, null)).get();
             fail("update script should have been rejected");
         } catch(Exception e) {
             assertThat(e.getMessage(), containsString("failed to execute script"));
-            assertThat(e.getCause().getMessage(), containsString("scripts of type [stored], operation [update] and lang [expression] are disabled"));
+            assertThat(e.getCause().getMessage(), containsString("scripts of type [indexed], operation [update] and lang [expression] are disabled"));
         }
         try {
-            client().prepareSearch()
-                    .setSource(
-                            new SearchSourceBuilder().scriptField("test1", new Script("script1", ScriptType.STORED, "expression", null)))
-                    .setIndices("test").setTypes("scriptTest").get();
+            String query = "{ \"script_fields\" : { \"test1\" : { \"script_id\" : \"script1\", \"lang\":\"expression\" }}}";
+            client().prepareSearch().setSource(new BytesArray(query)).setIndices("test").setTypes("scriptTest").get();
             fail("search script should have been rejected");
         } catch(Exception e) {
-            assertThat(e.toString(), containsString("scripts of type [stored], operation [search] and lang [expression] are disabled"));
+            assertThat(e.toString(), containsString("scripts of type [indexed], operation [search] and lang [expression] are disabled"));
         }
         try {
-            client().prepareSearch("test")
-                    .setSource(
-                            new SearchSourceBuilder().aggregation(AggregationBuilders.terms("test").script(
-                                    new Script("script1", ScriptType.STORED, "expression", null)))).get();
-        } catch (Exception e) {
-            assertThat(e.toString(), containsString("scripts of type [stored], operation [aggs] and lang [expression] are disabled"));
+            String source = "{\"aggs\": {\"test\": { \"terms\" : { \"script_id\":\"script1\", \"script_lang\":\"expression\" } } } }";
+            client().prepareSearch("test").setSource(new BytesArray(source)).get();
+        } catch(Exception e) {
+            assertThat(e.toString(), containsString("scripts of type [indexed], operation [aggs] and lang [expression] are disabled"));
         }
     }
 }

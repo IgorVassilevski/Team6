@@ -20,19 +20,21 @@ package org.elasticsearch.search.suggest;
 
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.util.CharsRefBuilder;
-import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.HasContextAndHeaders;
 import org.elasticsearch.common.text.Text;
-import org.elasticsearch.index.query.QueryParseContext;
-import org.elasticsearch.index.query.QueryShardContext;
-import org.elasticsearch.search.suggest.CustomSuggesterSearchIT.CustomSuggestionBuilder;
+import org.elasticsearch.common.xcontent.XContentParser;
+import org.elasticsearch.index.mapper.MapperService;
+import org.elasticsearch.index.query.IndexQueryParserService;
 
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ *
+ */
 public class CustomSuggester extends Suggester<CustomSuggester.CustomSuggestionsContext> {
 
-    public static final CustomSuggester INSTANCE = new CustomSuggester();
 
     // This is a pretty dumb implementation which returns the original text + fieldName + custom config option + 12 or 123
     @Override
@@ -54,23 +56,27 @@ public class CustomSuggester extends Suggester<CustomSuggester.CustomSuggestions
         return response;
     }
 
+    @Override
+    public SuggestContextParser getContextParser() {
+        return new SuggestContextParser() {
+            @Override
+            public SuggestionSearchContext.SuggestionContext parse(XContentParser parser, MapperService mapperService,
+                    IndexQueryParserService queryParserService, HasContextAndHeaders headersContext) throws IOException {
+                Map<String, Object> options = parser.map();
+                CustomSuggestionsContext suggestionContext = new CustomSuggestionsContext(CustomSuggester.this, options);
+                suggestionContext.setField((String) options.get("field"));
+                return suggestionContext;
+            }
+        };
+    }
+
     public static class CustomSuggestionsContext extends SuggestionSearchContext.SuggestionContext {
 
         public Map<String, Object> options;
 
-        public CustomSuggestionsContext(QueryShardContext context, Map<String, Object> options) {
-            super(new CustomSuggester(), context);
+        public CustomSuggestionsContext(Suggester suggester, Map<String, Object> options) {
+            super(suggester);
             this.options = options;
         }
-    }
-
-    @Override
-    public SuggestionBuilder<?> innerFromXContent(QueryParseContext context) throws IOException {
-        return CustomSuggestionBuilder.innerFromXContent(context);
-    }
-
-    @Override
-    public SuggestionBuilder<?> read(StreamInput in) throws IOException {
-        return new CustomSuggestionBuilder(in);
     }
 }

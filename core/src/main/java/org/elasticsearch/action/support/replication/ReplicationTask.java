@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.support.replication;
 
-import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -60,7 +59,7 @@ public class ReplicationTask extends Task {
     }
 
     public static class Status implements Task.Status {
-        public static final String NAME = "replication";
+        public static final Status PROTOTYPE = new Status("prototype");
 
         private final String phase;
 
@@ -74,7 +73,7 @@ public class ReplicationTask extends Task {
 
         @Override
         public String getWriteableName() {
-            return NAME;
+            return "replication";
         }
 
         @Override
@@ -91,23 +90,8 @@ public class ReplicationTask extends Task {
         }
 
         @Override
-        public String toString() {
-            return Strings.toString(this);
-        }
-
-        // Implements equals and hashcode for testing
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == null || obj.getClass() != ReplicationTask.Status.class) {
-                return false;
-            }
-            ReplicationTask.Status other = (Status) obj;
-            return phase.equals(other.phase);
-        }
-
-        @Override
-        public int hashCode() {
-            return phase.hashCode();
+        public Status readFrom(StreamInput in) throws IOException {
+            return new Status(in);
         }
     }
 }

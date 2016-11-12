@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # This file contains some utilities to test the elasticsearch scripts,
 # the .deb/.rpm packages and the SysV/Systemd scripts.
@@ -134,18 +134,14 @@ skip_not_zip() {
 
 assert_file_exist() {
     local file="$1"
-    if [ ! -e "$file" ]; then
-        echo "Should exist: ${file} but does not"
-    fi
+    echo "Should exist: ${file}"
     local file=$(readlink -m "${file}")
     [ -e "$file" ]
 }
 
 assert_file_not_exist() {
     local file="$1"
-    if [ -e "$file" ]; then
-        echo "Should not exist: ${file} but does"
-    fi
+    echo "Should not exist: ${file}"
     local file=$(readlink -m "${file}")
     [ ! -e "$file" ]
 }
@@ -160,75 +156,31 @@ assert_file() {
     assert_file_exist "$file"
 
     if [ "$type" = "d" ]; then
-        if [ ! -d "$file" ]; then
-            echo "[$file] should be a directory but is not"
-        fi
+        echo "And be a directory...."
         [ -d "$file" ]
     else
-        if [ ! -f "$file" ]; then
-            echo "[$file] should be a regular file but is not"
-        fi
+        echo "And be a regular file...."
         [ -f "$file" ]
     fi
 
     if [ "x$user" != "x" ]; then
         realuser=$(find "$file" -maxdepth 0 -printf "%u")
-        if [ "$realuser" != "$user" ]; then
-            echo "Expected user: $user, found $realuser [$file]"
-        fi
         [ "$realuser" = "$user" ]
     fi
 
     if [ "x$group" != "x" ]; then
         realgroup=$(find "$file" -maxdepth 0 -printf "%g")
-        if [ "$realgroup" != "$group" ]; then
-            echo "Expected group: $group, found $realgroup [$file]"
-        fi
         [ "$realgroup" = "$group" ]
     fi
 
     if [ "x$privileges" != "x" ]; then
         realprivileges=$(find "$file" -maxdepth 0 -printf "%m")
-        if [ "$realprivileges" != "$privileges" ]; then
-            echo "Expected privileges: $privileges, found $realprivileges [$file]"
-        fi
         [ "$realprivileges" = "$privileges" ]
     fi
 }
 
-assert_module_or_plugin_directory() {
-    local directory=$1
-    shift
-
-    #owner group and permissions vary depending on how es was installed
-    #just make sure that everything is the same as $CONFIG_DIR, which was properly set up during install
-    config_user=$(find "$ESHOME" -maxdepth 0 -printf "%u")
-    config_owner=$(find "$ESHOME" -maxdepth 0 -printf "%g")
-
-    assert_file $directory d $config_user $config_owner 755
-}
-
-assert_module_or_plugin_file() {
-    local file=$1
-    shift
-
-    assert_file_exist "$(readlink -m $file)"
-    assert_file $file f $config_user $config_owner 644
-}
-
 assert_output() {
     echo "$output" | grep -E "$1"
-}
-
-assert_recursive_ownership() {
-    local directory=$1
-    local user=$2
-    local group=$3
-
-    realuser=$(find $directory -printf "%u\n" | sort | uniq)
-    [ "$realuser" = "$user" ]
-    realgroup=$(find $directory -printf "%g\n" | sort | uniq)
-    [ "$realgroup" = "$group" ]
 }
 
 # Deletes everything before running a test file
@@ -257,22 +209,6 @@ clean_before_test() {
     # Kills all running Elasticsearch processes
     ps aux | grep -i "org.elasticsearch.bootstrap.Elasticsearch" | awk {'print $2'} | xargs kill -9 > /dev/null 2>&1 || true
 
-    purge_elasticsearch
-
-    # Removes user & group
-    userdel elasticsearch > /dev/null 2>&1 || true
-    groupdel elasticsearch > /dev/null 2>&1 || true
-
-
-    # Removes all files
-    for d in "${ELASTICSEARCH_TEST_FILES[@]}"; do
-        if [ -e "$d" ]; then
-            rm -rf "$d"
-        fi
-    done
-}
-
-purge_elasticsearch() {
     # Removes RPM package
     if is_rpm; then
         rpm --quiet -e elasticsearch > /dev/null 2>&1 || true
@@ -290,17 +226,28 @@ purge_elasticsearch() {
     if [ -x "`which apt-get 2>/dev/null`" ]; then
         apt-get --quiet --yes purge elasticsearch > /dev/null 2>&1 || true
     fi
+
+    # Removes user & group
+    userdel elasticsearch > /dev/null 2>&1 || true
+    groupdel elasticsearch > /dev/null 2>&1 || true
+
+
+    # Removes all files
+    for d in "${ELASTICSEARCH_TEST_FILES[@]}"; do
+        if [ -e "$d" ]; then
+            rm -rf "$d"
+        fi
+    done
 }
 
 # Start elasticsearch and wait for it to come up with a status.
 # $1 - expected status - defaults to green
 start_elasticsearch_service() {
     local desiredStatus=${1:-green}
-    local index=$2
 
     run_elasticsearch_service 0
 
-    wait_for_elasticsearch_status $desiredStatus $index
+    wait_for_elasticsearch_status $desiredStatus
 
     if [ -r "/tmp/elasticsearch/elasticsearch.pid" ]; then
         pid=$(cat /tmp/elasticsearch/elasticsearch.pid)
@@ -338,9 +285,6 @@ run_elasticsearch_service() {
     if [ -f "/tmp/elasticsearch/bin/elasticsearch" ]; then
         if [ -z "$CONF_DIR" ]; then
             local CONF_DIR=""
-            local ES_PATH_CONF=""
-        else
-            local ES_PATH_CONF="-Epath.conf=$CONF_DIR"
         fi
         # we must capture the exit code to compare so we don't want to start as background process in case we expect something other than 0
         local background=""
@@ -359,9 +303,7 @@ run_elasticsearch_service() {
 # This line is attempting to emulate the on login behavior of /usr/share/upstart/sessions/jayatana.conf
 [ -f /usr/share/java/jayatanaag.jar ] && export JAVA_TOOL_OPTIONS="-javaagent:/usr/share/java/jayatanaag.jar"
 # And now we can start Elasticsearch normally, in the background (-d) and with a pidfile (-p).
-export ES_JVM_OPTIONS=$ES_JVM_OPTIONS
-export ES_JAVA_OPTS=$ES_JAVA_OPTS
-$timeoutCommand/tmp/elasticsearch/bin/elasticsearch $background -p /tmp/elasticsearch/elasticsearch.pid $ES_PATH_CONF $commandLineArgs
+$timeoutCommand/tmp/elasticsearch/bin/elasticsearch $background -p /tmp/elasticsearch/elasticsearch.pid -Des.path.conf=$CONF_DIR $commandLineArgs
 BASH
         [ "$status" -eq "$expectedStatus" ]
     elif is_systemd; then
@@ -411,10 +353,9 @@ stop_elasticsearch_service() {
 # $1 - expected status - defaults to green
 wait_for_elasticsearch_status() {
     local desiredStatus=${1:-green}
-    local index=$2
 
     echo "Making sure elasticsearch is up..."
-    wget -O - --retry-connrefused --waitretry=1 --timeout=60 --tries 60 http://localhost:9200/_cluster/health || {
+    wget -O - --retry-connrefused --waitretry=1 --timeout=60 --tries 60 http://localhost:9200 || {
           echo "Looks like elasticsearch never started. Here is its log:"
           if [ -e "$ESLOG/elasticsearch.log" ]; then
               cat "$ESLOG/elasticsearch.log"
@@ -425,13 +366,8 @@ wait_for_elasticsearch_status() {
           false
     }
 
-    if [ -z "index" ]; then
-      echo "Tring to connect to elasticsearch and wait for expected status $desiredStatus..."
-      curl -sS "http://localhost:9200/_cluster/health?wait_for_status=$desiredStatus&timeout=60s&pretty"
-    else
-      echo "Trying to connect to elasticsearch and wait for expected status $desiredStatus for index $index"
-      curl -sS "http://localhost:9200/_cluster/health/$index?wait_for_status=$desiredStatus&timeout=60s&pretty"
-    fi
+    echo "Tring to connect to elasticsearch and wait for expected status..."
+    curl -sS "http://localhost:9200/_cluster/health?wait_for_status=$desiredStatus&timeout=60s&pretty"
     if [ $? -eq 0 ]; then
         echo "Connected"
     else
@@ -475,16 +411,15 @@ run_elasticsearch_tests() {
     curl -s -XPOST 'http://localhost:9200/library/book/_count?pretty' -d '{
       "query": {
         "script": {
-          "script": {
-            "file": "is_guide",
-            "lang": "groovy"
-          }
+          "script_file": "is_guide"
         }
       }
     }' | grep \"count\"\ :\ 1
 
     curl -s -XGET 'http://localhost:9200/library/book/_search/template?pretty' -d '{
-      "file": "is_guide"
+      "template": {
+        "file": "is_guide"
+      }
     }' | grep \"total\"\ :\ 1
 
     curl -s -XDELETE 'http://localhost:9200/_all'
@@ -500,7 +435,7 @@ move_config() {
     mv "$oldConfig"/* "$ESCONFIG"
     chown -R elasticsearch:elasticsearch "$ESCONFIG"
     assert_file_exist "$ESCONFIG/elasticsearch.yml"
-    assert_file_exist "$ESCONFIG/log4j2.properties"
+    assert_file_exist "$ESCONFIG/logging.yml"
 }
 
 # Copies a script into the Elasticsearch install.
@@ -510,20 +445,4 @@ install_script() {
     local script="$BATS_TEST_DIRNAME/example/scripts/$name"
     echo "Installing $script to $ESSCRIPTS"
     cp $script $ESSCRIPTS
-}
-
-# permissions from the user umask with the executable bit set
-executable_privileges_for_user_from_umask() {
-    local user=$1
-    shift
-
-    echo $((0777 & ~$(sudo -E -u $user sh -c umask) | 0111))
-}
-
-# permissions from the user umask without the executable bit set
-file_privileges_for_user_from_umask() {
-    local user=$1
-    shift
-
-    echo $((0777 & ~$(sudo -E -u $user sh -c umask) & ~0111))
 }

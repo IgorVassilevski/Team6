@@ -3,21 +3,6 @@
 
 See {ref}/search-template.html[Search Template] documentation
 
-In order to use the `template` query from the Java API
-the lang-mustache module dependency should be on the classpath and
-the transport client should be loaded with the lang-mustache plugin:
-
-[source,java]
---------------------------------------------------
-TransportClient transportClient = TransportClient.builder()
-        .settings(Settings.builder().put("node.name", "node"))
-        .addPlugin(MustachePlugin.class)
-        .build();
-transportClient.addTransportAddress(
-        new InetSocketTransportAddress(new InetSocketAddress(InetAddresses.forString("127.0.0.1"), 9300))
-);
---------------------------------------------------
-
 Define your template parameters as a `Map<String,Object>`:
 
 [source,java]
@@ -41,13 +26,12 @@ For example, if you have a file named `config/scripts/template_gender.mustache` 
     }
 }
 --------------------------------------------------
-// NOTCONSOLE
 
 Define your template query:
 
 [source,java]
 --------------------------------------------------
-QueryBuilder qb = new TemplateQueryBuilder(
+QueryBuilder qb = templateQuery(
     "gender_template",                  <1>
     ScriptService.ScriptType.FILE,      <2>
     template_params);                   <3>
@@ -56,14 +40,11 @@ QueryBuilder qb = new TemplateQueryBuilder(
 <2> template stored on disk in `gender_template.mustache`
 <3> parameters
 
-You can also store your template in the cluster state:
+You can also store your template in a special index named `.scripts`:
 
 [source,java]
 --------------------------------------------------
-client.admin().cluster().preparePutStoredScript()
-    .setScriptLang("mustache")
-    .setId("template_gender")
-    .setSource(new BytesArray(
+client.preparePutIndexedScript("mustache", "template_gender",
         "{\n" +
         "    \"template\" : {\n" +
         "        \"query\" : {\n" +
@@ -72,18 +53,19 @@ client.admin().cluster().preparePutStoredScript()
         "            }\n" +
         "        }\n" +
         "    }\n" +
-        "}")).get();
+        "}").get();
 --------------------------------------------------
 
-To execute a stored templates, use `ScriptService.ScriptType.STORED`:
+To execute an indexed templates, use `ScriptService.ScriptType.INDEXED`:
 
 [source,java]
 --------------------------------------------------
-QueryBuilder qb = new TemplateQueryBuilder(
+QueryBuilder qb = templateQuery(
     "gender_template",                  <1>
-    ScriptType.STORED,                  <2>
+    ScriptService.ScriptType.INDEXED,   <2>
     template_params);                   <3>
 --------------------------------------------------
 <1> template name
-<2> template stored in the cluster state
+<2> template stored in an index
 <3> parameters
+

@@ -26,6 +26,7 @@ import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.junit.annotations.TestLogging;
+import org.junit.Test;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -36,26 +37,35 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
  */
 @TestLogging("_root:DEBUG")
 public class SearchWhileCreatingIndexIT extends ESIntegTestCase {
+
+    @Test
     public void testIndexCausesIndexCreation() throws Exception {
         searchWhileCreatingIndex(false, 1); // 1 replica in our default...
     }
 
+    @Test
     public void testNoReplicas() throws Exception {
         searchWhileCreatingIndex(true, 0);
     }
 
+    @Test
     public void testOneReplica() throws Exception {
         searchWhileCreatingIndex(true, 1);
     }
 
+    @Test
     public void testTwoReplicas() throws Exception {
         searchWhileCreatingIndex(true, 2);
     }
 
     private void searchWhileCreatingIndex(boolean createIndex, int numberOfReplicas) throws Exception {
 
-        // TODO: randomize the wait for active shards value on index creation and ensure the appropriate
-        // number of data nodes are started for the randomized active shard count value
+        // make sure we have enough nodes to guaranty default QUORUM consistency.
+        // TODO: add a smarter choice based on actual consistency (when that is randomized)
+        int shardsNo = numberOfReplicas + 1;
+        int neededNodes = shardsNo <= 2 ? 1 : shardsNo / 2 + 1;
+        internalCluster().ensureAtLeastNumDataNodes(randomIntBetween(neededNodes, shardsNo));
+
         String id = randomAsciiOfLength(5);
         // we will go the primary or the replica, but in a
         // randomized re-creatable manner

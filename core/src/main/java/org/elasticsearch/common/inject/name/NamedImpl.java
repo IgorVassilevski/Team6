@@ -16,15 +16,17 @@
 
 package org.elasticsearch.common.inject.name;
 
+import java.io.Serializable;
 import java.lang.annotation.Annotation;
-import java.util.Objects;
 
-class NamedImpl implements Named {
+import static com.google.common.base.Preconditions.checkNotNull;
+
+class NamedImpl implements Named, Serializable {
 
     private final String value;
 
     public NamedImpl(String value) {
-        this.value = Objects.requireNonNull(value, "name");
+        this.value = checkNotNull(value, "name");
     }
 
     @Override
@@ -57,4 +59,6 @@ class NamedImpl implements Named {
     public Class<? extends Annotation> annotationType() {
         return Named.class;
     }
+
+    private static final long serialVersionUID = 0;
 }

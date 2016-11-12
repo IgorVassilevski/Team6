@@ -2,7 +2,7 @@
     "numeric_detection" : false,
     "properties": {
         "foo": {
-            "type": "text"
+            "type": "string"
         }
     }
 }

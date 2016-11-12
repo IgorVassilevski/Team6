@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.cluster.node.info;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.Build;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.support.nodes.BaseNodeResponse;
@@ -27,9 +28,7 @@ import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.http.HttpInfo;
-import org.elasticsearch.ingest.IngestInfo;
 import org.elasticsearch.monitor.jvm.JvmInfo;
 import org.elasticsearch.monitor.os.OsInfo;
 import org.elasticsearch.monitor.process.ProcessInfo;
@@ -37,15 +36,15 @@ import org.elasticsearch.threadpool.ThreadPoolInfo;
 import org.elasticsearch.transport.TransportInfo;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
-
-import static java.util.Collections.unmodifiableMap;
 
 /**
  * Node information (static, does not change over time).
  */
 public class NodeInfo extends BaseNodeResponse {
+
+    @Nullable
+    private ImmutableMap<String, String> serviceAttributes;
 
     private Version version;
     private Build build;
@@ -74,22 +73,16 @@ public class NodeInfo extends BaseNodeResponse {
     @Nullable
     private PluginsAndModules plugins;
 
-    @Nullable
-    private IngestInfo ingest;
-
-    @Nullable
-    private ByteSizeValue totalIndexingBuffer;
-
-    public NodeInfo() {
+    NodeInfo() {
     }
 
-    public NodeInfo(Version version, Build build, DiscoveryNode node, @Nullable Settings settings,
+    public NodeInfo(Version version, Build build, DiscoveryNode node, @Nullable ImmutableMap<String, String> serviceAttributes, @Nullable Settings settings,
                     @Nullable OsInfo os, @Nullable ProcessInfo process, @Nullable JvmInfo jvm, @Nullable ThreadPoolInfo threadPool,
-                    @Nullable TransportInfo transport, @Nullable HttpInfo http, @Nullable PluginsAndModules plugins, @Nullable IngestInfo ingest,
-                    @Nullable ByteSizeValue totalIndexingBuffer) {
+                    @Nullable TransportInfo transport, @Nullable HttpInfo http, @Nullable PluginsAndModules plugins) {
         super(node);
         this.version = version;
         this.build = build;
+        this.serviceAttributes = serviceAttributes;
         this.settings = settings;
         this.os = os;
         this.process = process;
@@ -98,8 +91,6 @@ public class NodeInfo extends BaseNodeResponse {
         this.transport = transport;
         this.http = http;
         this.plugins = plugins;
-        this.ingest = ingest;
-        this.totalIndexingBuffer = totalIndexingBuffer;
     }
 
     /**
@@ -122,6 +113,14 @@ public class NodeInfo extends BaseNodeResponse {
      */
     public Build getBuild() {
         return this.build;
+    }
+
+    /**
+     * The service attributes of the node.
+     */
+    @Nullable
+    public ImmutableMap<String, String> getServiceAttributes() {
+        return this.serviceAttributes;
     }
 
     /**
@@ -176,16 +175,6 @@ public class NodeInfo extends BaseNodeResponse {
         return this.plugins;
     }
 
-    @Nullable
-    public IngestInfo getIngest() {
-        return ingest;
-    }
-
-    @Nullable
-    public ByteSizeValue getTotalIndexingBuffer() {
-        return totalIndexingBuffer;
-    }
-
     public static NodeInfo readNodeInfo(StreamInput in) throws IOException {
         NodeInfo nodeInfo = new NodeInfo();
         nodeInfo.readFrom(in);
@@ -198,9 +187,12 @@ public class NodeInfo extends BaseNodeResponse {
         version = Version.readVersion(in);
         build = Build.readBuild(in);
         if (in.readBoolean()) {
-            totalIndexingBuffer = new ByteSizeValue(in.readLong());
-        } else {
-            totalIndexingBuffer = null;
+            ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
+            int size = in.readVInt();
+            for (int i = 0; i < size; i++) {
+                builder.put(in.readString(), in.readString());
+            }
+            serviceAttributes = builder.build();
         }
         if (in.readBoolean()) {
             settings = Settings.readSettingsFromStream(in);
@@ -227,9 +219,6 @@ public class NodeInfo extends BaseNodeResponse {
             plugins = new PluginsAndModules();
             plugins.readFrom(in);
         }
-        if (in.readBoolean()) {
-            ingest = new IngestInfo(in);
-        }
     }
 
     @Override
@@ -237,11 +226,15 @@ public class NodeInfo extends BaseNodeResponse {
         super.writeTo(out);
         out.writeVInt(version.id);
         Build.writeBuild(build, out);
-        if (totalIndexingBuffer == null) {
+        if (getServiceAttributes() == null) {
             out.writeBoolean(false);
         } else {
             out.writeBoolean(true);
-            out.writeLong(totalIndexingBuffer.bytes());
+            out.writeVInt(serviceAttributes.size());
+            for (Map.Entry<String, String> entry : serviceAttributes.entrySet()) {
+                out.writeString(entry.getKey());
+                out.writeString(entry.getValue());
+            }
         }
         if (settings == null) {
             out.writeBoolean(false);
@@ -290,12 +283,6 @@ public class NodeInfo extends BaseNodeResponse {
         } else {
             out.writeBoolean(true);
             plugins.writeTo(out);
-        }
-        if (ingest == null) {
-            out.writeBoolean(false);
-        } else {
-            out.writeBoolean(true);
-            ingest.writeTo(out);
         }
     }
 }

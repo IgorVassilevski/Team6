@@ -19,10 +19,11 @@
 package org.elasticsearch.index.fieldvisitor;
 
 import org.apache.lucene.index.FieldInfo;
-import org.elasticsearch.index.mapper.IdFieldMapper;
+import org.elasticsearch.index.mapper.FieldMapper;
 import org.elasticsearch.index.mapper.MappedFieldType;
-import org.elasticsearch.index.mapper.TypeFieldMapper;
-import org.elasticsearch.index.mapper.UidFieldMapper;
+import org.elasticsearch.index.mapper.internal.IdFieldMapper;
+import org.elasticsearch.index.mapper.internal.TypeFieldMapper;
+import org.elasticsearch.index.mapper.internal.UidFieldMapper;
 
 import java.io.IOException;
 import java.util.List;
@@ -59,22 +60,16 @@ public class SingleFieldsVisitor extends FieldsVisitor {
     public void postProcess(MappedFieldType fieldType) {
         if (uid != null) {
             switch (field) {
-            case UidFieldMapper.NAME:
-                addValue(field, uid.toString());
-                break;
-            case IdFieldMapper.NAME:
-                addValue(field, uid.id());
-                break;
-            case TypeFieldMapper.NAME:
-                addValue(field, uid.type());
-                break;
+                case UidFieldMapper.NAME: addValue(field, uid.toString());
+                case IdFieldMapper.NAME: addValue(field, uid.id());
+                case TypeFieldMapper.NAME: addValue(field, uid.type());
             }
         }
 
         if (fieldsValues == null) {
             return;
         }
-        List<Object> fieldValues = fieldsValues.get(fieldType.name());
+        List<Object> fieldValues = fieldsValues.get(fieldType.names().indexName());
         if (fieldValues == null) {
             return;
         }

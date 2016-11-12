@@ -28,19 +28,22 @@ import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
-import org.elasticsearch.test.ESIntegTestCase.Scope;
+import org.junit.Test;
 
+import static org.elasticsearch.test.ESIntegTestCase.*;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 @ClusterScope(scope=Scope.TEST, numDataNodes=2)
 public class CloseIndexDisableCloseAllIT extends ESIntegTestCase {
+
+    @Test
     // Combined multiple tests into one, because cluster scope is test.
     // The cluster scope is test b/c we can't clear cluster settings.
     public void testCloseAllRequiresName() {
         Settings clusterSettings = Settings.builder()
-                .put(DestructiveOperations.REQUIRES_NAME_SETTING.getKey(), true)
+                .put(DestructiveOperations.REQUIRES_NAME, true)
                 .build();
         assertAcked(client().admin().cluster().prepareUpdateSettings().setTransientSettings(clusterSettings));
         createIndex("test1", "test2", "test3");
@@ -91,7 +94,7 @@ public class CloseIndexDisableCloseAllIT extends ESIntegTestCase {
         createIndex("test_no_close");
         healthResponse = client.admin().cluster().prepareHealth().setWaitForGreenStatus().execute().actionGet();
         assertThat(healthResponse.isTimedOut(), equalTo(false));
-        client().admin().cluster().prepareUpdateSettings().setTransientSettings(Settings.builder().put(TransportCloseIndexAction.CLUSTER_INDICES_CLOSE_ENABLE_SETTING.getKey(), false)).get();
+        client().admin().cluster().prepareUpdateSettings().setTransientSettings(Settings.builder().put(TransportCloseIndexAction.SETTING_CLUSTER_INDICES_CLOSE_ENABLE, false)).get();
 
         try {
             client.admin().indices().prepareClose("test_no_close").execute().actionGet();

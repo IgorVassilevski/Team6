@@ -25,10 +25,10 @@ import org.apache.lucene.queries.function.FunctionValues;
  * A support class for an executable expression script that allows the double returned
  * by a {@link FunctionValues} to be modified.
  */
-final class ReplaceableConstFunctionValues extends FunctionValues {
+public class ReplaceableConstFunctionValues extends FunctionValues {
     private double value = 0;
 
-    void setValue(double value) {
+    public void setValue(double value) {
         this.value = value;
     }
 

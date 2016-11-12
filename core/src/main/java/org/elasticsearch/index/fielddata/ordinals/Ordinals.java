@@ -47,9 +47,10 @@ public abstract class Ordinals implements Accountable {
         return ordinals(NO_VALUES);
     }
 
-    public interface ValuesHolder {
+    public static interface ValuesHolder {
 
-        BytesRef lookupOrd(long ord);
+        public abstract BytesRef lookupOrd(long ord);
+
     }
 
 }

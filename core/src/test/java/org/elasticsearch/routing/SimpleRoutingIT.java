@@ -20,6 +20,7 @@
 package org.elasticsearch.routing;
 
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.Version;
 import org.elasticsearch.action.RoutingMissingException;
 import org.elasticsearch.action.admin.indices.alias.Alias;
 import org.elasticsearch.action.bulk.BulkItemResponse;
@@ -28,14 +29,15 @@ import org.elasticsearch.action.explain.ExplainResponse;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.get.MultiGetRequest;
 import org.elasticsearch.action.get.MultiGetResponse;
-import org.elasticsearch.action.support.WriteRequest.RefreshPolicy;
 import org.elasticsearch.action.termvectors.MultiTermVectorsResponse;
 import org.elasticsearch.action.termvectors.TermVectorsRequest;
 import org.elasticsearch.action.termvectors.TermVectorsResponse;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.Requests;
+import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.index.mapper.MapperParsingException;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.test.ESIntegTestCase;
@@ -51,14 +53,13 @@ public class SimpleRoutingIT extends ESIntegTestCase {
     protected int minimumNumberOfShards() {
         return 2;
     }
-
+    
     public void testSimpleCrudRouting() throws Exception {
         createIndex("test");
         ensureGreen();
 
         logger.info("--> indexing with id [1], and routing [0]");
-        client().prepareIndex("test", "type1", "1").setRouting("0").setSource("field", "value1").setRefreshPolicy(RefreshPolicy.IMMEDIATE)
-                .get();
+        client().prepareIndex("test", "type1", "1").setRouting("0").setSource("field", "value1").setRefresh(true).execute().actionGet();
         logger.info("--> verifying get with no routing, should not find anything");
         for (int i = 0; i < 5; i++) {
             assertThat(client().prepareGet("test", "type1", "1").execute().actionGet().isExists(), equalTo(false));
@@ -69,22 +70,21 @@ public class SimpleRoutingIT extends ESIntegTestCase {
         }
 
         logger.info("--> deleting with no routing, should not delete anything");
-        client().prepareDelete("test", "type1", "1").setRefreshPolicy(RefreshPolicy.IMMEDIATE).get();
+        client().prepareDelete("test", "type1", "1").setRefresh(true).execute().actionGet();
         for (int i = 0; i < 5; i++) {
             assertThat(client().prepareGet("test", "type1", "1").execute().actionGet().isExists(), equalTo(false));
             assertThat(client().prepareGet("test", "type1", "1").setRouting("0").execute().actionGet().isExists(), equalTo(true));
         }
 
         logger.info("--> deleting with routing, should delete");
-        client().prepareDelete("test", "type1", "1").setRouting("0").setRefreshPolicy(RefreshPolicy.IMMEDIATE).get();
+        client().prepareDelete("test", "type1", "1").setRouting("0").setRefresh(true).execute().actionGet();
         for (int i = 0; i < 5; i++) {
             assertThat(client().prepareGet("test", "type1", "1").execute().actionGet().isExists(), equalTo(false));
             assertThat(client().prepareGet("test", "type1", "1").setRouting("0").execute().actionGet().isExists(), equalTo(false));
         }
 
         logger.info("--> indexing with id [1], and routing [0]");
-        client().prepareIndex("test", "type1", "1").setRouting("0").setSource("field", "value1").setRefreshPolicy(RefreshPolicy.IMMEDIATE)
-                .get();
+        client().prepareIndex("test", "type1", "1").setRouting("0").setSource("field", "value1").setRefresh(true).execute().actionGet();
         logger.info("--> verifying get with no routing, should not find anything");
         for (int i = 0; i < 5; i++) {
             assertThat(client().prepareGet("test", "type1", "1").execute().actionGet().isExists(), equalTo(false));
@@ -94,14 +94,13 @@ public class SimpleRoutingIT extends ESIntegTestCase {
             assertThat(client().prepareGet("test", "type1", "1").setRouting("0").execute().actionGet().isExists(), equalTo(true));
         }
     }
-
+    
     public void testSimpleSearchRouting() {
         createIndex("test");
         ensureGreen();
 
         logger.info("--> indexing with id [1], and routing [0]");
-        client().prepareIndex("test", "type1", "1").setRouting("0").setSource("field", "value1").setRefreshPolicy(RefreshPolicy.IMMEDIATE)
-                .get();
+        client().prepareIndex("test", "type1", "1").setRouting("0").setSource("field", "value1").setRefresh(true).execute().actionGet();
         logger.info("--> verifying get with no routing, should not find anything");
         for (int i = 0; i < 5; i++) {
             assertThat(client().prepareGet("test", "type1", "1").execute().actionGet().isExists(), equalTo(false));
@@ -113,52 +112,52 @@ public class SimpleRoutingIT extends ESIntegTestCase {
 
         logger.info("--> search with no routing, should fine one");
         for (int i = 0; i < 5; i++) {
-            assertThat(client().prepareSearch().setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1L));
+            assertThat(client().prepareSearch().setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1l));
         }
 
         logger.info("--> search with wrong routing, should not find");
         for (int i = 0; i < 5; i++) {
-            assertThat(client().prepareSearch().setRouting("1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(0L));
-            assertThat(client().prepareSearch().setSize(0).setRouting("1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(0L));
+            assertThat(client().prepareSearch().setRouting("1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(0l));
+            assertThat(client().prepareCount().setRouting("1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getCount(), equalTo(0l));
         }
 
         logger.info("--> search with correct routing, should find");
         for (int i = 0; i < 5; i++) {
-            assertThat(client().prepareSearch().setRouting("0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1L));
-            assertThat(client().prepareSearch().setSize(0).setRouting("0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1L));
+            assertThat(client().prepareSearch().setRouting("0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1l));
+            assertThat(client().prepareCount().setRouting("0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getCount(), equalTo(1l));
         }
 
         logger.info("--> indexing with id [2], and routing [1]");
-        client().prepareIndex("test", "type1", "2").setRouting("1").setSource("field", "value1").setRefreshPolicy(RefreshPolicy.IMMEDIATE).get();
+        client().prepareIndex("test", "type1", "2").setRouting("1").setSource("field", "value1").setRefresh(true).execute().actionGet();
 
         logger.info("--> search with no routing, should fine two");
         for (int i = 0; i < 5; i++) {
-            assertThat(client().prepareSearch().setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2L));
-            assertThat(client().prepareSearch().setSize(0).setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2L));
+            assertThat(client().prepareSearch().setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2l));
+            assertThat(client().prepareCount().setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getCount(), equalTo(2l));
         }
 
         logger.info("--> search with 0 routing, should find one");
         for (int i = 0; i < 5; i++) {
-            assertThat(client().prepareSearch().setRouting("0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1L));
-            assertThat(client().prepareSearch().setSize(0).setRouting("0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1L));
+            assertThat(client().prepareSearch().setRouting("0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1l));
+            assertThat(client().prepareCount().setRouting("0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getCount(), equalTo(1l));
         }
 
         logger.info("--> search with 1 routing, should find one");
         for (int i = 0; i < 5; i++) {
-            assertThat(client().prepareSearch().setRouting("1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1L));
-            assertThat(client().prepareSearch().setSize(0).setRouting("1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1L));
+            assertThat(client().prepareSearch().setRouting("1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(1l));
+            assertThat(client().prepareCount().setRouting("1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getCount(), equalTo(1l));
         }
 
         logger.info("--> search with 0,1 routings , should find two");
         for (int i = 0; i < 5; i++) {
-            assertThat(client().prepareSearch().setRouting("0", "1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2L));
-            assertThat(client().prepareSearch().setSize(0).setRouting("0", "1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2L));
+            assertThat(client().prepareSearch().setRouting("0", "1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2l));
+            assertThat(client().prepareCount().setRouting("0", "1").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getCount(), equalTo(2l));
         }
 
         logger.info("--> search with 0,1,0 routings , should find two");
         for (int i = 0; i < 5; i++) {
-            assertThat(client().prepareSearch().setRouting("0", "1", "0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2L));
-            assertThat(client().prepareSearch().setSize(0).setRouting("0", "1", "0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2L));
+            assertThat(client().prepareSearch().setRouting("0", "1", "0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getHits().totalHits(), equalTo(2l));
+            assertThat(client().prepareCount().setRouting("0", "1", "0").setQuery(QueryBuilders.matchAllQuery()).execute().actionGet().getCount(), equalTo(2l));
         }
     }
 
@@ -169,13 +168,12 @@ public class SimpleRoutingIT extends ESIntegTestCase {
         ensureGreen();
 
         logger.info("--> indexing with id [1], and routing [0]");
-        client().prepareIndex(indexOrAlias(), "type1", "1").setRouting("0").setSource("field", "value1")
-                .setRefreshPolicy(RefreshPolicy.IMMEDIATE).get();
+        client().prepareIndex(indexOrAlias(), "type1", "1").setRouting("0").setSource("field", "value1").setRefresh(true).execute().actionGet();
         logger.info("--> verifying get with no routing, should fail");
 
         logger.info("--> indexing with id [1], with no routing, should fail");
         try {
-            client().prepareIndex(indexOrAlias(), "type1", "1").setSource("field", "value1").get();
+            client().prepareIndex(indexOrAlias(), "type1", "1").setSource("field", "value1").setRefresh(true).execute().actionGet();
             fail("index with missing routing when routing is required should fail");
         } catch (ElasticsearchException e) {
             assertThat(e.unwrapCause(), instanceOf(RoutingMissingException.class));
@@ -188,7 +186,7 @@ public class SimpleRoutingIT extends ESIntegTestCase {
 
         logger.info("--> deleting with no routing, should fail");
         try {
-            client().prepareDelete(indexOrAlias(), "type1", "1").get();
+            client().prepareDelete(indexOrAlias(), "type1", "1").setRefresh(true).execute().actionGet();
             fail("delete with missing routing when routing is required should fail");
         } catch (ElasticsearchException e) {
             assertThat(e.unwrapCause(), instanceOf(RoutingMissingException.class));
@@ -225,10 +223,10 @@ public class SimpleRoutingIT extends ESIntegTestCase {
             }
             GetResponse getResponse = client().prepareGet(indexOrAlias(), "type1", "1").setRouting("0").execute().actionGet();
             assertThat(getResponse.isExists(), equalTo(true));
-            assertThat(getResponse.getSourceAsMap().get("field"), equalTo("value2"));
+            assertThat((String)getResponse.getSourceAsMap().get("field"), equalTo("value2"));
         }
 
-        client().prepareDelete(indexOrAlias(), "type1", "1").setRouting("0").setRefreshPolicy(RefreshPolicy.IMMEDIATE).get();
+        client().prepareDelete(indexOrAlias(), "type1", "1").setRouting("0").setRefresh(true).execute().actionGet();
 
         for (int i = 0; i < 5; i++) {
             try {
@@ -239,6 +237,76 @@ public class SimpleRoutingIT extends ESIntegTestCase {
                 assertThat(e.getMessage(), equalTo("routing is required for [test]/[type1]/[1]"));
             }
             assertThat(client().prepareGet(indexOrAlias(), "type1", "1").setRouting("0").execute().actionGet().isExists(), equalTo(false));
+        }
+    }
+    
+    public void testRequiredRoutingWithPathMapping() throws Exception {
+        client().admin().indices().prepareCreate("test")
+                .addAlias(new Alias("alias"))
+                .addMapping("type1", XContentFactory.jsonBuilder().startObject().startObject("type1")
+                        .startObject("_routing").field("required", true).field("path", "routing_field").endObject().startObject("properties")
+                        .startObject("routing_field").field("type", "string").field("index", randomBoolean() ? "no" : "not_analyzed").field("doc_values", randomBoolean() ? "yes" : "no").endObject().endObject()
+                        .endObject().endObject())
+                .setSettings(IndexMetaData.SETTING_VERSION_CREATED, Version.V_1_4_2_ID)
+                .execute().actionGet();
+        ensureGreen();
+
+        logger.info("--> indexing with id [1], and routing [0]");
+        client().prepareIndex(indexOrAlias(), "type1", "1").setSource("field", "value1", "routing_field", "0").setRefresh(true).execute().actionGet();
+
+        logger.info("--> check failure with different routing");
+        try {
+            client().prepareIndex(indexOrAlias(), "type1", "1").setRouting("1").setSource("field", "value1", "routing_field", "0").setRefresh(true).execute().actionGet();
+            fail();
+        } catch (ElasticsearchException e) {
+            assertThat(e.unwrapCause(), instanceOf(MapperParsingException.class));
+        }
+
+
+        logger.info("--> verifying get with no routing, should fail");
+        for (int i = 0; i < 5; i++) {
+            try {
+                client().prepareGet(indexOrAlias(), "type1", "1").execute().actionGet().isExists();
+                fail();
+            } catch (RoutingMissingException e) {
+                assertThat(e.status(), equalTo(RestStatus.BAD_REQUEST));
+                assertThat(e.getMessage(), equalTo("routing is required for [test]/[type1]/[1]"));
+            }
+        }
+        logger.info("--> verifying get with routing, should find");
+        for (int i = 0; i < 5; i++) {
+            assertThat(client().prepareGet(indexOrAlias(), "type1", "1").setRouting("0").execute().actionGet().isExists(), equalTo(true));
+        }
+    }
+    
+    public void testRequiredRoutingWithPathMappingBulk() throws Exception {
+        client().admin().indices().prepareCreate("test")
+                .addAlias(new Alias("alias"))
+                .addMapping("type1", XContentFactory.jsonBuilder().startObject().startObject("type1")
+                        .startObject("_routing").field("required", true).field("path", "routing_field").endObject()
+                        .endObject().endObject())
+                .setSettings(IndexMetaData.SETTING_VERSION_CREATED, Version.V_1_4_2_ID)
+                .execute().actionGet();
+        ensureGreen();
+
+        logger.info("--> indexing with id [1], and routing [0]");
+        client().prepareBulk().add(
+                client().prepareIndex(indexOrAlias(), "type1", "1").setSource("field", "value1", "routing_field", "0")).execute().actionGet();
+        client().admin().indices().prepareRefresh().execute().actionGet();
+
+        logger.info("--> verifying get with no routing, should fail");
+        for (int i = 0; i < 5; i++) {
+            try {
+                client().prepareGet(indexOrAlias(), "type1", "1").execute().actionGet().isExists();
+                fail();
+            } catch (RoutingMissingException e) {
+                assertThat(e.status(), equalTo(RestStatus.BAD_REQUEST));
+                assertThat(e.getMessage(), equalTo("routing is required for [test]/[type1]/[1]"));
+            }
+        }
+        logger.info("--> verifying get with routing, should find");
+        for (int i = 0; i < 5; i++) {
+            assertThat(client().prepareGet(indexOrAlias(), "type1", "1").setRouting("0").execute().actionGet().isExists(), equalTo(true));
         }
     }
 
@@ -315,7 +383,38 @@ public class SimpleRoutingIT extends ESIntegTestCase {
             assertThat(bulkResponse.hasFailures(), equalTo(false));
         }
     }
+    
+    public void testRequiredRoutingWithPathNumericType() throws Exception {
+        
+        client().admin().indices().prepareCreate("test")
+                .addAlias(new Alias("alias"))
+                .addMapping("type1", XContentFactory.jsonBuilder().startObject().startObject("type1")
+                        .startObject("_routing").field("required", true).field("path", "routing_field").endObject()
+                        .endObject().endObject())
+                .setSettings(IndexMetaData.SETTING_VERSION_CREATED, Version.V_1_4_2_ID)
+                .execute().actionGet();
+        ensureGreen();
 
+        logger.info("--> indexing with id [1], and routing [0]");
+        client().prepareIndex(indexOrAlias(), "type1", "1").setSource("field", "value1", "routing_field", 0).execute().actionGet();
+        client().admin().indices().prepareRefresh().execute().actionGet();
+
+        logger.info("--> verifying get with no routing, should fail");
+        for (int i = 0; i < 5; i++) {
+            try {
+                client().prepareGet(indexOrAlias(), "type1", "1").execute().actionGet().isExists();
+                fail();
+            } catch (RoutingMissingException e) {
+                assertThat(e.status(), equalTo(RestStatus.BAD_REQUEST));
+                assertThat(e.getMessage(), equalTo("routing is required for [test]/[type1]/[1]"));
+            }
+        }
+        logger.info("--> verifying get with routing, should find");
+        for (int i = 0; i < 5; i++) {
+            assertThat(client().prepareGet(indexOrAlias(), "type1", "1").setRouting("0").execute().actionGet().isExists(), equalTo(true));
+        }
+    }
+    
     public void testRequiredRoutingMappingVariousAPIs() throws Exception {
         client().admin().indices().prepareCreate("test").addAlias(new Alias("alias"))
                 .addMapping("type1", XContentFactory.jsonBuilder().startObject().startObject("type1").startObject("_routing").field("required", true).endObject().endObject().endObject())
@@ -325,8 +424,7 @@ public class SimpleRoutingIT extends ESIntegTestCase {
         logger.info("--> indexing with id [1], and routing [0]");
         client().prepareIndex(indexOrAlias(), "type1", "1").setRouting("0").setSource("field", "value1").get();
         logger.info("--> indexing with id [2], and routing [0]");
-        client().prepareIndex(indexOrAlias(), "type1", "2").setRouting("0").setSource("field", "value2")
-                .setRefreshPolicy(RefreshPolicy.IMMEDIATE).get();
+        client().prepareIndex(indexOrAlias(), "type1", "2").setRouting("0").setSource("field", "value2").setRefresh(true).get();
 
         logger.info("--> verifying get with id [1] with routing [0], should succeed");
         assertThat(client().prepareGet(indexOrAlias(), "type1", "1").setRouting("0").execute().actionGet().isExists(), equalTo(true));
@@ -370,7 +468,7 @@ public class SimpleRoutingIT extends ESIntegTestCase {
         UpdateResponse updateResponse = client().prepareUpdate(indexOrAlias(), "type1", "1").setRouting("0")
                 .setDoc("field1", "value1").get();
         assertThat(updateResponse.getId(), equalTo("1"));
-        assertThat(updateResponse.getVersion(), equalTo(2L));
+        assertThat(updateResponse.getVersion(), equalTo(2l));
 
         try {
             client().prepareUpdate(indexOrAlias(), "type1", "1").setDoc("field1", "value1").get();

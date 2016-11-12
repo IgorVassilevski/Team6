@@ -23,13 +23,13 @@ import org.elasticsearch.Version;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.broadcast.node.TransportBroadcastByNodeAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardsIterator;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.settings.Settings;
@@ -54,7 +54,7 @@ public class TransportUpgradeStatusAction extends TransportBroadcastByNodeAction
     public TransportUpgradeStatusAction(Settings settings, ThreadPool threadPool, ClusterService clusterService, TransportService transportService,
                                         IndicesService indicesService, ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
         super(settings, UpgradeStatusAction.NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver,
-                UpgradeStatusRequest::new, ThreadPool.Names.MANAGEMENT);
+                UpgradeStatusRequest.class, ThreadPool.Names.MANAGEMENT);
         this.indicesService = indicesService;
     }
 
@@ -96,8 +96,8 @@ public class TransportUpgradeStatusAction extends TransportBroadcastByNodeAction
     @Override
     protected ShardUpgradeStatus shardOperation(UpgradeStatusRequest request, ShardRouting shardRouting) {
         IndexService indexService = indicesService.indexServiceSafe(shardRouting.shardId().getIndex());
-        IndexShard indexShard = indexService.getShard(shardRouting.shardId().id());
-        List<Segment> segments = indexShard.segments(false);
+        IndexShard indexShard = indexService.shardSafe(shardRouting.shardId().id());
+        List<Segment> segments = indexShard.engine().segments(false);
         long total_bytes = 0;
         long to_upgrade_bytes = 0;
         long to_upgrade_bytes_ancient = 0;

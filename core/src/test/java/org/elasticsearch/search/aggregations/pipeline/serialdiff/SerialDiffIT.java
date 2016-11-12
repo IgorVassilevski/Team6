@@ -19,35 +19,28 @@
 
 package org.elasticsearch.search.aggregations.pipeline.serialdiff;
 
+import com.google.common.collect.EvictingQueue;
 import org.elasticsearch.action.index.IndexRequestBuilder;
+import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.common.collect.EvictingQueue;
 import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
-import org.elasticsearch.search.aggregations.bucket.histogram.Histogram.Bucket;
+import org.elasticsearch.search.aggregations.bucket.histogram.InternalHistogram;
+import org.elasticsearch.search.aggregations.metrics.ValuesSourceMetricsAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.BucketHelpers;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregationHelperTests;
 import org.elasticsearch.search.aggregations.pipeline.SimpleValue;
-import org.elasticsearch.search.aggregations.support.ValuesSource;
-import org.elasticsearch.search.aggregations.support.ValuesSourceAggregationBuilder;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.hamcrest.Matchers;
+import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
-import static org.elasticsearch.search.aggregations.AggregationBuilders.avg;
-import static org.elasticsearch.search.aggregations.AggregationBuilders.histogram;
-import static org.elasticsearch.search.aggregations.AggregationBuilders.max;
-import static org.elasticsearch.search.aggregations.AggregationBuilders.min;
+import static org.elasticsearch.search.aggregations.AggregationBuilders.*;
 import static org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorBuilders.diff;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertSearchResponse;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsNull.notNullValue;
 import static org.hamcrest.core.IsNull.nullValue;
 
@@ -60,7 +53,7 @@ public class SerialDiffIT extends ESIntegTestCase {
     static int numBuckets;
     static int lag;
     static BucketHelpers.GapPolicy gapPolicy;
-    static ValuesSourceAggregationBuilder<? extends ValuesSource, ? extends ValuesSourceAggregationBuilder<?, ?>> metric;
+    static ValuesSourceMetricsAggregationBuilder metric;
     static List<PipelineAggregationHelperTests.MockBucket> mockHisto;
 
     static Map<String, ArrayList<Double>> testValues;
@@ -74,13 +67,12 @@ public class SerialDiffIT extends ESIntegTestCase {
             name = s;
         }
 
-        @Override
         public String toString(){
             return name;
         }
     }
 
-    private ValuesSourceAggregationBuilder<? extends ValuesSource, ? extends ValuesSourceAggregationBuilder<?, ?>> randomMetric(String name, String field) {
+    private ValuesSourceMetricsAggregationBuilder randomMetric(String name, String field) {
         int rand = randomIntBetween(0,3);
 
         switch (rand) {
@@ -168,7 +160,7 @@ public class SerialDiffIT extends ESIntegTestCase {
      */
     private void setupExpected(MetricTarget target) {
         ArrayList<Double> values = new ArrayList<>(numBuckets);
-        EvictingQueue<Double> lagWindow = new EvictingQueue<>(lag);
+        EvictingQueue<Double> lagWindow = EvictingQueue.create(lag);
 
         int counter = 0;
         for (PipelineAggregationHelperTests.MockBucket mockBucket : mockHisto) {
@@ -226,27 +218,31 @@ public class SerialDiffIT extends ESIntegTestCase {
         testValues.put(target.toString(), values);
     }
 
-    public void testBasicDiff() {
+    @Test
+    public void basicDiff() {
+
         SearchResponse response = client()
                 .prepareSearch("idx").setTypes("type")
                 .addAggregation(
                         histogram("histo").field(INTERVAL_FIELD).interval(interval)
                                 .extendedBounds(0L, (long) (interval * (numBuckets - 1)))
                                 .subAggregation(metric)
-                                .subAggregation(diff("diff_counts", "_count")
+                                .subAggregation(diff("diff_counts")
                                         .lag(lag)
-                                        .gapPolicy(gapPolicy))
-                                .subAggregation(diff("diff_values", "the_metric")
+                                        .gapPolicy(gapPolicy)
+                                        .setBucketsPaths("_count"))
+                                .subAggregation(diff("diff_values")
                                         .lag(lag)
-                                        .gapPolicy(gapPolicy))
+                                        .gapPolicy(gapPolicy)
+                                        .setBucketsPaths("the_metric"))
                 ).execute().actionGet();
 
         assertSearchResponse(response);
 
-        Histogram histo = response.getAggregations().get("histo");
+        InternalHistogram<InternalHistogram.Bucket> histo = response.getAggregations().get("histo");
         assertThat(histo, notNullValue());
         assertThat(histo.getName(), equalTo("histo"));
-        List<? extends Bucket> buckets = histo.getBuckets();
+        List<? extends InternalHistogram.Bucket> buckets = histo.getBuckets();
         assertThat("Size of buckets array is not correct.", buckets.size(), equalTo(mockHisto.size()));
 
         List<Double> expectedCounts = testValues.get(MetricTarget.COUNT.toString());
@@ -272,7 +268,8 @@ public class SerialDiffIT extends ESIntegTestCase {
         }
     }
 
-    public void testInvalidLagSize() {
+    @Test
+    public void invalidLagSize() {
         try {
             client()
                 .prepareSearch("idx").setTypes("type")
@@ -280,12 +277,15 @@ public class SerialDiffIT extends ESIntegTestCase {
                         histogram("histo").field(INTERVAL_FIELD).interval(interval)
                                 .extendedBounds(0L, (long) (interval * (numBuckets - 1)))
                                 .subAggregation(metric)
-                                .subAggregation(diff("diff_counts", "_count")
+                                .subAggregation(diff("diff_counts")
                                         .lag(-1)
-                                        .gapPolicy(gapPolicy))
+                                        .gapPolicy(gapPolicy)
+                                        .setBucketsPaths("_count"))
                 ).execute().actionGet();
-        } catch (IllegalArgumentException e) {
-            assertThat(e.getMessage(), is("[lag] must be a positive integer: [diff_counts]"));
+        } catch (SearchPhaseExecutionException e) {
+            // All good
         }
     }
+
+
 }

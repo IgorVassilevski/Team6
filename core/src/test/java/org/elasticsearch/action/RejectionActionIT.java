@@ -29,6 +29,7 @@ import org.elasticsearch.common.util.concurrent.EsRejectedExecutionException;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
+import org.junit.Test;
 
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -45,17 +46,18 @@ public class RejectionActionIT extends ESIntegTestCase {
     protected Settings nodeSettings(int nodeOrdinal) {
         return Settings.builder()
                 .put(super.nodeSettings(nodeOrdinal))
-                .put("thread_pool.search.size", 1)
-                .put("thread_pool.search.queue_size", 1)
-                .put("thread_pool.index.size", 1)
-                .put("thread_pool.index.queue_size", 1)
-                .put("thread_pool.get.size", 1)
-                .put("thread_pool.get.queue_size", 1)
+                .put("threadpool.search.size", 1)
+                .put("threadpool.search.queue_size", 1)
+                .put("threadpool.index.size", 1)
+                .put("threadpool.index.queue_size", 1)
+                .put("threadpool.get.size", 1)
+                .put("threadpool.get.queue_size", 1)
                 .build();
     }
 
 
-    public void testSimulatedSearchRejectionLoad() throws Throwable {
+    @Test
+    public void simulateSearchRejectionLoad() throws Throwable {
         for (int i = 0; i < 10; i++) {
             client().prepareIndex("test", "type", Integer.toString(i)).setSource("field", "1").get();
         }
@@ -75,7 +77,7 @@ public class RejectionActionIT extends ESIntegTestCase {
                         }
 
                         @Override
-                        public void onFailure(Exception e) {
+                        public void onFailure(Throwable e) {
                             responses.add(e);
                             latch.countDown();
                         }
@@ -92,7 +94,7 @@ public class RejectionActionIT extends ESIntegTestCase {
                     assertTrue("got unexpected reason..." + failure.reason(), failure.reason().toLowerCase(Locale.ENGLISH).contains("rejected"));
                 }
             } else {
-                Exception t = (Exception) response;
+                Throwable t = (Throwable) response;
                 Throwable unwrap = ExceptionsHelper.unwrapCause(t);
                 if (unwrap instanceof SearchPhaseExecutionException) {
                     SearchPhaseExecutionException e = (SearchPhaseExecutionException) unwrap;

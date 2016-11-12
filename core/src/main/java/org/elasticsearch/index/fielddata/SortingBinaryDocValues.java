@@ -19,12 +19,7 @@
 
 package org.elasticsearch.index.fielddata;
 
-import org.apache.lucene.util.ArrayUtil;
-import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.BytesRefBuilder;
-import org.apache.lucene.util.InPlaceMergeSorter;
-import org.apache.lucene.util.RamUsageEstimator;
-import org.apache.lucene.util.Sorter;
+import org.apache.lucene.util.*;
 
 import java.util.Arrays;
 

@@ -47,7 +47,6 @@ public class UpdateSettingsRequest extends AcknowledgedRequest<UpdateSettingsReq
     private String[] indices;
     private IndicesOptions indicesOptions = IndicesOptions.fromOptions(false, false, true, true);
     private Settings settings = EMPTY_SETTINGS;
-    private boolean preserveExisting = false;
 
     public UpdateSettingsRequest() {
     }
@@ -124,24 +123,7 @@ public class UpdateSettingsRequest extends AcknowledgedRequest<UpdateSettingsReq
      * Sets the settings to be updated (either json/yaml/properties format)
      */
     public UpdateSettingsRequest settings(String source) {
-        this.settings = Settings.builder().loadFromSource(source).build();
-        return this;
-    }
-
-    /**
-     * Returns <code>true</code> iff the settings update should only add but not update settings. If the setting already exists
-     * it should not be overwritten by this update. The default is <code>false</code>
-     */
-    public boolean isPreserveExisting() {
-        return preserveExisting;
-    }
-
-    /**
-     * Iff set to <code>true</code> this settings update will only add settings not already set on an index. Existing settings remain
-     * unchanged.
-     */
-    public UpdateSettingsRequest setPreserveExisting(boolean preserveExisting) {
-        this.preserveExisting = preserveExisting;
+        this.settings = Settings.settingsBuilder().loadFromSource(source).build();
         return this;
     }
 
@@ -167,7 +149,6 @@ public class UpdateSettingsRequest extends AcknowledgedRequest<UpdateSettingsReq
         indicesOptions = IndicesOptions.readIndicesOptions(in);
         settings = readSettingsFromStream(in);
         readTimeout(in);
-        preserveExisting = in.readBoolean();
     }
 
     @Override
@@ -177,6 +158,5 @@ public class UpdateSettingsRequest extends AcknowledgedRequest<UpdateSettingsReq
         indicesOptions.writeIndicesOptions(out);
         writeSettingsToStream(settings, out);
         writeTimeout(out);
-        out.writeBoolean(preserveExisting);
     }
 }

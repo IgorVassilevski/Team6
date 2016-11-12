@@ -19,6 +19,10 @@
 
 package org.elasticsearch.index.mapper;
 
+import com.google.common.base.Function;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import org.apache.lucene.analysis.Analyzer;
 import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.index.analysis.FieldNameAnalyzer;
@@ -58,9 +62,9 @@ public final class DocumentFieldMappers implements Iterable<FieldMapper> {
         for (FieldMapper mapper : mappers) {
             fieldMappers.put(mapper.name(), mapper);
             MappedFieldType fieldType = mapper.fieldType();
-            put(indexAnalyzers, fieldType.name(), fieldType.indexAnalyzer(), defaultIndex);
-            put(searchAnalyzers, fieldType.name(), fieldType.searchAnalyzer(), defaultSearch);
-            put(searchQuoteAnalyzers, fieldType.name(), fieldType.searchQuoteAnalyzer(), defaultSearchQuote);
+            put(indexAnalyzers, fieldType.names().indexName(), fieldType.indexAnalyzer(), defaultIndex);
+            put(searchAnalyzers, fieldType.names().indexName(), fieldType.searchAnalyzer(), defaultSearch);
+            put(searchQuoteAnalyzers, fieldType.names().indexName(), fieldType.searchQuoteAnalyzer(), defaultSearchQuote);
         }
         this.fieldMappers = Collections.unmodifiableMap(fieldMappers);
         this.indexAnalyzer = new FieldNameAnalyzer(indexAnalyzers);
@@ -74,12 +78,12 @@ public final class DocumentFieldMappers implements Iterable<FieldMapper> {
     }
 
     public Collection<String> simpleMatchToFullName(String pattern) {
-        Set<String> fields = new HashSet<>();
+        Set<String> fields = Sets.newHashSet();
         for (FieldMapper fieldMapper : this) {
-            if (Regex.simpleMatch(pattern, fieldMapper.fieldType().name())) {
-                fields.add(fieldMapper.fieldType().name());
-            } else if (Regex.simpleMatch(pattern, fieldMapper.fieldType().name())) {
-                fields.add(fieldMapper.fieldType().name());
+            if (Regex.simpleMatch(pattern, fieldMapper.fieldType().names().fullName())) {
+                fields.add(fieldMapper.fieldType().names().fullName());
+            } else if (Regex.simpleMatch(pattern, fieldMapper.fieldType().names().indexName())) {
+                fields.add(fieldMapper.fieldType().names().fullName());
             }
         }
         return fields;
@@ -91,7 +95,7 @@ public final class DocumentFieldMappers implements Iterable<FieldMapper> {
             return fieldMapper;
         }
         for (FieldMapper otherFieldMapper : this) {
-            if (otherFieldMapper.fieldType().name().equals(name)) {
+            if (otherFieldMapper.fieldType().names().indexName().equals(name)) {
                 return otherFieldMapper;
             }
         }

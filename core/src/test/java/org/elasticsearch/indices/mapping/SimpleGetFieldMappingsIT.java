@@ -19,6 +19,7 @@
 
 package org.elasticsearch.indices.mapping;
 
+import com.google.common.collect.Maps;
 import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsResponse;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -28,27 +29,19 @@ import org.hamcrest.Matchers;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 
-import static org.elasticsearch.cluster.metadata.IndexMetaData.INDEX_METADATA_BLOCK;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_METADATA;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_READ;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_WRITE;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_READ_ONLY;
+import static org.elasticsearch.cluster.metadata.IndexMetaData.*;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertBlocked;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasEntry;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.*;
 
 public class SimpleGetFieldMappingsIT extends ESIntegTestCase {
-
+    
     public void testGetMappingsWhereThereAreNone() {
         createIndex("index");
+        ensureYellow();
         GetFieldMappingsResponse response = client().admin().indices().prepareGetFieldMappings().get();
         assertThat(response.mappings().size(), equalTo(1));
         assertThat(response.mappings().get("index").size(), equalTo(0));
@@ -58,11 +51,11 @@ public class SimpleGetFieldMappingsIT extends ESIntegTestCase {
 
     private XContentBuilder getMappingForType(String type) throws IOException {
         return jsonBuilder().startObject().startObject(type).startObject("properties")
-                .startObject("field1").field("type", "text").endObject()
-                .startObject("obj").startObject("properties").startObject("subfield").field("type", "keyword").endObject().endObject().endObject()
+                .startObject("field1").field("type", "string").endObject()
+                .startObject("obj").startObject("properties").startObject("subfield").field("type", "string").field("index", "not_analyzed").endObject().endObject().endObject()
                 .endObject().endObject().endObject();
     }
-
+    
     public void testSimpleGetFieldMappings() throws Exception {
 
         assertAcked(prepareCreate("indexa")
@@ -72,6 +65,7 @@ public class SimpleGetFieldMappingsIT extends ESIntegTestCase {
                 .addMapping("typeA", getMappingForType("typeA"))
                 .addMapping("typeB", getMappingForType("typeB")));
 
+        ensureYellow();
 
         // Get mappings by full name
         GetFieldMappingsResponse response = client().admin().indices().prepareGetFieldMappings("indexa").setTypes("typeA").setFields("field1", "obj.subfield").get();
@@ -137,14 +131,16 @@ public class SimpleGetFieldMappingsIT extends ESIntegTestCase {
         assertAcked(prepareCreate("test").addMapping("type", getMappingForType("type")));
 
         client().prepareIndex("test", "type", "1").setSource("num", 1).get();
+        ensureYellow();
 
         GetFieldMappingsResponse response = client().admin().indices().prepareGetFieldMappings().setFields("num", "field1", "obj.subfield").includeDefaults(true).get();
 
-        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "num").sourceAsMap().get("num"), hasEntry("index", Boolean.TRUE));
+        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "num").sourceAsMap().get("num"), hasEntry("index", (Object) "not_analyzed"));
         assertThat((Map<String, Object>) response.fieldMappings("test", "type", "num").sourceAsMap().get("num"), hasEntry("type", (Object) "long"));
-        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "field1").sourceAsMap().get("field1"), hasEntry("index", Boolean.TRUE));
-        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "field1").sourceAsMap().get("field1"), hasEntry("type", (Object) "text"));
-        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "obj.subfield").sourceAsMap().get("subfield"), hasEntry("type", (Object) "keyword"));
+        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "field1").sourceAsMap().get("field1"), hasEntry("index", (Object) "analyzed"));
+        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "field1").sourceAsMap().get("field1"), hasEntry("type", (Object) "string"));
+        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "obj.subfield").sourceAsMap().get("subfield"), hasEntry("index", (Object) "not_analyzed"));
+        assertThat((Map<String, Object>) response.fieldMappings("test", "type", "obj.subfield").sourceAsMap().get("subfield"), hasEntry("type", (Object) "string"));
 
 
     }
@@ -152,8 +148,9 @@ public class SimpleGetFieldMappingsIT extends ESIntegTestCase {
     //fix #6552
     public void testSimpleGetFieldMappingsWithPretty() throws Exception {
         assertAcked(prepareCreate("index").addMapping("type", getMappingForType("type")));
-        Map<String, String> params = new HashMap<>();
+        Map<String, String> params = Maps.newHashMap();
         params.put("pretty", "true");
+        ensureYellow();
         GetFieldMappingsResponse response = client().admin().indices().prepareGetFieldMappings("index").setTypes("type").setFields("field1", "obj.subfield").get();
         XContentBuilder responseBuilder = XContentFactory.jsonBuilder().prettyPrint();
         responseBuilder.startObject();
@@ -185,6 +182,7 @@ public class SimpleGetFieldMappingsIT extends ESIntegTestCase {
         assertAcked(prepareCreate("test")
                 .addMapping("typeA", getMappingForType("typeA"))
                 .addMapping("typeB", getMappingForType("typeB")));
+        ensureYellow();
 
         for (String block : Arrays.asList(SETTING_BLOCKS_READ, SETTING_BLOCKS_WRITE, SETTING_READ_ONLY)) {
             try {

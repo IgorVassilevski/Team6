@@ -25,29 +25,16 @@ import org.elasticsearch.SpecialPermission;
 import org.elasticsearch.bootstrap.BootstrapInfo;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.component.AbstractComponent;
-import org.elasticsearch.common.logging.DeprecationLogger;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.script.ClassPermission;
-import org.elasticsearch.script.CompiledScript;
-import org.elasticsearch.script.ExecutableScript;
-import org.elasticsearch.script.LeafSearchScript;
-import org.elasticsearch.script.ScoreAccessor;
-import org.elasticsearch.script.ScriptEngineService;
-import org.elasticsearch.script.SearchScript;
+import org.elasticsearch.script.*;
 import org.elasticsearch.script.javascript.support.NativeList;
 import org.elasticsearch.script.javascript.support.NativeMap;
 import org.elasticsearch.script.javascript.support.ScriptValueConverter;
 import org.elasticsearch.search.lookup.LeafSearchLookup;
 import org.elasticsearch.search.lookup.SearchLookup;
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.ContextFactory;
-import org.mozilla.javascript.GeneratedClassLoader;
-import org.mozilla.javascript.PolicySecurityController;
+import org.mozilla.javascript.*;
 import org.mozilla.javascript.Script;
-import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.ScriptableObject;
-import org.mozilla.javascript.SecurityController;
-import org.mozilla.javascript.WrapFactory;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -65,10 +52,6 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  */
 public class JavaScriptScriptEngineService extends AbstractComponent implements ScriptEngineService {
-
-    public static final String NAME = "javascript";
-
-    public static final String EXTENSION = "js";
 
     private final AtomicLong counter = new AtomicLong();
 
@@ -136,10 +119,9 @@ public class JavaScriptScriptEngineService extends AbstractComponent implements 
     /** ensures this engine is initialized */
     public static void init() {}
 
+    @Inject
     public JavaScriptScriptEngineService(Settings settings) {
         super(settings);
-
-        deprecationLogger.deprecated("[javascript] scripts are deprecated, use [painless] scripts instead");
 
         Context ctx = Context.enter();
         try {
@@ -151,42 +133,48 @@ public class JavaScriptScriptEngineService extends AbstractComponent implements 
 
     @Override
     public void close() {
+
+    }
+
+    @Override
+    public void scriptRemoved(@Nullable CompiledScript compiledScript) {
         // Nothing to do here
     }
 
     @Override
-    public String getType() {
-        return NAME;
+    public String[] types() {
+        return new String[]{"js", "javascript"};
     }
 
     @Override
-    public String getExtension() {
-        return EXTENSION;
+    public String[] extensions() {
+        return new String[]{"js"};
     }
 
     @Override
-    public Object compile(String scriptName, String scriptSource, Map<String, String> params) {
+    public boolean sandboxed() {
+        return false;
+    }
+
+    @Override
+    public Object compile(String script, Map<String, String> params) {
         Context ctx = Context.enter();
         try {
-            return ctx.compileString(scriptSource, generateScriptName(), 1, DOMAIN);
+            return ctx.compileString(script, generateScriptName(), 1, DOMAIN);
         } finally {
             Context.exit();
         }
     }
 
     @Override
-    public ExecutableScript executable(CompiledScript compiledScript, @Nullable Map<String, Object> vars) {
-        deprecationLogger.deprecated("[javascript] scripts are deprecated, use [painless] scripts instead");
-
+    public ExecutableScript executable(CompiledScript compiledScript, Map<String, Object> vars) {
         Context ctx = Context.enter();
         try {
             Scriptable scope = ctx.newObject(globalScope);
             scope.setPrototype(globalScope);
             scope.setParentScope(null);
-            if (vars != null) {
-                for (Map.Entry<String, Object> entry : vars.entrySet()) {
-                    ScriptableObject.putProperty(scope, entry.getKey(), entry.getValue());
-                }
+            for (Map.Entry<String, Object> entry : vars.entrySet()) {
+                ScriptableObject.putProperty(scope, entry.getKey(), entry.getValue());
             }
 
             return new JavaScriptExecutableScript((Script) compiledScript.compiled(), scope);
@@ -197,8 +185,6 @@ public class JavaScriptScriptEngineService extends AbstractComponent implements 
 
     @Override
     public SearchScript search(final CompiledScript compiledScript, final SearchLookup lookup, @Nullable final Map<String, Object> vars) {
-        deprecationLogger.deprecated("[javascript] scripts are deprecated, use [painless] scripts instead");
-
         Context ctx = Context.enter();
         try {
             final Scriptable scope = ctx.newObject(globalScope);
@@ -320,6 +306,11 @@ public class JavaScriptScriptEngineService extends AbstractComponent implements 
         }
 
         @Override
+        public float runAsFloat() {
+            return ((Number) run()).floatValue();
+        }
+
+        @Override
         public long runAsLong() {
             return ((Number) run()).longValue();
         }
@@ -344,14 +335,12 @@ public class JavaScriptScriptEngineService extends AbstractComponent implements 
             setJavaPrimitiveWrap(false); // RingoJS does that..., claims its annoying...
         }
 
-        @Override
-        @SuppressWarnings("unchecked")
-        public Scriptable wrapAsJavaObject(Context cx, Scriptable scope, Object javaObject, Class<?> staticType) {
+        public Scriptable wrapAsJavaObject(Context cx, Scriptable scope, Object javaObject, Class staticType) {
             if (javaObject instanceof Map) {
-                return NativeMap.wrap(scope, (Map<Object, Object>) javaObject);
+                return NativeMap.wrap(scope, (Map) javaObject);
             }
             if (javaObject instanceof List) {
-                return NativeList.wrap(scope, (List<Object>) javaObject, staticType);
+                return NativeList.wrap(scope, (List) javaObject, staticType);
             }
             return super.wrapAsJavaObject(cx, scope, javaObject, staticType);
         }

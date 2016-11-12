@@ -18,7 +18,6 @@
  */
 package org.elasticsearch.search.aggregations.bucket.significant;
 
-import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.search.aggregations.InternalMultiBucketAggregation;
 import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
 
@@ -28,26 +27,25 @@ import java.util.List;
  * An aggregation that collects significant terms in comparison to a background set.
  */
 public interface SignificantTerms extends MultiBucketsAggregation, Iterable<SignificantTerms.Bucket> {
-    abstract static class Bucket extends InternalMultiBucketAggregation.InternalBucket {
+
+
+    static abstract class Bucket extends InternalMultiBucketAggregation.InternalBucket {
 
         long subsetDf;
         long subsetSize;
         long supersetDf;
         long supersetSize;
 
-        Bucket(long subsetDf, long subsetSize, long supersetDf, long supersetSize) {
+        protected Bucket(long subsetSize, long supersetSize) {
+            // for serialization
             this.subsetSize = subsetSize;
             this.supersetSize = supersetSize;
-            this.subsetDf = subsetDf;
-            this.supersetDf = supersetDf;
         }
 
-        /**
-         * Read from a stream.
-         */
-        protected Bucket(StreamInput in, long subsetSize, long supersetSize) {
-            this.subsetSize = subsetSize;
-            this.supersetSize = supersetSize;
+        Bucket(long subsetDf, long subsetSize, long supersetDf, long supersetSize) {
+            this(subsetSize, supersetSize);
+            this.subsetDf = subsetDf;
+            this.supersetDf = supersetDf;
         }
 
         abstract int compareTerm(SignificantTerms.Bucket other);

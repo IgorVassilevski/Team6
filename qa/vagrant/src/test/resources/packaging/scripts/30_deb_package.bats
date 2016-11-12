@@ -40,10 +40,6 @@ setup() {
     export_elasticsearch_paths
 }
 
-@test "[DEB] package depends on bash" {
-    dpkg -I elasticsearch-$(cat version).deb | grep "Depends:.*bash.*"
-}
-
 ##################################
 # Install DEB package
 ##################################
@@ -55,6 +51,13 @@ setup() {
 @test "[DEB] package is available" {
     count=$(ls elasticsearch-$(cat version).deb | wc -l)
     [ "$count" -eq 1 ]
+}
+
+@test "[DEB] deb is signed by our dummy key" {
+    # dpkg-sig verifies the signature against some user's .gnupg directory
+    # and its simpler to have that directory be the vagrant user's directory
+    # rather than root's.
+    sudo -u vagrant dpkg-sig --verify elasticsearch*.deb | grep 'GOODSIG'
 }
 
 @test "[DEB] package is not installed" {
@@ -132,8 +135,7 @@ setup() {
     # The configuration files are still here
     assert_file_exist "/etc/elasticsearch"
     assert_file_exist "/etc/elasticsearch/elasticsearch.yml"
-    assert_file_exist "/etc/elasticsearch/jvm.options"
-    assert_file_exist "/etc/elasticsearch/log4j2.properties"
+    assert_file_exist "/etc/elasticsearch/logging.yml"
 
     # The env file is still here
     assert_file_exist "/etc/default/elasticsearch"
@@ -153,8 +155,7 @@ setup() {
     # all remaining files are deleted by the purge
     assert_file_not_exist "/etc/elasticsearch"
     assert_file_not_exist "/etc/elasticsearch/elasticsearch.yml"
-    assert_file_not_exist "/etc/elasticsearch/jvm.options"
-    assert_file_not_exist "/etc/elasticsearch/log4j2.properties"
+    assert_file_not_exist "/etc/elasticsearch/logging.yml"
 
     assert_file_not_exist "/etc/default/elasticsearch"
 

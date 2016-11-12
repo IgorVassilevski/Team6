@@ -38,6 +38,7 @@
           status: "green"
 
   - match:   { indices.index1.shards.0.stores.0.allocation: "primary" }
+  - gte:     { indices.index1.shards.0.stores.0.version: 0 }
 
 ---
 "multiple indices test":
@@ -77,6 +78,9 @@
           status: "green"
 
   - match:   { indices.index1.shards.0.stores.0.allocation: "primary" }
+  - gte:     { indices.index1.shards.0.stores.0.version: 0 }
   - match:   { indices.index2.shards.0.stores.0.allocation: "primary" }
+  - gte:     { indices.index2.shards.0.stores.0.version: 0 }
   - match:   { indices.index2.shards.1.stores.0.allocation: "primary" }
+  - gte:     { indices.index2.shards.1.stores.0.version: 0 }
 

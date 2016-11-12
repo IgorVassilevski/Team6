@@ -24,8 +24,9 @@ import org.joda.time.DateTimeZone;
 import org.joda.time.MutableDateTime;
 import org.joda.time.format.DateTimeFormatter;
 
-import java.util.Objects;
 import java.util.concurrent.Callable;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * A parser for date/time formatted text with optional date math.
@@ -39,7 +40,7 @@ public class DateMathParser {
     private final FormatDateTimeFormatter dateTimeFormatter;
 
     public DateMathParser(FormatDateTimeFormatter dateTimeFormatter) {
-        Objects.requireNonNull(dateTimeFormatter);
+        checkNotNull(dateTimeFormatter);
         this.dateTimeFormatter = dateTimeFormatter;
     }
 

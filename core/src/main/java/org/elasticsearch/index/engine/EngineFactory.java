@@ -23,7 +23,7 @@ package org.elasticsearch.index.engine;
  */
 public interface EngineFactory {
 
-    Engine newReadWriteEngine(EngineConfig config);
+    public Engine newReadWriteEngine(EngineConfig config, boolean skipTranslogRecovery);
 
-    Engine newReadOnlyEngine(EngineConfig config);
+    public Engine newReadOnlyEngine(EngineConfig config);
 }

@@ -14,10 +14,10 @@ PUT my_index
     "my_type": {
       "properties": {
         "title": { <1>
-          "type": "text"
-        },
+          "type": "string"
+        }
         "content": { <1>
-          "type": "text"
+          "type": "string"
         },
         "date": { <2>
           "type": "date",
@@ -28,7 +28,7 @@ PUT my_index
   }
 }
 --------------------------------
-// CONSOLE
+// AUTOSENSE
 
 <1> The `title` and `content` fields will be included in the `_all` field.
 <2> The `date` field will not be included in the `_all` field.
@@ -50,18 +50,18 @@ PUT my_index
     "my_type": {
       "include_in_all": false, <1>
       "properties": {
-        "title":          { "type": "text" },
+        "title":          { "type": "string" },
         "author": {
           "include_in_all": true, <2>
           "properties": {
-            "first_name": { "type": "text" },
-            "last_name":  { "type": "text" }
+            "first_name": { "type": "string" },
+            "last_name":  { "type": "string" }
           }
         },
         "editor": {
           "properties": {
-            "first_name": { "type": "text" }, <3>
-            "last_name":  { "type": "text", "include_in_all": true } <3>
+            "first_name": { "type": "string" }, <3>
+            "last_name":  { "type": "string", "include_in_all": true } <3>
           }
         }
       }
@@ -69,7 +69,7 @@ PUT my_index
   }
 }
 --------------------------------
-// CONSOLE
+// AUTOSENSE
 
 <1> All fields in `my_type` are excluded from `_all`.
 <2> The `author.first_name` and `author.last_name` fields are included in `_all`.

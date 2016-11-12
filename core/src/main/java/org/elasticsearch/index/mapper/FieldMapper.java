@@ -21,19 +21,24 @@ package org.elasticsearch.index.mapper;
 
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
+import com.google.common.base.Function;
+import com.google.common.collect.Iterators;
+
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.index.IndexOptions;
 import org.elasticsearch.Version;
+import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.lucene.Lucene;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.analysis.NamedAnalyzer;
+import org.elasticsearch.index.fielddata.FieldDataType;
+import org.elasticsearch.index.mapper.core.TypeParsers;
+import org.elasticsearch.index.mapper.internal.AllFieldMapper;
+import org.elasticsearch.index.similarity.SimilarityLookupService;
 import org.elasticsearch.index.similarity.SimilarityProvider;
-import org.elasticsearch.index.similarity.SimilarityService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,23 +47,23 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.stream.StreamSupport;
 
 public abstract class FieldMapper extends Mapper implements Cloneable {
-    public static final Setting<Boolean> IGNORE_MALFORMED_SETTING =
-        Setting.boolSetting("index.mapping.ignore_malformed", false, Property.IndexScope);
-    public static final Setting<Boolean> COERCE_SETTING =
-        Setting.boolSetting("index.mapping.coerce", false, Property.IndexScope);
+
     public abstract static class Builder<T extends Builder, Y extends FieldMapper> extends Mapper.Builder<T, Y> {
 
         protected final MappedFieldType fieldType;
         protected final MappedFieldType defaultFieldType;
         private final IndexOptions defaultOptions;
         protected boolean omitNormsSet = false;
+        protected String indexName;
         protected Boolean includeInAll;
         protected boolean indexOptionsSet = false;
         protected boolean docValuesSet = false;
+        @Nullable
+        protected Settings fieldDataSettings;
         protected final MultiFields.Builder multiFieldsBuilder;
         protected CopyTo copyTo;
 
@@ -67,7 +72,6 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
             this.fieldType = fieldType.clone();
             this.defaultFieldType = defaultFieldType.clone();
             this.defaultOptions = fieldType.indexOptions(); // we have to store it the fieldType is mutable
-            this.docValuesSet = fieldType.hasDocValues();
             multiFieldsBuilder = new MultiFields.Builder();
         }
 
@@ -166,6 +170,11 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
             return builder;
         }
 
+        public T indexName(String indexName) {
+            this.indexName = indexName;
+            return builder;
+        }
+
         public T indexAnalyzer(NamedAnalyzer indexAnalyzer) {
             this.fieldType.setIndexAnalyzer(indexAnalyzer);
             return builder;
@@ -173,11 +182,6 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
 
         public T searchAnalyzer(NamedAnalyzer searchAnalyzer) {
             this.fieldType.setSearchAnalyzer(searchAnalyzer);
-            return builder;
-        }
-
-        public T searchQuoteAnalyzer(NamedAnalyzer searchQuoteAnalyzer) {
-            this.fieldType.setSearchQuoteAnalyzer(searchQuoteAnalyzer);
             return builder;
         }
 
@@ -191,9 +195,24 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
             return builder;
         }
 
+        public T normsLoading(MappedFieldType.Loading normsLoading) {
+            this.fieldType.setNormsLoading(normsLoading);
+            return builder;
+        }
+
+        public T fieldDataSettings(Settings settings) {
+            this.fieldDataSettings = settings;
+            return builder;
+        }
+
         public Builder nullValue(Object nullValue) {
             this.fieldType.setNullValue(nullValue);
             return this;
+        }
+
+        public T multiFieldPathType(ContentPath.Type pathType) {
+            multiFieldsBuilder.pathType(pathType);
+            return builder;
         }
 
         public T addMultiField(Mapper.Builder mapperBuilder) {
@@ -206,51 +225,67 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
             return builder;
         }
 
-        protected String buildFullName(BuilderContext context) {
-            return context.path().pathAsText(name);
+        protected MappedFieldType.Names buildNames(BuilderContext context) {
+            return new MappedFieldType.Names(buildIndexName(context), buildIndexNameClean(context), buildFullName(context));
         }
 
-        protected boolean defaultDocValues(Version indexCreated) {
-            if (indexCreated.onOrAfter(Version.V_5_0_0_alpha1)) {
-                // add doc values by default to keyword (boolean, numerics, etc.) fields
-                return fieldType.tokenized() == false;
-            } else {
-                return fieldType.tokenized() == false && fieldType.indexOptions() != IndexOptions.NONE;
+        protected String buildIndexName(BuilderContext context) {
+            if (context.indexCreatedVersion().onOrAfter(Version.V_2_0_0_beta1)) {
+                return buildFullName(context);
             }
+            String actualIndexName = indexName == null ? name : indexName;
+            return context.path().pathAsText(actualIndexName);
+        }
+
+        protected String buildIndexNameClean(BuilderContext context) {
+            if (context.indexCreatedVersion().onOrAfter(Version.V_2_0_0_beta1)) {
+                return buildFullName(context);
+            }
+            return indexName == null ? name : indexName;
+        }
+
+        protected String buildFullName(BuilderContext context) {
+            return context.path().fullPathAsText(name);
         }
 
         protected void setupFieldType(BuilderContext context) {
-            fieldType.setName(buildFullName(context));
-            if (context.indexCreatedVersion().before(Version.V_5_0_0_alpha1)) {
-                fieldType.setOmitNorms(fieldType.omitNorms() && fieldType.boost() == 1.0f);
-            }
+            fieldType.setNames(buildNames(context));
             if (fieldType.indexAnalyzer() == null && fieldType.tokenized() == false && fieldType.indexOptions() != IndexOptions.NONE) {
                 fieldType.setIndexAnalyzer(Lucene.KEYWORD_ANALYZER);
                 fieldType.setSearchAnalyzer(Lucene.KEYWORD_ANALYZER);
             }
-            boolean defaultDocValues = defaultDocValues(context.indexCreatedVersion());
+            if (fieldDataSettings != null) {
+                Settings settings = Settings.builder().put(fieldType.fieldDataType().getSettings()).put(fieldDataSettings).build();
+                fieldType.setFieldDataType(new FieldDataType(fieldType.fieldDataType().getType(), settings));
+            }
+            boolean defaultDocValues = false; // pre 2.0
+            if (context.indexCreatedVersion().onOrAfter(Version.V_2_0_0_beta1)) {
+                defaultDocValues = fieldType.tokenized() == false && fieldType.indexOptions() != IndexOptions.NONE;
+            }
+            // backcompat for "fielddata: format: docvalues" for now...
+            boolean fieldDataDocValues = fieldType.fieldDataType() != null
+                && FieldDataType.DOC_VALUES_FORMAT_VALUE.equals(fieldType.fieldDataType().getFormat(context.indexSettings()));
+            if (fieldDataDocValues && docValuesSet && fieldType.hasDocValues() == false) {
+                // this forces the doc_values setting to be written, so fielddata does not mask the original setting
+                defaultDocValues = true;
+            }
             defaultFieldType.setHasDocValues(defaultDocValues);
             if (docValuesSet == false) {
-                fieldType.setHasDocValues(defaultDocValues);
+                fieldType.setHasDocValues(defaultDocValues || fieldDataDocValues);
             }
         }
     }
 
-    private final Version indexCreatedVersion;
     protected MappedFieldType fieldType;
     protected final MappedFieldType defaultFieldType;
     protected MultiFields multiFields;
     protected CopyTo copyTo;
+    protected final boolean indexCreatedBefore2x;
 
     protected FieldMapper(String simpleName, MappedFieldType fieldType, MappedFieldType defaultFieldType, Settings indexSettings, MultiFields multiFields, CopyTo copyTo) {
         super(simpleName);
         assert indexSettings != null;
-        this.indexCreatedVersion = Version.indexCreated(indexSettings);
-        if (indexCreatedVersion.onOrAfter(Version.V_5_0_0_alpha6)) {
-            if (simpleName.isEmpty()) {
-                throw new IllegalArgumentException("name cannot be empty string");
-            }
-        }
+        this.indexCreatedBefore2x = Version.indexCreated(indexSettings).before(Version.V_2_0_0_beta1);
         fieldType.freeze();
         this.fieldType = fieldType;
         defaultFieldType.freeze();
@@ -261,7 +296,7 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
 
     @Override
     public String name() {
-        return fieldType().name();
+        return fieldType().names().fullName();
     }
 
     public MappedFieldType fieldType() {
@@ -285,16 +320,13 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
         try {
             parseCreateField(context, fields);
             for (Field field : fields) {
-                if (!customBoost()
-                        // don't set boosts eg. on dv fields
-                        && field.fieldType().indexOptions() != IndexOptions.NONE
-                        && indexCreatedVersion.before(Version.V_5_0_0_alpha1)) {
+                if (!customBoost()) {
                     field.setBoost(fieldType().boost());
                 }
                 context.doc().add(field);
             }
         } catch (Exception e) {
-            throw new MapperParsingException("failed to parse [" + fieldType().name() + "]", e);
+            throw new MapperParsingException("failed to parse [" + fieldType().names().fullName() + "]", e);
         }
         multiFields.parse(this, context);
         return null;
@@ -343,7 +375,7 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
             if (mergeWith instanceof FieldMapper) {
                 mergedType = ((FieldMapper) mergeWith).contentType();
             }
-            throw new IllegalArgumentException("mapper [" + fieldType().name() + "] of different type, current_type [" + contentType() + "], merged_type [" + mergedType + "]");
+            throw new IllegalArgumentException("mapper [" + fieldType().names().fullName() + "] of different type, current_type [" + contentType() + "], merged_type [" + mergedType + "]");
         }
         FieldMapper fieldMergeWith = (FieldMapper) mergeWith;
         multiFields = multiFields.merge(fieldMergeWith.multiFields);
@@ -355,14 +387,14 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
 
     @Override
     public FieldMapper updateFieldType(Map<String, MappedFieldType> fullNameToFieldType) {
-        final MappedFieldType newFieldType = fullNameToFieldType.get(fieldType.name());
+        final MappedFieldType newFieldType = fullNameToFieldType.get(fieldType.names().fullName());
         if (newFieldType == null) {
             // this field does not exist in the mappings yet
             // this can happen if this mapper represents a mapping update
             return this;
         } else if (fieldType.getClass() != newFieldType.getClass()) {
             throw new IllegalStateException("Mixing up field types: " +
-                fieldType.getClass() + " != " + newFieldType.getClass() + " on field " + fieldType.name());
+                fieldType.getClass() + " != " + newFieldType.getClass() + " on field " + fieldType.names().fullName());
         }
         MultiFields updatedMultiFields = multiFields.updateFieldType(fullNameToFieldType);
         if (fieldType == newFieldType && multiFields == updatedMultiFields) {
@@ -385,6 +417,9 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
     protected void doXContentBody(XContentBuilder builder, boolean includeDefaults, Params params) throws IOException {
 
         builder.field("type", contentType());
+        if (indexCreatedBefore2x && (includeDefaults || !simpleName().equals(fieldType().names().originalIndexName()))) {
+            builder.field("index_name", fieldType().names().originalIndexName());
+        }
 
         if (includeDefaults || fieldType().boost() != 1.0f) {
             builder.field("boost", fieldType().boost());
@@ -394,7 +429,7 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
         boolean defaultIndexed = defaultFieldType.indexOptions() != IndexOptions.NONE;
         if (includeDefaults || indexed != defaultIndexed ||
             fieldType().tokenized() != defaultFieldType.tokenized()) {
-            builder.field("index", indexTokenizeOption(indexed, fieldType().tokenized()));
+            builder.field("index", indexTokenizeOptionToString(indexed, fieldType().tokenized()));
         }
         if (includeDefaults || fieldType().stored() != defaultFieldType.stored()) {
             builder.field("store", fieldType().stored());
@@ -403,22 +438,29 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
         if (includeDefaults || fieldType().storeTermVectors() != defaultFieldType.storeTermVectors()) {
             builder.field("term_vector", termVectorOptionsToString(fieldType()));
         }
-        if (includeDefaults || fieldType().omitNorms() != defaultFieldType.omitNorms()) {
-            builder.field("norms", fieldType().omitNorms() == false);
+        if (includeDefaults || fieldType().omitNorms() != defaultFieldType.omitNorms() || fieldType().normsLoading() != null) {
+            builder.startObject("norms");
+            if (includeDefaults || fieldType().omitNorms() != defaultFieldType.omitNorms()) {
+                builder.field("enabled", !fieldType().omitNorms());
+            }
+            if (fieldType().normsLoading() != null) {
+                builder.field(MappedFieldType.Loading.KEY, fieldType().normsLoading());
+            }
+            builder.endObject();
         }
         if (indexed && (includeDefaults || fieldType().indexOptions() != defaultFieldType.indexOptions())) {
             builder.field("index_options", indexOptionToString(fieldType().indexOptions()));
-        }
-        if (includeDefaults || fieldType().eagerGlobalOrdinals() != defaultFieldType.eagerGlobalOrdinals()) {
-            builder.field("eager_global_ordinals", fieldType().eagerGlobalOrdinals());
         }
 
         if (fieldType().similarity() != null) {
             builder.field("similarity", fieldType().similarity().name());
         } else if (includeDefaults) {
-            builder.field("similarity", SimilarityService.DEFAULT_SIMILARITY);
+            builder.field("similarity", SimilarityLookupService.DEFAULT_SIMILARITY);
         }
 
+        if (includeDefaults || hasCustomFieldDataSettings()) {
+            builder.field("fielddata", fieldType().fieldDataType().getSettings().getAsMap());
+        }
         multiFields.toXContent(builder, params);
 
         if (copyTo != null) {
@@ -440,9 +482,9 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
             boolean hasDifferentSearchQuoteAnalyzer = fieldType().searchAnalyzer().name().equals(fieldType().searchQuoteAnalyzer().name()) == false;
             if (includeDefaults || hasDefaultIndexAnalyzer == false || hasDifferentSearchAnalyzer || hasDifferentSearchQuoteAnalyzer) {
                 builder.field("analyzer", fieldType().indexAnalyzer().name());
-                if (includeDefaults || hasDifferentSearchAnalyzer || hasDifferentSearchQuoteAnalyzer) {
+                if (hasDifferentSearchAnalyzer || hasDifferentSearchQuoteAnalyzer) {
                     builder.field("search_analyzer", fieldType().searchAnalyzer().name());
-                    if (includeDefaults || hasDifferentSearchQuoteAnalyzer) {
+                    if (hasDifferentSearchQuoteAnalyzer) {
                         builder.field("search_quote_analyzer", fieldType().searchQuoteAnalyzer().name());
                     }
                 }
@@ -493,9 +535,18 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
         }
     }
 
-    /* Only protected so that string can override it */
-    protected Object indexTokenizeOption(boolean indexed, boolean tokenized) {
-        return indexed;
+    protected static String indexTokenizeOptionToString(boolean indexed, boolean tokenized) {
+        if (!indexed) {
+            return "no";
+        } else if (tokenized) {
+            return "analyzed";
+        } else {
+            return "not_analyzed";
+        }
+    }
+
+    protected boolean hasCustomFieldDataSettings() {
+        return fieldType().fieldDataType() != null && fieldType().fieldDataType().equals(defaultFieldType.fieldDataType()) == false;
     }
 
     protected abstract String contentType();
@@ -503,12 +554,18 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
     public static class MultiFields {
 
         public static MultiFields empty() {
-            return new MultiFields(ImmutableOpenMap.<String, FieldMapper>of());
+            return new MultiFields(ContentPath.Type.FULL, ImmutableOpenMap.<String, FieldMapper>of());
         }
 
         public static class Builder {
 
             private final ImmutableOpenMap.Builder<String, Mapper.Builder> mapperBuilders = ImmutableOpenMap.builder();
+            private ContentPath.Type pathType = ContentPath.Type.FULL;
+
+            public Builder pathType(ContentPath.Type pathType) {
+                this.pathType = pathType;
+                return this;
+            }
 
             public Builder add(Mapper.Builder builder) {
                 mapperBuilders.put(builder.name(), builder);
@@ -517,9 +574,13 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
 
             @SuppressWarnings("unchecked")
             public MultiFields build(FieldMapper.Builder mainFieldBuilder, BuilderContext context) {
-                if (mapperBuilders.isEmpty()) {
+                if (pathType == ContentPath.Type.FULL && mapperBuilders.isEmpty()) {
                     return empty();
+                } else if (mapperBuilders.isEmpty()) {
+                    return new MultiFields(pathType, ImmutableOpenMap.<String, FieldMapper>of());
                 } else {
+                    ContentPath.Type origPathType = context.path().pathType();
+                    context.path().pathType(pathType);
                     context.path().add(mainFieldBuilder.name());
                     ImmutableOpenMap.Builder mapperBuilders = this.mapperBuilders;
                     for (ObjectObjectCursor<String, Mapper.Builder> cursor : this.mapperBuilders) {
@@ -530,19 +591,26 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
                         mapperBuilders.put(key, mapper);
                     }
                     context.path().remove();
+                    context.path().pathType(origPathType);
                     ImmutableOpenMap.Builder<String, FieldMapper> mappers = mapperBuilders.cast();
-                    return new MultiFields(mappers.build());
+                    return new MultiFields(pathType, mappers.build());
                 }
             }
         }
 
+        private final ContentPath.Type pathType;
         private final ImmutableOpenMap<String, FieldMapper> mappers;
 
-        private MultiFields(ImmutableOpenMap<String, FieldMapper> mappers) {
+        private MultiFields(ContentPath.Type pathType, ImmutableOpenMap<String, FieldMapper> mappers) {
+            this.pathType = pathType;
             ImmutableOpenMap.Builder<String, FieldMapper> builder = new ImmutableOpenMap.Builder<>();
             // we disable the all in multi-field mappers
             for (ObjectObjectCursor<String, FieldMapper> cursor : mappers) {
-                builder.put(cursor.key, cursor.value);
+                FieldMapper mapper = cursor.value;
+                if (mapper instanceof AllFieldMapper.IncludeInAll) {
+                    mapper = (FieldMapper) ((AllFieldMapper.IncludeInAll) mapper).unsetIncludeInAll();
+                }
+                builder.put(cursor.key, mapper);
             }
             this.mappers = builder.build();
         }
@@ -555,20 +623,31 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
 
             context = context.createMultiFieldContext();
 
+            ContentPath.Type origPathType = context.path().pathType();
+            context.path().pathType(pathType);
+
             context.path().add(mainField.simpleName());
             for (ObjectCursor<FieldMapper> cursor : mappers.values()) {
                 cursor.value.parse(context);
             }
             context.path().remove();
+            context.path().pathType(origPathType);
         }
 
         public MultiFields merge(MultiFields mergeWith) {
+            if (pathType != mergeWith.pathType) {
+                throw new IllegalArgumentException("Can't change path type from [" + pathType + "] to [" + mergeWith.pathType + "]");
+            }
             ImmutableOpenMap.Builder<String, FieldMapper> newMappersBuilder = ImmutableOpenMap.builder(mappers);
 
             for (ObjectCursor<FieldMapper> cursor : mergeWith.mappers.values()) {
                 FieldMapper mergeWithMapper = cursor.value;
                 FieldMapper mergeIntoMapper = mappers.get(mergeWithMapper.simpleName());
                 if (mergeIntoMapper == null) {
+                    // we disable the all in multi-field mappers
+                    if (mergeWithMapper instanceof AllFieldMapper.IncludeInAll) {
+                        mergeWithMapper = (FieldMapper) ((AllFieldMapper.IncludeInAll) mergeWithMapper).unsetIncludeInAll();
+                    }
                     newMappersBuilder.put(mergeWithMapper.simpleName(), mergeWithMapper);
                 } else {
                     FieldMapper merged = mergeIntoMapper.merge(mergeWithMapper, false);
@@ -577,7 +656,7 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
             }
 
             ImmutableOpenMap<String, FieldMapper> mappers = newMappersBuilder.build();
-            return new MultiFields(mappers);
+            return new MultiFields(pathType, mappers);
         }
 
         public MultiFields updateFieldType(Map<String, MappedFieldType> fullNameToFieldType) {
@@ -598,14 +677,22 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
             }
 
             ImmutableOpenMap<String, FieldMapper> mappers = newMappersBuilder.build();
-            return new MultiFields(mappers);
+            return new MultiFields(pathType, mappers);
         }
 
         public Iterator<Mapper> iterator() {
-            return StreamSupport.stream(mappers.values().spliterator(), false).map((p) -> (Mapper)p.value).iterator();
+            return Iterators.transform(mappers.values().iterator(), new Function<ObjectCursor<FieldMapper>, Mapper>() {
+                @Override
+                public Mapper apply(@Nullable ObjectCursor<FieldMapper> cursor) {
+                    return cursor.value;
+                }
+            });
         }
 
         public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+            if (pathType != ContentPath.Type.FULL) {
+                builder.field("path", pathType.name().toLowerCase(Locale.ROOT));
+            }
             if (!mappers.isEmpty()) {
                 // sort the mappers so we get consistent serialization format
                 Mapper[] sortedMappers = mappers.values().toArray(Mapper.class);
@@ -663,6 +750,16 @@ public abstract class FieldMapper extends Mapper implements Cloneable {
         public List<String> copyToFields() {
             return copyToFields;
         }
+    }
+
+    /**
+     * Fields might not be available before indexing, for example _all, token_count,...
+     * When get is called and these fields are requested, this case needs special treatment.
+     *
+     * @return If the field is available before indexing or not.
+     */
+    public boolean isGenerated() {
+        return false;
     }
 
 }

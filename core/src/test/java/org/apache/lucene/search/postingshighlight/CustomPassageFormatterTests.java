@@ -23,12 +23,16 @@ import org.apache.lucene.search.highlight.DefaultEncoder;
 import org.apache.lucene.search.highlight.SimpleHTMLEncoder;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 
 public class CustomPassageFormatterTests extends ESTestCase {
+
+    @Test
     public void testSimpleFormat() {
         String content = "This is a really cool highlighter. Postings highlighter gives nice snippets back. No matches here.";
 
@@ -70,6 +74,7 @@ public class CustomPassageFormatterTests extends ESTestCase {
         assertThat(fragments[2].isHighlighted(), equalTo(false));
     }
 
+    @Test
     public void testHtmlEncodeFormat() {
         String content = "<b>This is a really cool highlighter.</b> Postings highlighter gives nice snippets back.";
 

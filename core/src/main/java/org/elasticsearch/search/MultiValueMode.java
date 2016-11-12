@@ -20,20 +20,12 @@
 
 package org.elasticsearch.search;
 
-import org.apache.lucene.index.BinaryDocValues;
-import org.apache.lucene.index.DocValues;
-import org.apache.lucene.index.NumericDocValues;
-import org.apache.lucene.index.RandomAccessOrds;
-import org.apache.lucene.index.SortedDocValues;
-import org.apache.lucene.index.SortedNumericDocValues;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.util.BitSet;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BitSet;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.index.fielddata.FieldData;
 import org.elasticsearch.index.fielddata.NumericDoubleValues;
 import org.elasticsearch.index.fielddata.SortedBinaryDocValues;
@@ -45,7 +37,7 @@ import java.util.Locale;
 /**
  * Defines what values to pick in the case a document contains multiple values for a particular field.
  */
-public enum MultiValueMode implements Writeable {
+public enum MultiValueMode {
 
     /**
      * Pick the sum of all the values.
@@ -519,7 +511,7 @@ public enum MultiValueMode implements Writeable {
     public static MultiValueMode fromString(String sortMode) {
         try {
             return valueOf(sortMode.toUpperCase(Locale.ROOT));
-        } catch (Exception e) {
+        } catch (Throwable t) {
             throw new IllegalArgumentException("Illegal sort mode: " + sortMode);
         }
     }
@@ -931,18 +923,5 @@ public enum MultiValueMode implements Writeable {
         int count();
         void setDocument(int docId);
         double valueAt(int index);
-    }
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeVInt(this.ordinal());
-    }
-
-    public static MultiValueMode readMultiValueModeFrom(StreamInput in) throws IOException {
-        int ordinal = in.readVInt();
-        if (ordinal < 0 || ordinal >= values().length) {
-            throw new IOException("Unknown MultiValueMode ordinal [" + ordinal + "]");
-        }
-        return values()[ordinal];
     }
 }

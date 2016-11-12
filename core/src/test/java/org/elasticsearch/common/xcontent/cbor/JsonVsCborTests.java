@@ -25,6 +25,7 @@ import org.elasticsearch.common.xcontent.XContentGenerator;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 
@@ -35,7 +36,9 @@ import static org.hamcrest.Matchers.nullValue;
  *
  */
 public class JsonVsCborTests extends ESTestCase {
-    public void testCompareParsingTokens() throws IOException {
+
+    @Test
+    public void compareParsingTokens() throws IOException {
         BytesStreamOutput xsonOs = new BytesStreamOutput();
         XContentGenerator xsonGen = XContentFactory.xContent(XContentType.CBOR).createGenerator(xsonOs);
 
@@ -63,8 +66,7 @@ public class JsonVsCborTests extends ESTestCase {
         xsonGen.close();
         jsonGen.close();
 
-        verifySameTokens(XContentFactory.xContent(XContentType.JSON).createParser(jsonOs.bytes()),
-            XContentFactory.xContent(XContentType.CBOR).createParser(xsonOs.bytes()));
+        verifySameTokens(XContentFactory.xContent(XContentType.JSON).createParser(jsonOs.bytes().toBytes()), XContentFactory.xContent(XContentType.CBOR).createParser(xsonOs.bytes().toBytes()));
     }
 
     private void verifySameTokens(XContentParser parser1, XContentParser parser2) throws IOException {

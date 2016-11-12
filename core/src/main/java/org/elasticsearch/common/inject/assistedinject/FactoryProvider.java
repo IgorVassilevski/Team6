@@ -16,6 +16,9 @@
 
 package org.elasticsearch.common.inject.assistedinject;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import org.elasticsearch.common.inject.ConfigurationException;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.inject.Injector;
@@ -34,15 +37,9 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singleton;
-import static java.util.Collections.unmodifiableSet;
 
 /**
  * Provides a factory that combines the caller's arguments with injector-supplied values to
@@ -134,7 +131,7 @@ public class FactoryProvider<F> implements Provider<F>, HasDependencies {
 
     /*
     * This class implements the old @AssistedInject implementation that manually matches constructors
-    * to factory methods.
+    * to factory methods. The new child injector implementation lives in FactoryProvider2.
     */
 
     private Injector injector;
@@ -142,11 +139,44 @@ public class FactoryProvider<F> implements Provider<F>, HasDependencies {
     private final TypeLiteral<F> factoryType;
     private final Map<Method, AssistedConstructor<?>> factoryMethodToConstructor;
 
+    public static <F> Provider<F> newFactory(
+            Class<F> factoryType, Class<?> implementationType) {
+        return newFactory(TypeLiteral.get(factoryType), TypeLiteral.get(implementationType));
+    }
+
+    public static <F> Provider<F> newFactory(
+            TypeLiteral<F> factoryType, TypeLiteral<?> implementationType) {
+        Map<Method, AssistedConstructor<?>> factoryMethodToConstructor
+                = createMethodMapping(factoryType, implementationType);
+
+        if (!factoryMethodToConstructor.isEmpty()) {
+            return new FactoryProvider<>(factoryType, factoryMethodToConstructor);
+        } else {
+            return new FactoryProvider2<>(factoryType, Key.get(implementationType));
+        }
+    }
+
     private FactoryProvider(TypeLiteral<F> factoryType,
                             Map<Method, AssistedConstructor<?>> factoryMethodToConstructor) {
         this.factoryType = factoryType;
         this.factoryMethodToConstructor = factoryMethodToConstructor;
         checkDeclaredExceptionsMatch();
+    }
+
+    @Inject
+    void setInjectorAndCheckUnboundParametersAreInjectable(Injector injector) {
+        this.injector = injector;
+        for (AssistedConstructor<?> c : factoryMethodToConstructor.values()) {
+            for (Parameter p : c.getAllParameters()) {
+                if (!p.isProvidedByFactory() && !paramCanBeInjected(p, injector)) {
+                    // this is lame - we're not using the proper mechanism to add an
+                    // error to the injector. Throughout this class we throw exceptions
+                    // to add errors, which isn't really the best way in Guice
+                    throw newConfigurationException("Parameter of type '%s' is not injectable or annotated "
+                            + "with @Assisted for Constructor '%s'", p, c);
+                }
+            }
+        }
     }
 
     private void checkDeclaredExceptionsMatch() {
@@ -171,9 +201,85 @@ public class FactoryProvider<F> implements Provider<F>, HasDependencies {
         return false;
     }
 
+    private boolean paramCanBeInjected(Parameter parameter, Injector injector) {
+        return parameter.isBound(injector);
+    }
+
+    private static Map<Method, AssistedConstructor<?>> createMethodMapping(
+            TypeLiteral<?> factoryType, TypeLiteral<?> implementationType) {
+        List<AssistedConstructor<?>> constructors = new ArrayList<>();
+
+        for (Constructor<?> constructor : implementationType.getRawType().getDeclaredConstructors()) {
+            if (constructor.getAnnotation(AssistedInject.class) != null) {
+                @SuppressWarnings("unchecked") // the constructor type and implementation type agree
+                        AssistedConstructor assistedConstructor = new AssistedConstructor(
+                        constructor, implementationType.getParameterTypes(constructor));
+                constructors.add(assistedConstructor);
+            }
+        }
+
+        if (constructors.isEmpty()) {
+            return ImmutableMap.of();
+        }
+
+        Method[] factoryMethods = factoryType.getRawType().getMethods();
+
+        if (constructors.size() != factoryMethods.length) {
+            throw newConfigurationException("Constructor mismatch: %s has %s @AssistedInject "
+                    + "constructors, factory %s has %s creation methods", implementationType,
+                    constructors.size(), factoryType, factoryMethods.length);
+        }
+
+        Map<ParameterListKey, AssistedConstructor> paramsToConstructor = Maps.newHashMap();
+
+        for (AssistedConstructor c : constructors) {
+            if (paramsToConstructor.containsKey(c.getAssistedParameters())) {
+                throw new RuntimeException("Duplicate constructor, " + c);
+            }
+            paramsToConstructor.put(c.getAssistedParameters(), c);
+        }
+
+        Map<Method, AssistedConstructor<?>> result = Maps.newHashMap();
+        for (Method method : factoryMethods) {
+            if (!method.getReturnType().isAssignableFrom(implementationType.getRawType())) {
+                throw newConfigurationException("Return type of method %s is not assignable from %s",
+                        method, implementationType);
+            }
+
+            List<Type> parameterTypes = new ArrayList<>();
+            for (TypeLiteral<?> parameterType : factoryType.getParameterTypes(method)) {
+                parameterTypes.add(parameterType.getType());
+            }
+            ParameterListKey methodParams = new ParameterListKey(parameterTypes);
+
+            if (!paramsToConstructor.containsKey(methodParams)) {
+                throw newConfigurationException("%s has no @AssistInject constructor that takes the "
+                        + "@Assisted parameters %s in that order. @AssistInject constructors are %s",
+                        implementationType, methodParams, paramsToConstructor.values());
+            }
+
+            method.getParameterAnnotations();
+            for (Annotation[] parameterAnnotations : method.getParameterAnnotations()) {
+                for (Annotation parameterAnnotation : parameterAnnotations) {
+                    if (parameterAnnotation.annotationType() == Assisted.class) {
+                        throw newConfigurationException("Factory method %s has an @Assisted parameter, which "
+                                + "is incompatible with the deprecated @AssistedInject annotation. Please replace "
+                                + "@AssistedInject with @Inject on the %s constructor.",
+                                method, implementationType);
+                    }
+                }
+            }
+
+            AssistedConstructor matchingConstructor = paramsToConstructor.remove(methodParams);
+
+            result.put(method, matchingConstructor);
+        }
+        return result;
+    }
+
     @Override
     public Set<Dependency<?>> getDependencies() {
-        Set<Dependency<?>> dependencies = new HashSet<>();
+        List<Dependency<?>> dependencies = new ArrayList<>();
         for (AssistedConstructor<?> constructor : factoryMethodToConstructor.values()) {
             for (Parameter parameter : constructor.getAllParameters()) {
                 if (!parameter.isProvidedByFactory()) {
@@ -181,7 +287,7 @@ public class FactoryProvider<F> implements Provider<F>, HasDependencies {
                 }
             }
         }
-        return unmodifiableSet(dependencies);
+        return ImmutableSet.copyOf(dependencies);
     }
 
     @Override
@@ -228,6 +334,6 @@ public class FactoryProvider<F> implements Provider<F>, HasDependencies {
     }
 
     private static ConfigurationException newConfigurationException(String format, Object... args) {
-        return new ConfigurationException(singleton(new Message(Errors.format(format, args))));
+        return new ConfigurationException(ImmutableSet.of(new Message(Errors.format(format, args))));
     }
 }

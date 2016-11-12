@@ -19,16 +19,19 @@
 
 package org.elasticsearch.gateway;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.admin.indices.recovery.RecoveryResponse;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.ShardStats;
 import org.elasticsearch.cluster.routing.allocation.decider.EnableAllocationDecider;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.engine.Engine;
+import org.elasticsearch.indices.flush.SyncedFlushUtil;
 import org.elasticsearch.indices.recovery.RecoveryState;
 
+import static org.elasticsearch.common.settings.Settings.settingsBuilder;
 import static org.elasticsearch.test.ESIntegTestCase.client;
+import static org.elasticsearch.test.ESIntegTestCase.internalCluster;
 import static org.elasticsearch.test.ESTestCase.randomBoolean;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
@@ -56,7 +59,7 @@ public class ReusePeerRecoverySharedTest {
      *            should this use synced flush? can't use synced from in the bwc
      *            tests
      */
-    public static void testCase(Settings indexSettings, Runnable restartCluster, Logger logger, boolean useSyncIds) {
+    public static void testCase(Settings indexSettings, Runnable restartCluster, ESLogger logger, boolean useSyncIds) {
         /*
          * prevent any rebalance actions during the peer recovery if we run into
          * a relocation the reuse count will be 0 and this fails the test. We
@@ -64,7 +67,7 @@ public class ReusePeerRecoverySharedTest {
          * for replicas.
          */
         assertAcked(client().admin().indices().prepareCreate("test").setSettings(Settings.builder().put(indexSettings)
-                .put(EnableAllocationDecider.INDEX_ROUTING_REBALANCE_ENABLE_SETTING.getKey(), EnableAllocationDecider.Rebalance.NONE)));
+                .put(EnableAllocationDecider.INDEX_ROUTING_REBALANCE_ENABLE, EnableAllocationDecider.Rebalance.NONE)));
         client().admin().cluster().prepareHealth().setWaitForGreenStatus().setTimeout("30s").get();
         logger.info("--> indexing docs");
         for (int i = 0; i < 1000; i++) {
@@ -86,8 +89,8 @@ public class ReusePeerRecoverySharedTest {
             logger.info("--> disabling allocation while the cluster is shut down");
 
             // Disable allocations while we are closing nodes
-            client().admin().cluster().prepareUpdateSettings().setTransientSettings(Settings.builder()
-                    .put(EnableAllocationDecider.CLUSTER_ROUTING_ALLOCATION_ENABLE_SETTING.getKey(), EnableAllocationDecider.Allocation.NONE)).get();
+            client().admin().cluster().prepareUpdateSettings().setTransientSettings(settingsBuilder()
+                    .put(EnableAllocationDecider.CLUSTER_ROUTING_ALLOCATION_ENABLE, EnableAllocationDecider.Allocation.NONE)).get();
             logger.info("--> full cluster restart");
             restartCluster.run();
 
@@ -102,7 +105,7 @@ public class ReusePeerRecoverySharedTest {
         logger.info("--> disabling allocation while the cluster is shut down{}", useSyncIds ? "" : " a second time");
         // Disable allocations while we are closing nodes
         client().admin().cluster().prepareUpdateSettings().setTransientSettings(
-                Settings.builder().put(EnableAllocationDecider.CLUSTER_ROUTING_ALLOCATION_ENABLE_SETTING.getKey(), EnableAllocationDecider.Allocation.NONE))
+                settingsBuilder().put(EnableAllocationDecider.CLUSTER_ROUTING_ALLOCATION_ENABLE, EnableAllocationDecider.Allocation.NONE))
                 .get();
         logger.info("--> full cluster restart");
         restartCluster.run();
@@ -123,10 +126,10 @@ public class ReusePeerRecoverySharedTest {
             }
             if (!recoveryState.getPrimary() && (useSyncIds == false)) {
                 logger.info("--> replica shard {} recovered from {} to {}, recovered {}, reuse {}", recoveryState.getShardId().getId(),
-                        recoveryState.getSourceNode().getName(), recoveryState.getTargetNode().getName(),
+                        recoveryState.getSourceNode().name(), recoveryState.getTargetNode().name(),
                         recoveryState.getIndex().recoveredBytes(), recoveryState.getIndex().reusedBytes());
                 assertThat("no bytes should be recovered", recoveryState.getIndex().recoveredBytes(), equalTo(recovered));
-                assertThat("data should have been reused", recoveryState.getIndex().reusedBytes(), greaterThan(0L));
+                assertThat("data should have been reused", recoveryState.getIndex().reusedBytes(), greaterThan(0l));
                 // we have to recover the segments file since we commit the translog ID on engine startup
                 assertThat("all bytes should be reused except of the segments file", recoveryState.getIndex().reusedBytes(),
                         equalTo(recoveryState.getIndex().totalBytes() - recovered));
@@ -138,10 +141,10 @@ public class ReusePeerRecoverySharedTest {
             } else {
                 if (useSyncIds && !recoveryState.getPrimary()) {
                     logger.info("--> replica shard {} recovered from {} to {} using sync id, recovered {}, reuse {}",
-                            recoveryState.getShardId().getId(), recoveryState.getSourceNode().getName(), recoveryState.getTargetNode().getName(),
+                            recoveryState.getShardId().getId(), recoveryState.getSourceNode().name(), recoveryState.getTargetNode().name(),
                             recoveryState.getIndex().recoveredBytes(), recoveryState.getIndex().reusedBytes());
                 }
-                assertThat(recoveryState.getIndex().recoveredBytes(), equalTo(0L));
+                assertThat(recoveryState.getIndex().recoveredBytes(), equalTo(0l));
                 assertThat(recoveryState.getIndex().reusedBytes(), equalTo(recoveryState.getIndex().totalBytes()));
                 assertThat(recoveryState.getIndex().recoveredFileCount(), equalTo(0));
                 assertThat(recoveryState.getIndex().reusedFileCount(), equalTo(recoveryState.getIndex().totalFileCount()));

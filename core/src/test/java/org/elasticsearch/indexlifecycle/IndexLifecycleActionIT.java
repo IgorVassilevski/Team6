@@ -19,6 +19,9 @@
 
 package org.elasticsearch.indexlifecycle;
 
+import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexResponse;
@@ -26,30 +29,25 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.RoutingNodes;
+import org.elasticsearch.cluster.routing.UnassignedInfo;
+import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.discovery.Discovery;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
-import org.elasticsearch.test.ESIntegTestCase.Scope;
 import org.elasticsearch.test.InternalTestCluster;
+import org.junit.Test;
 
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import static org.elasticsearch.client.Requests.clusterHealthRequest;
 import static org.elasticsearch.client.Requests.createIndexRequest;
 import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_NUMBER_OF_REPLICAS;
 import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_NUMBER_OF_SHARDS;
-import static org.elasticsearch.cluster.routing.ShardRoutingState.INITIALIZING;
-import static org.elasticsearch.cluster.routing.ShardRoutingState.RELOCATING;
-import static org.elasticsearch.cluster.routing.ShardRoutingState.STARTED;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
-import static org.hamcrest.Matchers.anyOf;
-import static org.hamcrest.Matchers.containsInAnyOrder;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
+import static org.elasticsearch.cluster.routing.ShardRoutingState.*;
+import static org.elasticsearch.common.settings.Settings.settingsBuilder;
+import static org.elasticsearch.test.ESIntegTestCase.Scope;
+import static org.hamcrest.Matchers.*;
 
 
 /**
@@ -57,21 +55,29 @@ import static org.hamcrest.Matchers.nullValue;
  */
 @ClusterScope(scope = Scope.TEST, numDataNodes = 0)
 public class IndexLifecycleActionIT extends ESIntegTestCase {
+
+    @Test
     public void testIndexLifecycleActionsWith11Shards1Backup() throws Exception {
-        Settings settings = Settings.builder()
-                .put(indexSettings())
+        Settings settings = settingsBuilder()
                 .put(SETTING_NUMBER_OF_SHARDS, 11)
                 .put(SETTING_NUMBER_OF_REPLICAS, 1)
+                .put(UnassignedInfo.INDEX_DELAYED_NODE_LEFT_TIMEOUT_SETTING, "0s")
                 .build();
 
         // start one server
         logger.info("Starting sever1");
-        final String server_1 = internalCluster().startNode();
+        final String server_1 = internalCluster().startNode(settings);
         final String node1 = getLocalNodeId(server_1);
 
         logger.info("Creating index [test]");
-        CreateIndexResponse createIndexResponse = client().admin().indices().create(createIndexRequest("test").settings(settings)).actionGet();
-        assertAcked(createIndexResponse);
+        CreateIndexResponse createIndexResponse = client().admin().indices().create(createIndexRequest("test")).actionGet();
+        assertThat(createIndexResponse.isAcknowledged(), equalTo(true));
+
+        logger.info("Running Cluster Health");
+        ClusterHealthResponse clusterHealth = client().admin().cluster().prepareHealth().setWaitForEvents(Priority.LANGUID).setWaitForYellowStatus().execute().actionGet();
+        logger.info("Done Cluster Health, status " + clusterHealth.getStatus());
+        assertThat(clusterHealth.isTimedOut(), equalTo(false));
+        assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.YELLOW));
 
         ClusterState clusterState = client().admin().cluster().prepareState().get().getState();
         RoutingNode routingNodeEntry1 = clusterState.getRoutingNodes().node(node1);
@@ -79,13 +85,12 @@ public class IndexLifecycleActionIT extends ESIntegTestCase {
 
         logger.info("Starting server2");
         // start another server
-        String server_2 = internalCluster().startNode();
+        String server_2 = internalCluster().startNode(settings);
 
         // first wait for 2 nodes in the cluster
-        logger.info("Waiting for replicas to be assigned");
-        ClusterHealthResponse clusterHealth =
-            client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNodes("2")).actionGet();
-        logger.info("Done Cluster Health, status {}", clusterHealth.getStatus());
+        logger.info("Running Cluster Health");
+        clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNodes("2")).actionGet();
+        logger.info("Done Cluster Health, status " + clusterHealth.getStatus());
         assertThat(clusterHealth.isTimedOut(), equalTo(false));
         assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.GREEN));
         final String node2 = getLocalNodeId(server_2);
@@ -93,7 +98,7 @@ public class IndexLifecycleActionIT extends ESIntegTestCase {
         // explicitly call reroute, so shards will get relocated to the new node (we delay it in ES in case other nodes join)
         client().admin().cluster().prepareReroute().execute().actionGet();
 
-        clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNodes("2").waitForNoRelocatingShards(true)).actionGet();
+        clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNodes("2").waitForRelocatingShards(0)).actionGet();
         assertThat(clusterHealth.isTimedOut(), equalTo(false));
         assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.GREEN));
         assertThat(clusterHealth.getNumberOfDataNodes(), equalTo(2));
@@ -115,10 +120,9 @@ public class IndexLifecycleActionIT extends ESIntegTestCase {
 
         logger.info("Starting server3");
         // start another server
-        String server_3 = internalCluster().startNode();
+        String server_3 = internalCluster().startNode(settings);
 
         // first wait for 3 nodes in the cluster
-        logger.info("Waiting for replicas to be assigned");
         clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNodes("3")).actionGet();
         assertThat(clusterHealth.isTimedOut(), equalTo(false));
         assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.GREEN));
@@ -130,7 +134,7 @@ public class IndexLifecycleActionIT extends ESIntegTestCase {
         // explicitly call reroute, so shards will get relocated to the new node (we delay it in ES in case other nodes join)
         client().admin().cluster().prepareReroute().execute().actionGet();
 
-        clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNodes("3").waitForNoRelocatingShards(true)).actionGet();
+        clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNodes("3").waitForRelocatingShards(0)).actionGet();
         assertThat(clusterHealth.isTimedOut(), equalTo(false));
         assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.GREEN));
         assertThat(clusterHealth.getNumberOfDataNodes(), equalTo(3));
@@ -165,13 +169,13 @@ public class IndexLifecycleActionIT extends ESIntegTestCase {
         // verify health
         logger.info("Running Cluster Health");
         clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNodes("2")).actionGet();
-        logger.info("Done Cluster Health, status {}", clusterHealth.getStatus());
+        logger.info("Done Cluster Health, status " + clusterHealth.getStatus());
         assertThat(clusterHealth.isTimedOut(), equalTo(false));
         assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.GREEN));
 
         client().admin().cluster().prepareReroute().get();
 
-        clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForNoRelocatingShards(true).waitForNodes("2")).actionGet();
+        clusterHealth = client().admin().cluster().health(clusterHealthRequest().waitForGreenStatus().waitForRelocatingShards(0).waitForNodes("2")).actionGet();
         assertThat(clusterHealth.isTimedOut(), equalTo(false));
         assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.GREEN));
         assertThat(clusterHealth.getRelocatingShards(), equalTo(0));
@@ -214,7 +218,12 @@ public class IndexLifecycleActionIT extends ESIntegTestCase {
     }
 
     private void assertNodesPresent(RoutingNodes routingNodes, String... nodes) {
-        final Set<String> keySet = StreamSupport.stream(routingNodes.spliterator(), false).map((p) -> (p.nodeId())).collect(Collectors.toSet());
+        final Set<String> keySet = Sets.newHashSet(Iterables.transform(routingNodes, new Function<RoutingNode, String>() {
+            @Override
+            public String apply(RoutingNode input) {
+                return input.nodeId();
+            }
+        }));
         assertThat(keySet, containsInAnyOrder(nodes));
     }
 }

@@ -25,7 +25,6 @@ import org.elasticsearch.common.util.DoubleArray;
 import org.elasticsearch.index.fielddata.NumericDoubleValues;
 import org.elasticsearch.index.fielddata.SortedNumericDoubleValues;
 import org.elasticsearch.search.MultiValueMode;
-import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.LeafBucketCollector;
@@ -34,6 +33,9 @@ import org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregator;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
+import org.elasticsearch.search.aggregations.support.ValuesSourceAggregatorFactory;
+import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
+import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 
 import java.io.IOException;
 import java.util.List;
@@ -45,11 +47,11 @@ import java.util.Map;
 public class MaxAggregator extends NumericMetricsAggregator.SingleValue {
 
     final ValuesSource.Numeric valuesSource;
-    final DocValueFormat formatter;
+    final ValueFormatter formatter;
 
     DoubleArray maxes;
 
-    public MaxAggregator(String name, ValuesSource.Numeric valuesSource, DocValueFormat formatter,
+    public MaxAggregator(String name, ValuesSource.Numeric valuesSource, ValueFormatter formatter,
  AggregationContext context,
             Aggregator parent, List<PipelineAggregator> pipelineAggregators,
             Map<String, Object> metaData) throws IOException {
@@ -113,6 +115,26 @@ public class MaxAggregator extends NumericMetricsAggregator.SingleValue {
     @Override
     public InternalAggregation buildEmptyAggregation() {
         return new InternalMax(name, Double.NEGATIVE_INFINITY, formatter, pipelineAggregators(), metaData());
+    }
+
+    public static class Factory extends ValuesSourceAggregatorFactory.LeafOnly<ValuesSource.Numeric> {
+
+        public Factory(String name, ValuesSourceConfig<ValuesSource.Numeric> valuesSourceConfig) {
+            super(name, InternalMax.TYPE.name(), valuesSourceConfig);
+        }
+
+        @Override
+        protected Aggregator createUnmapped(AggregationContext aggregationContext, Aggregator parent,
+                List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData) throws IOException {
+            return new MaxAggregator(name, null, config.formatter(), aggregationContext, parent, pipelineAggregators, metaData);
+        }
+
+        @Override
+        protected Aggregator doCreateInternal(ValuesSource.Numeric valuesSource, AggregationContext aggregationContext, Aggregator parent,
+                boolean collectsFromSingleBucket, List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData)
+                throws IOException {
+            return new MaxAggregator(name, valuesSource, config.formatter(), aggregationContext, parent, pipelineAggregators, metaData);
+        }
     }
 
     @Override

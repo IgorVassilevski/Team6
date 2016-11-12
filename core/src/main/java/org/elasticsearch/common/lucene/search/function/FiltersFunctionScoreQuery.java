@@ -29,16 +29,12 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.Bits;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
+import org.apache.lucene.util.ToStringUtils;
 import org.elasticsearch.common.lucene.Lucene;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -61,58 +57,53 @@ public class FiltersFunctionScoreQuery extends Query {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) {
+            if (this == o)
                 return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
+            if (o == null || getClass() != o.getClass())
                 return false;
-            }
+
             FilterFunction that = (FilterFunction) o;
-            return Objects.equals(this.filter, that.filter) && Objects.equals(this.function, that.function);
+
+            if (filter != null ? !filter.equals(that.filter) : that.filter != null)
+                return false;
+            if (function != null ? !function.equals(that.function) : that.function != null)
+                return false;
+
+            return true;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(super.hashCode(), filter, function);
+            int result = filter != null ? filter.hashCode() : 0;
+            result = 31 * result + (function != null ? function.hashCode() : 0);
+            return result;
         }
     }
 
-    public enum ScoreMode implements Writeable {
-        FIRST, AVG, MAX, SUM, MIN, MULTIPLY;
-
-        @Override
-        public void writeTo(StreamOutput out) throws IOException {
-            out.writeVInt(this.ordinal());
-        }
-
-        public static ScoreMode readFromStream(StreamInput in) throws IOException {
-            int ordinal = in.readVInt();
-            if (ordinal < 0 || ordinal >= values().length) {
-                throw new IOException("Unknown ScoreMode ordinal [" + ordinal + "]");
-            }
-            return values()[ordinal];
-        }
-
-        public static ScoreMode fromString(String scoreMode) {
-            return valueOf(scoreMode.toUpperCase(Locale.ROOT));
-        }
+    public static enum ScoreMode {
+        First, Avg, Max, Sum, Min, Multiply
     }
 
-    final Query subQuery;
+    Query subQuery;
     final FilterFunction[] filterFunctions;
     final ScoreMode scoreMode;
     final float maxBoost;
-    private final Float minScore;
+    private Float minScore;
 
-    protected final CombineFunction combineFunction;
+    protected CombineFunction combineFunction;
 
-    public FiltersFunctionScoreQuery(Query subQuery, ScoreMode scoreMode, FilterFunction[] filterFunctions, float maxBoost, Float minScore, CombineFunction combineFunction) {
+    public FiltersFunctionScoreQuery(Query subQuery, ScoreMode scoreMode, FilterFunction[] filterFunctions, float maxBoost, Float minScore) {
         this.subQuery = subQuery;
         this.scoreMode = scoreMode;
         this.filterFunctions = filterFunctions;
         this.maxBoost = maxBoost;
-        this.combineFunction = combineFunction;
+        combineFunction = CombineFunction.MULT;
         this.minScore = minScore;
+    }
+
+    public FiltersFunctionScoreQuery setCombineFunction(CombineFunction combineFunction) {
+        this.combineFunction = combineFunction;
+        return this;
     }
 
     public Query getSubQuery() {
@@ -125,14 +116,15 @@ public class FiltersFunctionScoreQuery extends Query {
 
     @Override
     public Query rewrite(IndexReader reader) throws IOException {
-        Query rewritten = super.rewrite(reader);
-        if (rewritten != this) {
-            return rewritten;
+        if (getBoost() != 1.0F) {
+            return super.rewrite(reader);
         }
         Query newQ = subQuery.rewrite(reader);
         if (newQ == subQuery)
             return this;
-        return new FiltersFunctionScoreQuery(newQ, scoreMode, filterFunctions, maxBoost, minScore, combineFunction);
+        FiltersFunctionScoreQuery bq = (FiltersFunctionScoreQuery) this.clone();
+        bq.subQuery = newQ;
+        return bq;
     }
 
     @Override
@@ -226,23 +218,17 @@ public class FiltersFunctionScoreQuery extends Query {
                     filterExplanations.add(filterExplanation);
                 }
             }
-            FiltersFunctionFactorScorer scorer = functionScorer(context);
-            int actualDoc = scorer.iterator().advance(doc);
-            assert (actualDoc == doc);
-            double score = scorer.computeScore(doc, expl.getValue());
-            Explanation factorExplanation;
             if (filterExplanations.size() > 0) {
-                factorExplanation = Explanation.match(
+                FiltersFunctionFactorScorer scorer = functionScorer(context);
+                int actualDoc = scorer.iterator().advance(doc);
+                assert (actualDoc == doc);
+                double score = scorer.computeScore(doc, expl.getValue());
+                Explanation factorExplanation = Explanation.match(
                         CombineFunction.toFloat(score),
                         "function score, score mode [" + scoreMode.toString().toLowerCase(Locale.ROOT) + "]",
                         filterExplanations);
-
-            } else {
-                // it is a little weird to add a match although no function matches but that is the way function_score behaves right now
-                factorExplanation = Explanation.match(1.0f,
-                    "No function matched", Collections.emptyList());
+                expl = combineFunction.explain(expl, factorExplanation, maxBoost);
             }
-            expl = combineFunction.explain(expl, factorExplanation, maxBoost);
             if (minScore != null && minScore > expl.getValue()) {
                 expl = Explanation.noMatch("Score value is too low, expected at least " + minScore + " but got " + expl.getValue(), expl);
             }
@@ -284,64 +270,58 @@ public class FiltersFunctionScoreQuery extends Query {
 
         protected double computeScore(int docId, float subQueryScore) {
             double factor = 1d;
-            switch(scoreMode) {
-                case FIRST:
-                    for (int i = 0; i < filterFunctions.length; i++) {
-                        if (docSets[i].get(docId)) {
-                            factor = functions[i].score(docId, subQueryScore);
-                            break;
+            if (scoreMode == ScoreMode.First) {
+                for (int i = 0; i < filterFunctions.length; i++) {
+                    if (docSets[i].get(docId)) {
+                        factor = functions[i].score(docId, subQueryScore);
+                        break;
+                    }
+                }
+            } else if (scoreMode == ScoreMode.Max) {
+                double maxFactor = Double.NEGATIVE_INFINITY;
+                for (int i = 0; i < filterFunctions.length; i++) {
+                    if (docSets[i].get(docId)) {
+                        maxFactor = Math.max(functions[i].score(docId, subQueryScore), maxFactor);
+                    }
+                }
+                if (maxFactor != Float.NEGATIVE_INFINITY) {
+                    factor = maxFactor;
+                }
+            } else if (scoreMode == ScoreMode.Min) {
+                double minFactor = Double.POSITIVE_INFINITY;
+                for (int i = 0; i < filterFunctions.length; i++) {
+                    if (docSets[i].get(docId)) {
+                        minFactor = Math.min(functions[i].score(docId, subQueryScore), minFactor);
+                    }
+                }
+                if (minFactor != Float.POSITIVE_INFINITY) {
+                    factor = minFactor;
+                }
+            } else if (scoreMode == ScoreMode.Multiply) {
+                for (int i = 0; i < filterFunctions.length; i++) {
+                    if (docSets[i].get(docId)) {
+                        factor *= functions[i].score(docId, subQueryScore);
+                    }
+                }
+            } else {
+                double totalFactor = 0.0f;
+                double weightSum = 0;
+                for (int i = 0; i < filterFunctions.length; i++) {
+                    if (docSets[i].get(docId)) {
+                        totalFactor += functions[i].score(docId, subQueryScore);
+                        if (filterFunctions[i].function instanceof WeightFactorFunction) {
+                            weightSum += ((WeightFactorFunction) filterFunctions[i].function).getWeight();
+                        } else {
+                            weightSum += 1.0;
                         }
                     }
-                    break;
-                case MAX:
-                    double maxFactor = Double.NEGATIVE_INFINITY;
-                    for (int i = 0; i < filterFunctions.length; i++) {
-                        if (docSets[i].get(docId)) {
-                            maxFactor = Math.max(functions[i].score(docId, subQueryScore), maxFactor);
-                        }
+                }
+                if (weightSum != 0) {
+                    factor = totalFactor;
+                    if (scoreMode == ScoreMode.Avg) {
+                        factor /= weightSum;
                     }
-                    if (maxFactor != Float.NEGATIVE_INFINITY) {
-                        factor = maxFactor;
-                    }
-                    break;
-                case MIN:
-                    double minFactor = Double.POSITIVE_INFINITY;
-                    for (int i = 0; i < filterFunctions.length; i++) {
-                        if (docSets[i].get(docId)) {
-                            minFactor = Math.min(functions[i].score(docId, subQueryScore), minFactor);
-                        }
-                    }
-                    if (minFactor != Float.POSITIVE_INFINITY) {
-                        factor = minFactor;
-                    }
-                    break;
-                case MULTIPLY:
-                    for (int i = 0; i < filterFunctions.length; i++) {
-                        if (docSets[i].get(docId)) {
-                            factor *= functions[i].score(docId, subQueryScore);
-                        }
-                    }
-                    break;
-                default: // Avg / Total
-                    double totalFactor = 0.0f;
-                    double weightSum = 0;
-                    for (int i = 0; i < filterFunctions.length; i++) {
-                        if (docSets[i].get(docId)) {
-                            totalFactor += functions[i].score(docId, subQueryScore);
-                            if (filterFunctions[i].function instanceof WeightFactorFunction) {
-                                weightSum += ((WeightFactorFunction) filterFunctions[i].function).getWeight();
-                            } else {
-                                weightSum += 1.0;
-                            }
-                        }
-                    }
-                    if (weightSum != 0) {
-                        factor = totalFactor;
-                        if (scoreMode == ScoreMode.AVG) {
-                            factor /= weightSum;
-                        }
-                    }
-                    break;
+                }
             }
             return factor;
         }
@@ -355,6 +335,7 @@ public class FiltersFunctionScoreQuery extends Query {
             sb.append("{filter(").append(filterFunction.filter).append("), function [").append(filterFunction.function).append("]}");
         }
         sb.append("])");
+        sb.append(ToStringUtils.boost(getBoost()));
         return sb.toString();
     }
 
@@ -363,7 +344,7 @@ public class FiltersFunctionScoreQuery extends Query {
         if (this == o) {
             return true;
         }
-        if (sameClassAs(o) == false) {
+        if (super.equals(o) == false) {
             return false;
         }
         FiltersFunctionScoreQuery other = (FiltersFunctionScoreQuery) o;
@@ -375,6 +356,6 @@ public class FiltersFunctionScoreQuery extends Query {
 
     @Override
     public int hashCode() {
-        return Objects.hash(classHash(), subQuery, maxBoost, combineFunction, minScore, scoreMode, Arrays.hashCode(filterFunctions));
+        return Objects.hash(super.hashCode(), subQuery, maxBoost, combineFunction, minScore, scoreMode, Arrays.hashCode(filterFunctions));
     }
 }

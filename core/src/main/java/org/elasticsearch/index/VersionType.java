@@ -18,47 +18,32 @@
  */
 package org.elasticsearch.index;
 
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.lucene.uid.Versions;
-
-import java.io.IOException;
 
 /**
  *
  */
-public enum VersionType implements Writeable {
+public enum VersionType {
     INTERNAL((byte) 0) {
         @Override
-        public boolean isVersionConflictForWrites(long currentVersion, long expectedVersion, boolean deleted) {
-            return isVersionConflict(currentVersion, expectedVersion, deleted);
-        }
-
-        @Override
-        public String explainConflictForWrites(long currentVersion, long expectedVersion, boolean deleted) {
-            if (expectedVersion == Versions.MATCH_DELETED) {
-                return "document already exists (current version [" + currentVersion + "])";
-            }
-            return "current version [" + currentVersion + "] is different than the one provided [" + expectedVersion + "]";
+        public boolean isVersionConflictForWrites(long currentVersion, long expectedVersion) {
+            return isVersionConflict(currentVersion, expectedVersion);
         }
 
         @Override
         public boolean isVersionConflictForReads(long currentVersion, long expectedVersion) {
-            return isVersionConflict(currentVersion, expectedVersion, false);
+            return isVersionConflict(currentVersion, expectedVersion);
         }
 
-        @Override
-        public String explainConflictForReads(long currentVersion, long expectedVersion) {
-            return "current version [" + currentVersion + "] is different than the one provided [" + expectedVersion + "]";
-        }
-
-        private boolean isVersionConflict(long currentVersion, long expectedVersion, boolean deleted) {
+        private boolean isVersionConflict(long currentVersion, long expectedVersion) {
+            if (currentVersion == Versions.NOT_SET) {
+                return false;
+            }
             if (expectedVersion == Versions.MATCH_ANY) {
                 return false;
             }
-            if (expectedVersion == Versions.MATCH_DELETED) {
-                return deleted == false;
+            if (currentVersion == Versions.NOT_FOUND) {
+                return true;
             }
             if (currentVersion != expectedVersion) {
                 return true;
@@ -68,12 +53,13 @@ public enum VersionType implements Writeable {
 
         @Override
         public long updateVersion(long currentVersion, long expectedVersion) {
-            return currentVersion == Versions.NOT_FOUND ? 1 : currentVersion + 1;
+            return (currentVersion == Versions.NOT_SET || currentVersion == Versions.NOT_FOUND) ? 1 : currentVersion + 1;
         }
 
         @Override
         public boolean validateVersionForWrites(long version) {
-            return version > 0L || version == Versions.MATCH_ANY || version == Versions.MATCH_DELETED;
+            // not allowing Versions.NOT_FOUND as it is not a valid input value.
+            return version > 0L || version == Versions.MATCH_ANY;
         }
 
         @Override
@@ -91,7 +77,10 @@ public enum VersionType implements Writeable {
     },
     EXTERNAL((byte) 1) {
         @Override
-        public boolean isVersionConflictForWrites(long currentVersion, long expectedVersion, boolean deleted) {
+        public boolean isVersionConflictForWrites(long currentVersion, long expectedVersion) {
+            if (currentVersion == Versions.NOT_SET) {
+                return false;
+            }
             if (currentVersion == Versions.NOT_FOUND) {
                 return false;
             }
@@ -105,12 +94,10 @@ public enum VersionType implements Writeable {
         }
 
         @Override
-        public String explainConflictForWrites(long currentVersion, long expectedVersion, boolean deleted) {
-            return "current version [" + currentVersion + "] is higher or equal to the one provided [" + expectedVersion + "]";
-        }
-
-        @Override
         public boolean isVersionConflictForReads(long currentVersion, long expectedVersion) {
+            if (currentVersion == Versions.NOT_SET) {
+                return false;
+            }
             if (expectedVersion == Versions.MATCH_ANY) {
                 return false;
             }
@@ -121,11 +108,6 @@ public enum VersionType implements Writeable {
                 return true;
             }
             return false;
-        }
-
-        @Override
-        public String explainConflictForReads(long currentVersion, long expectedVersion) {
-            return "current version [" + currentVersion + "] is different than the one provided [" + expectedVersion + "]";
         }
 
         @Override
@@ -146,7 +128,10 @@ public enum VersionType implements Writeable {
     },
     EXTERNAL_GTE((byte) 2) {
         @Override
-        public boolean isVersionConflictForWrites(long currentVersion, long expectedVersion, boolean deleted) {
+        public boolean isVersionConflictForWrites(long currentVersion, long expectedVersion) {
+            if (currentVersion == Versions.NOT_SET) {
+                return false;
+            }
             if (currentVersion == Versions.NOT_FOUND) {
                 return false;
             }
@@ -160,12 +145,10 @@ public enum VersionType implements Writeable {
         }
 
         @Override
-        public String explainConflictForWrites(long currentVersion, long expectedVersion, boolean deleted) {
-            return "current version [" + currentVersion + "] is higher than the one provided [" + expectedVersion + "]";
-        }
-
-        @Override
         public boolean isVersionConflictForReads(long currentVersion, long expectedVersion) {
+            if (currentVersion == Versions.NOT_SET) {
+                return false;
+            }
             if (expectedVersion == Versions.MATCH_ANY) {
                 return false;
             }
@@ -176,11 +159,6 @@ public enum VersionType implements Writeable {
                 return true;
             }
             return false;
-        }
-
-        @Override
-        public String explainConflictForReads(long currentVersion, long expectedVersion) {
-            return "current version [" + currentVersion + "] is different than the one provided [" + expectedVersion + "]";
         }
 
         @Override
@@ -204,29 +182,22 @@ public enum VersionType implements Writeable {
      */
     FORCE((byte) 3) {
         @Override
-        public boolean isVersionConflictForWrites(long currentVersion, long expectedVersion, boolean deleted) {
+        public boolean isVersionConflictForWrites(long currentVersion, long expectedVersion) {
+            if (currentVersion == Versions.NOT_SET) {
+                return false;
+            }
             if (currentVersion == Versions.NOT_FOUND) {
                 return false;
             }
             if (expectedVersion == Versions.MATCH_ANY) {
-                throw new IllegalStateException("you must specify a version when use VersionType.FORCE");
+                return true;
             }
             return false;
-        }
-
-        @Override
-        public String explainConflictForWrites(long currentVersion, long expectedVersion, boolean deleted) {
-            throw new AssertionError("VersionType.FORCE should never result in a write conflict");
         }
 
         @Override
         public boolean isVersionConflictForReads(long currentVersion, long expectedVersion) {
             return false;
-        }
-
-        @Override
-        public String explainConflictForReads(long currentVersion, long expectedVersion) {
-            throw new AssertionError("VersionType.FORCE should never result in a read conflict");
         }
 
         @Override
@@ -259,45 +230,16 @@ public enum VersionType implements Writeable {
     /**
      * Checks whether the current version conflicts with the expected version, based on the current version type.
      *
-     * @param currentVersion  the current version for the document
-     * @param expectedVersion the version specified for the write operation
-     * @param deleted         true if the document is currently deleted (note that #currentVersion will typically be
-     *                        {@link Versions#NOT_FOUND}, but may be something else if the document was recently deleted
      * @return true if versions conflict false o.w.
      */
-    public abstract boolean isVersionConflictForWrites(long currentVersion, long expectedVersion, boolean deleted);
-
-
-    /**
-     * Returns a human readable explanation for a version conflict on write.
-     *
-     * Note that this method is only called if {@link #isVersionConflictForWrites(long, long, boolean)} returns true;
-     *
-     * @param currentVersion  the current version for the document
-     * @param expectedVersion the version specified for the write operation
-     * @param deleted         true if the document is currently deleted (note that #currentVersion will typically be
-     *                        {@link Versions#NOT_FOUND}, but may be something else if the document was recently deleted
-     */
-    public abstract String explainConflictForWrites(long currentVersion, long expectedVersion, boolean deleted);
+    public abstract boolean isVersionConflictForWrites(long currentVersion, long expectedVersion);
 
     /**
      * Checks whether the current version conflicts with the expected version, based on the current version type.
      *
-     * @param currentVersion  the current version for the document
-     * @param expectedVersion the version specified for the read operation
      * @return true if versions conflict false o.w.
      */
     public abstract boolean isVersionConflictForReads(long currentVersion, long expectedVersion);
-
-    /**
-     * Returns a human readable explanation for a version conflict on read.
-     *
-     * Note that this method is only called if {@link #isVersionConflictForReads(long, long)} returns true;
-     *
-     * @param currentVersion  the current version for the document
-     * @param expectedVersion the version specified for the read operation
-     */
-    public abstract String explainConflictForReads(long currentVersion, long expectedVersion);
 
     /**
      * Returns the new version for a document, based on its current one and the specified in the request
@@ -361,16 +303,5 @@ public enum VersionType implements Writeable {
             return FORCE;
         }
         throw new IllegalArgumentException("No version type match [" + value + "]");
-    }
-
-    public static VersionType readFromStream(StreamInput in) throws IOException {
-        int ordinal = in.readVInt();
-        assert (ordinal == 0 || ordinal == 1 || ordinal == 2 || ordinal == 3);
-        return VersionType.values()[ordinal];
-    }
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeVInt(ordinal());
     }
 }

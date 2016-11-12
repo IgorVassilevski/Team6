@@ -22,19 +22,18 @@ package org.elasticsearch.action.admin.indices.settings.get;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.master.TransportMasterNodeReadAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.settings.SettingsFilter;
 import org.elasticsearch.common.util.CollectionUtils;
-import org.elasticsearch.index.Index;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
@@ -50,7 +49,7 @@ public class TransportGetSettingsAction extends TransportMasterNodeReadAction<Ge
     public TransportGetSettingsAction(Settings settings, TransportService transportService, ClusterService clusterService,
                                       ThreadPool threadPool, SettingsFilter settingsFilter, ActionFilters actionFilters,
                                       IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, GetSettingsAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, GetSettingsRequest::new);
+        super(settings, GetSettingsAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, GetSettingsRequest.class);
         this.settingsFilter = settingsFilter;
     }
 
@@ -62,7 +61,7 @@ public class TransportGetSettingsAction extends TransportMasterNodeReadAction<Ge
 
     @Override
     protected ClusterBlockException checkBlock(GetSettingsRequest request, ClusterState state) {
-        return state.blocks().indicesBlockedException(ClusterBlockLevel.METADATA_READ, indexNameExpressionResolver.concreteIndexNames(state, request));
+        return state.blocks().indicesBlockedException(ClusterBlockLevel.METADATA_READ, indexNameExpressionResolver.concreteIndices(state, request));
     }
 
 
@@ -73,15 +72,15 @@ public class TransportGetSettingsAction extends TransportMasterNodeReadAction<Ge
 
     @Override
     protected void masterOperation(GetSettingsRequest request, ClusterState state, ActionListener<GetSettingsResponse> listener) {
-        Index[] concreteIndices = indexNameExpressionResolver.concreteIndices(state, request);
+        String[] concreteIndices = indexNameExpressionResolver.concreteIndices(state, request);
         ImmutableOpenMap.Builder<String, Settings> indexToSettingsBuilder = ImmutableOpenMap.builder();
-        for (Index concreteIndex : concreteIndices) {
+        for (String concreteIndex : concreteIndices) {
             IndexMetaData indexMetaData = state.getMetaData().index(concreteIndex);
             if (indexMetaData == null) {
                 continue;
             }
 
-            Settings settings = settingsFilter.filter(indexMetaData.getSettings());
+            Settings settings = SettingsFilter.filterSettings(settingsFilter.getPatterns(), indexMetaData.getSettings());
             if (request.humanReadable()) {
                 settings = IndexMetaData.addHumanReadableSettings(settings);
             }
@@ -94,7 +93,7 @@ public class TransportGetSettingsAction extends TransportMasterNodeReadAction<Ge
                 }
                 settings = settingsBuilder.build();
             }
-            indexToSettingsBuilder.put(concreteIndex.getName(), settings);
+            indexToSettingsBuilder.put(concreteIndex, settings);
         }
         listener.onResponse(new GetSettingsResponse(indexToSettingsBuilder.build()));
     }

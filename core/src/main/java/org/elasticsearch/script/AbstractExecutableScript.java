@@ -24,4 +24,9 @@ public abstract class AbstractExecutableScript implements ExecutableScript {
     @Override
     public void setNextVar(String name, Object value) {
     }
+
+    @Override
+    public Object unwrap(Object value) {
+        return value;
+    }
 }

@@ -21,14 +21,14 @@ package org.elasticsearch.cluster.routing.allocation.decider;
 
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.node.DiscoveryNodeFilters;
-import org.elasticsearch.cluster.routing.RecoverySource;
 import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
-import org.elasticsearch.common.settings.ClusterSettings;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.node.settings.NodeSettingsService;
+
+import java.util.Map;
 
 import static org.elasticsearch.cluster.node.DiscoveryNodeFilters.OpType.AND;
 import static org.elasticsearch.cluster.node.DiscoveryNodeFilters.OpType.OR;
@@ -50,56 +50,55 @@ import static org.elasticsearch.cluster.node.DiscoveryNodeFilters.OpType.OR;
  * would disallow the allocation. Filters are applied in the following order:
  * <ol>
  * <li><tt>required</tt> - filters required allocations.
- * If any <tt>required</tt> filters are set the allocation is denied if the index is <b>not</b> in the set of <tt>required</tt> to allocate
- * on the filtered node</li>
+ * If any <tt>required</tt> filters are set the allocation is denied if the index is <b>not</b> in the set of <tt>required</tt> to allocate on the filtered node</li>
  * <li><tt>include</tt> - filters "allowed" allocations.
- * If any <tt>include</tt> filters are set the allocation is denied if the index is <b>not</b> in the set of <tt>include</tt> filters for
- * the filtered node</li>
+ * If any <tt>include</tt> filters are set the allocation is denied if the index is <b>not</b> in the set of <tt>include</tt> filters for the filtered node</li>
  * <li><tt>exclude</tt> - filters "prohibited" allocations.
- * If any <tt>exclude</tt> filters are set the allocation is denied if the index is in the set of <tt>exclude</tt> filters for the
- * filtered node</li>
+ * If any <tt>exclude</tt> filters are set the allocation is denied if the index is in the set of <tt>exclude</tt> filters for the filtered node</li>
  * </ol>
  */
 public class FilterAllocationDecider extends AllocationDecider {
 
     public static final String NAME = "filter";
 
-    public static final Setting<Settings> CLUSTER_ROUTING_REQUIRE_GROUP_SETTING =
-        Setting.groupSetting("cluster.routing.allocation.require.", Property.Dynamic, Property.NodeScope);
-    public static final Setting<Settings> CLUSTER_ROUTING_INCLUDE_GROUP_SETTING =
-        Setting.groupSetting("cluster.routing.allocation.include.", Property.Dynamic, Property.NodeScope);
-    public static final Setting<Settings> CLUSTER_ROUTING_EXCLUDE_GROUP_SETTING =
-        Setting.groupSetting("cluster.routing.allocation.exclude.", Property.Dynamic, Property.NodeScope);
+    public static final String INDEX_ROUTING_REQUIRE_GROUP = "index.routing.allocation.require.";
+    public static final String INDEX_ROUTING_INCLUDE_GROUP = "index.routing.allocation.include.";
+    public static final String INDEX_ROUTING_EXCLUDE_GROUP = "index.routing.allocation.exclude.";
+
+    public static final String CLUSTER_ROUTING_REQUIRE_GROUP = "cluster.routing.allocation.require.";
+    public static final String CLUSTER_ROUTING_INCLUDE_GROUP = "cluster.routing.allocation.include.";
+    public static final String CLUSTER_ROUTING_EXCLUDE_GROUP = "cluster.routing.allocation.exclude.";
 
     private volatile DiscoveryNodeFilters clusterRequireFilters;
     private volatile DiscoveryNodeFilters clusterIncludeFilters;
     private volatile DiscoveryNodeFilters clusterExcludeFilters;
 
-    public FilterAllocationDecider(Settings settings, ClusterSettings clusterSettings) {
+    @Inject
+    public FilterAllocationDecider(Settings settings, NodeSettingsService nodeSettingsService) {
         super(settings);
-        setClusterRequireFilters(CLUSTER_ROUTING_REQUIRE_GROUP_SETTING.get(settings));
-        setClusterExcludeFilters(CLUSTER_ROUTING_EXCLUDE_GROUP_SETTING.get(settings));
-        setClusterIncludeFilters(CLUSTER_ROUTING_INCLUDE_GROUP_SETTING.get(settings));
-        clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_REQUIRE_GROUP_SETTING, this::setClusterRequireFilters);
-        clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_EXCLUDE_GROUP_SETTING, this::setClusterExcludeFilters);
-        clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_INCLUDE_GROUP_SETTING, this::setClusterIncludeFilters);
+        Map<String, String> requireMap = settings.getByPrefix(CLUSTER_ROUTING_REQUIRE_GROUP).getAsMap();
+        if (requireMap.isEmpty()) {
+            clusterRequireFilters = null;
+        } else {
+            clusterRequireFilters = DiscoveryNodeFilters.buildFromKeyValue(AND, requireMap);
+        }
+        Map<String, String> includeMap = settings.getByPrefix(CLUSTER_ROUTING_INCLUDE_GROUP).getAsMap();
+        if (includeMap.isEmpty()) {
+            clusterIncludeFilters = null;
+        } else {
+            clusterIncludeFilters = DiscoveryNodeFilters.buildFromKeyValue(OR, includeMap);
+        }
+        Map<String, String> excludeMap = settings.getByPrefix(CLUSTER_ROUTING_EXCLUDE_GROUP).getAsMap();
+        if (excludeMap.isEmpty()) {
+            clusterExcludeFilters = null;
+        } else {
+            clusterExcludeFilters = DiscoveryNodeFilters.buildFromKeyValue(OR, excludeMap);
+        }
+        nodeSettingsService.addListener(new ApplySettings());
     }
 
     @Override
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        if (shardRouting.unassigned()) {
-            // only for unassigned - we filter allocation right after the index creation ie. for shard shrinking etc. to ensure
-            // that once it has been allocated post API the replicas can be allocated elsewhere without user interaction
-            // this is a setting that can only be set within the system!
-            IndexMetaData indexMd = allocation.metaData().getIndexSafe(shardRouting.index());
-            DiscoveryNodeFilters initialRecoveryFilters = indexMd.getInitialRecoveryFilters();
-            if (shardRouting.recoverySource().getType() != RecoverySource.Type.EXISTING_STORE &&
-                initialRecoveryFilters != null &&
-                initialRecoveryFilters.match(node.node()) == false) {
-                return allocation.decision(Decision.NO, NAME, "node does not match index initial recovery filters [%s]",
-                    indexMd.includeFilters());
-            }
-        }
         return shouldFilter(shardRouting, node, allocation);
     }
 
@@ -117,7 +116,7 @@ public class FilterAllocationDecider extends AllocationDecider {
         Decision decision = shouldClusterFilter(node, allocation);
         if (decision != null) return decision;
 
-        decision = shouldIndexFilter(allocation.metaData().getIndexSafe(shardRouting.index()), node, allocation);
+        decision = shouldIndexFilter(allocation.routingNodes().metaData().index(shardRouting.index()), node, allocation);
         if (decision != null) return decision;
 
         return allocation.decision(Decision.YES, NAME, "node passes include/exclude/require filters");
@@ -171,13 +170,21 @@ public class FilterAllocationDecider extends AllocationDecider {
         return null;
     }
 
-    private void setClusterRequireFilters(Settings settings) {
-        clusterRequireFilters = DiscoveryNodeFilters.buildFromKeyValue(AND, settings.getAsMap());
-    }
-    private void setClusterIncludeFilters(Settings settings) {
-        clusterIncludeFilters = DiscoveryNodeFilters.buildFromKeyValue(OR, settings.getAsMap());
-    }
-    private void setClusterExcludeFilters(Settings settings) {
-        clusterExcludeFilters = DiscoveryNodeFilters.buildFromKeyValue(OR, settings.getAsMap());
+    class ApplySettings implements NodeSettingsService.Listener {
+        @Override
+        public void onRefreshSettings(Settings settings) {
+            Map<String, String> requireMap = settings.getByPrefix(CLUSTER_ROUTING_REQUIRE_GROUP).getAsMap();
+            if (!requireMap.isEmpty()) {
+                clusterRequireFilters = DiscoveryNodeFilters.buildFromKeyValue(AND, requireMap);
+            }
+            Map<String, String> includeMap = settings.getByPrefix(CLUSTER_ROUTING_INCLUDE_GROUP).getAsMap();
+            if (!includeMap.isEmpty()) {
+                clusterIncludeFilters = DiscoveryNodeFilters.buildFromKeyValue(OR, includeMap);
+            }
+            Map<String, String> excludeMap = settings.getByPrefix(CLUSTER_ROUTING_EXCLUDE_GROUP).getAsMap();
+            if (!excludeMap.isEmpty()) {
+                clusterExcludeFilters = DiscoveryNodeFilters.buildFromKeyValue(OR, excludeMap);
+            }
+        }
     }
 }

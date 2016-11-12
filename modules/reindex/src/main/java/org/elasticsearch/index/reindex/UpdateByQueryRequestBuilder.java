@@ -25,7 +25,7 @@ import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.client.ElasticsearchClient;
 
 public class UpdateByQueryRequestBuilder extends
-        AbstractBulkIndexByScrollRequestBuilder<UpdateByQueryRequest, UpdateByQueryRequestBuilder> {
+        AbstractBulkIndexByScrollRequestBuilder<UpdateByQueryRequest, BulkIndexByScrollResponse, UpdateByQueryRequestBuilder> {
 
     public UpdateByQueryRequestBuilder(ElasticsearchClient client,
             Action<UpdateByQueryRequest, BulkIndexByScrollResponse, UpdateByQueryRequestBuilder> action) {
@@ -46,11 +46,6 @@ public class UpdateByQueryRequestBuilder extends
     @Override
     public UpdateByQueryRequestBuilder abortOnVersionConflict(boolean abortOnVersionConflict) {
         request.setAbortOnVersionConflict(abortOnVersionConflict);
-        return this;
-    }
-
-    public UpdateByQueryRequestBuilder setPipeline(String pipeline) {
-        request.setPipeline(pipeline);
         return this;
     }
 }

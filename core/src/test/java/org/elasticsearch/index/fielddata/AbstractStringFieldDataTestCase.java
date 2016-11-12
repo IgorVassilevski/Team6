@@ -20,16 +20,13 @@
 package org.elasticsearch.index.fielddata;
 
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
+
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.SortedSetDocValuesField;
 import org.apache.lucene.document.StringField;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.RandomAccessOrds;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
@@ -49,12 +46,14 @@ import org.apache.lucene.util.UnicodeUtil;
 import org.elasticsearch.common.lucene.index.ElasticsearchDirectoryReader;
 import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.Index;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource.Nested;
 import org.elasticsearch.index.fielddata.fieldcomparator.BytesRefFieldComparatorSource;
 import org.elasticsearch.index.fielddata.ordinals.GlobalOrdinalsIndexFieldData;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.search.MultiValueMode;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -70,6 +69,7 @@ import static org.hamcrest.Matchers.sameInstance;
 /**
  */
 public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataImplTestCase {
+
     private void addField(Document d, String name, String value) {
         d.add(new StringField(name, value, Field.Store.YES));
         d.add(new SortedSetDocValuesField(name, new BytesRef(value)));
@@ -246,11 +246,11 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
         // missing value is set to an actual value
         final String[] values = new String[randomIntBetween(2, 30)];
         for (int i = 1; i < values.length; ++i) {
-            values[i] = TestUtil.randomUnicodeString(random());
+            values[i] = TestUtil.randomUnicodeString(getRandom());
         }
         final int numDocs = scaledRandomIntBetween(10, 3072);
         for (int i = 0; i < numDocs; ++i) {
-            final String value = RandomPicks.randomFrom(random(), values);
+            final String value = RandomPicks.randomFrom(getRandom(), values);
             if (value == null) {
                 writer.addDocument(new Document());
             } else {
@@ -265,7 +265,7 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
 
         final IndexFieldData indexFieldData = getForField("value");
         final String missingValue = values[1];
-        IndexSearcher searcher = new IndexSearcher(DirectoryReader.open(writer));
+        IndexSearcher searcher = new IndexSearcher(DirectoryReader.open(writer, true));
         XFieldComparatorSource comparator = indexFieldData.comparatorSource(missingValue, MultiValueMode.MIN, null);
         TopFieldDocs topDocs = searcher.search(new MatchAllDocsQuery(), randomBoolean() ? numDocs : randomIntBetween(10, numDocs), new Sort(new SortField("value", comparator, reverse)));
         assertEquals(numDocs, topDocs.totalHits);
@@ -302,11 +302,11 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
     public void testSortMissing(boolean first, boolean reverse) throws IOException {
         final String[] values = new String[randomIntBetween(2, 10)];
         for (int i = 1; i < values.length; ++i) {
-            values[i] = TestUtil.randomUnicodeString(random());
+            values[i] = TestUtil.randomUnicodeString(getRandom());
         }
         final int numDocs = scaledRandomIntBetween(10, 3072);
         for (int i = 0; i < numDocs; ++i) {
-            final String value = RandomPicks.randomFrom(random(), values);
+            final String value = RandomPicks.randomFrom(getRandom(), values);
             if (value == null) {
                 writer.addDocument(new Document());
             } else {
@@ -319,7 +319,7 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
             }
         }
         final IndexFieldData indexFieldData = getForField("value");
-        IndexSearcher searcher = new IndexSearcher(DirectoryReader.open(writer));
+        IndexSearcher searcher = new IndexSearcher(DirectoryReader.open(writer, true));
         XFieldComparatorSource comparator = indexFieldData.comparatorSource(first ? "_first" : "_last", MultiValueMode.MIN, null);
         TopFieldDocs topDocs = searcher.search(new MatchAllDocsQuery(), randomBoolean() ? numDocs : randomIntBetween(10, numDocs), new Sort(new SortField("value", comparator, reverse)));
         assertEquals(numDocs, topDocs.totalHits);
@@ -355,7 +355,7 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
     public void testNestedSorting(MultiValueMode sortMode) throws IOException {
         final String[] values = new String[randomIntBetween(2, 20)];
         for (int i = 0; i < values.length; ++i) {
-            values[i] = TestUtil.randomSimpleString(random());
+            values[i] = TestUtil.randomSimpleString(getRandom());
         }
         final int numParents = scaledRandomIntBetween(10, 3072);
         List<Document> docs = new ArrayList<>();
@@ -367,14 +367,14 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
                 final Document child = new Document();
                 final int numValues = randomInt(3);
                 for (int k = 0; k < numValues; ++k) {
-                    final String value = RandomPicks.randomFrom(random(), values);
+                    final String value = RandomPicks.randomFrom(getRandom(), values);
                     addField(child, "text", value);
                 }
                 docs.add(child);
             }
             final Document parent = new Document();
             parent.add(new StringField("type", "parent", Store.YES));
-            final String value = RandomPicks.randomFrom(random(), values);
+            final String value = RandomPicks.randomFrom(getRandom(), values);
             if (value != null) {
                 addField(parent, "text", value);
             }
@@ -387,8 +387,8 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
                 writer.commit();
             }
         }
-        DirectoryReader directoryReader = DirectoryReader.open(writer);
-        directoryReader = ElasticsearchDirectoryReader.wrap(directoryReader, new ShardId(indexService.index(), 0));
+        DirectoryReader directoryReader = DirectoryReader.open(writer, true);
+        directoryReader = ElasticsearchDirectoryReader.wrap(directoryReader, new ShardId(new Index("test"), 0));
         IndexSearcher searcher = new IndexSearcher(directoryReader);
         IndexFieldData<?> fieldData = getForField("text");
         final Object missingValue;
@@ -400,10 +400,10 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
             missingValue = "_last";
             break;
         case 2:
-            missingValue = new BytesRef(RandomPicks.randomFrom(random(), values));
+            missingValue = new BytesRef(RandomPicks.randomFrom(getRandom(), values));
             break;
         default:
-            missingValue = new BytesRef(TestUtil.randomSimpleString(random()));
+            missingValue = new BytesRef(TestUtil.randomSimpleString(getRandom()));
             break;
         }
         Query parentFilter = new TermQuery(new Term("type", "parent"));
@@ -468,10 +468,12 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
         }
     }
 
+    @Test
     public void testGlobalOrdinals() throws Exception {
         fillExtendedMvSet();
         refreshReader();
-        IndexOrdinalsFieldData ifd = getForField("string", "value", hasDocValues());
+        FieldDataType fieldDataType = new FieldDataType("string", Settings.builder().put("global_values", "fixed"));
+        IndexOrdinalsFieldData ifd = getForField(fieldDataType, "value", hasDocValues());
         IndexOrdinalsFieldData globalOrdinals = ifd.loadGlobal(topLevelReader);
         assertThat(topLevelReader.leaves().size(), equalTo(3));
 
@@ -484,17 +486,17 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
         values.setDocument(0);
         assertThat(values.cardinality(), equalTo(2));
         long ord = values.nextOrd();
-        assertThat(ord, equalTo(3L));
+        assertThat(ord, equalTo(3l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("02"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(5L));
+        assertThat(ord, equalTo(5l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("04"));
         values.setDocument(1);
         assertThat(values.cardinality(), equalTo(0));
         values.setDocument(2);
         assertThat(values.cardinality(), equalTo(1));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(4L));
+        assertThat(ord, equalTo(4l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("03"));
 
         // Second segment
@@ -505,37 +507,37 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
         values.setDocument(0);
         assertThat(values.cardinality(), equalTo(3));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(5L));
+        assertThat(ord, equalTo(5l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("04"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(6L));
+        assertThat(ord, equalTo(6l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("05"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(7L));
+        assertThat(ord, equalTo(7l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("06"));
         values.setDocument(1);
         assertThat(values.cardinality(), equalTo(3));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(7L));
+        assertThat(ord, equalTo(7l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("06"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(8L));
+        assertThat(ord, equalTo(8l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("07"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(9L));
+        assertThat(ord, equalTo(9l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("08"));
         values.setDocument(2);
         assertThat(values.cardinality(), equalTo(0));
         values.setDocument(3);
         assertThat(values.cardinality(), equalTo(3));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(9L));
+        assertThat(ord, equalTo(9l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("08"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(10L));
+        assertThat(ord, equalTo(10l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("09"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(11L));
+        assertThat(ord, equalTo(11l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("10"));
 
         // Third segment
@@ -547,16 +549,17 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
         values.setDocument(0);
         assertThat(values.cardinality(), equalTo(3));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(0L));
+        assertThat(ord, equalTo(0l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("!08"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(1L));
+        assertThat(ord, equalTo(1l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("!09"));
         ord = values.nextOrd();
-        assertThat(ord, equalTo(2L));
+        assertThat(ord, equalTo(2l));
         assertThat(values.lookupOrd(ord).utf8ToString(), equalTo("!10"));
     }
 
+    @Test
     public void testTermsEnum() throws Exception {
         fillExtendedMvSet();
         LeafReaderContext atomicReaderContext = refreshReader();
@@ -592,18 +595,20 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
         assertThat(size, equalTo(3));
     }
 
+    @Test
     public void testGlobalOrdinalsGetRemovedOnceIndexReaderCloses() throws Exception {
         fillExtendedMvSet();
         refreshReader();
-        IndexOrdinalsFieldData ifd = getForField("string", "value", hasDocValues());
+        FieldDataType fieldDataType = new FieldDataType("string", Settings.builder().put("global_values", "fixed").put("cache", "node"));
+        IndexOrdinalsFieldData ifd = getForField(fieldDataType, "value", hasDocValues());
         IndexOrdinalsFieldData globalOrdinals = ifd.loadGlobal(topLevelReader);
         assertThat(ifd.loadGlobal(topLevelReader), sameInstance(globalOrdinals));
         // 3 b/c 1 segment level caches and 1 top level cache
         // in case of doc values, we don't cache atomic FD, so only the top-level cache is there
-        assertThat(indicesFieldDataCache.getCache().weight(), equalTo(hasDocValues() ? 1L : 4L));
+        assertThat(indicesFieldDataCache.getCache().size(), equalTo(hasDocValues() ? 1L : 4L));
 
         IndexOrdinalsFieldData cachedInstance = null;
-        for (Accountable ramUsage : indicesFieldDataCache.getCache().values()) {
+        for (Accountable ramUsage : indicesFieldDataCache.getCache().asMap().values()) {
             if (ramUsage instanceof IndexOrdinalsFieldData) {
                 cachedInstance = (IndexOrdinalsFieldData) ramUsage;
                 break;
@@ -612,12 +617,12 @@ public abstract class AbstractStringFieldDataTestCase extends AbstractFieldDataI
         assertThat(cachedInstance, sameInstance(globalOrdinals));
         topLevelReader.close();
         // Now only 3 segment level entries, only the toplevel reader has been closed, but the segment readers are still used by IW
-        assertThat(indicesFieldDataCache.getCache().weight(), equalTo(hasDocValues() ? 0L : 3L));
+        assertThat(indicesFieldDataCache.getCache().size(), equalTo(hasDocValues() ? 0L : 3L));
 
         refreshReader();
         assertThat(ifd.loadGlobal(topLevelReader), not(sameInstance(globalOrdinals)));
 
         ifdService.clear();
-        assertThat(indicesFieldDataCache.getCache().weight(), equalTo(0L));
+        assertThat(indicesFieldDataCache.getCache().size(), equalTo(0l));
     }
 }

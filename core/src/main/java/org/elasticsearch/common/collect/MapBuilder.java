@@ -19,10 +19,11 @@
 
 package org.elasticsearch.common.collect;
 
-import java.util.HashMap;
+import com.google.common.collect.ImmutableMap;
+
 import java.util.Map;
 
-import static java.util.Collections.unmodifiableMap;
+import static com.google.common.collect.Maps.newHashMap;
 
 /**
  *
@@ -37,14 +38,14 @@ public class MapBuilder<K, V> {
         return new MapBuilder<>(map);
     }
 
-    private Map<K, V> map = new HashMap<>();
+    private Map<K, V> map = newHashMap();
 
     public MapBuilder() {
-        this.map = new HashMap<>();
+        this.map = newHashMap();
     }
 
     public MapBuilder(Map<K, V> map) {
-        this.map = new HashMap<>(map);
+        this.map = newHashMap(map);
     }
 
     public MapBuilder<K, V> putAll(Map<K, V> map) {
@@ -83,12 +84,7 @@ public class MapBuilder<K, V> {
         return this.map;
     }
 
-    /**
-     * Build an immutable copy of the map under construction. Always copies the map under construction. Prefer building
-     * a HashMap by hand and wrapping it in an unmodifiableMap
-     */
-    public Map<K, V> immutableMap() {
-        // TODO: follow the directions in the Javadoc for this method
-        return unmodifiableMap(new HashMap<>(map));
+    public ImmutableMap<K, V> immutableMap() {
+        return ImmutableMap.copyOf(map);
     }
 }

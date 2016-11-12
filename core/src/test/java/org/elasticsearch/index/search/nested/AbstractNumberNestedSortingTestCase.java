@@ -38,12 +38,14 @@ import org.apache.lucene.search.join.ScoreMode;
 import org.apache.lucene.search.join.ToParentBlockJoinQuery;
 import org.elasticsearch.common.lucene.index.ElasticsearchDirectoryReader;
 import org.elasticsearch.common.lucene.search.Queries;
+import org.elasticsearch.index.Index;
 import org.elasticsearch.index.fielddata.AbstractFieldDataTestCase;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource.Nested;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.search.MultiValueMode;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,126 +57,122 @@ import static org.hamcrest.Matchers.equalTo;
  */
 public abstract class AbstractNumberNestedSortingTestCase extends AbstractFieldDataTestCase {
 
-    @Override
-    protected boolean hasDocValues() {
-        return true;
-    }
-
+    @Test
     public void testNestedSorting() throws Exception {
         List<Document> docs = new ArrayList<>();
         Document document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
         document.add(new StringField("__type", "parent", Field.Store.NO));
-        document.add(createField("field1", 1));
+        document.add(createField("field1", 1, Field.Store.NO));
         docs.add(document);
         writer.addDocuments(docs);
         writer.commit();
 
         docs.clear();
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 2));
+        document.add(createField("field2", 2, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
         document.add(new StringField("__type", "parent", Field.Store.NO));
-        document.add(createField("field1", 2));
+        document.add(createField("field1", 2, Field.Store.NO));
         docs.add(document);
         writer.addDocuments(docs);
 
         docs.clear();
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 1));
+        document.add(createField("field2", 1, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
         document.add(new StringField("__type", "parent", Field.Store.NO));
-        document.add(createField("field1", 3));
+        document.add(createField("field1", 3, Field.Store.NO));
         docs.add(document);
         writer.addDocuments(docs);
 
         docs.clear();
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "F", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 4));
-        document.add(new StringField("filter_1", "F", Field.Store.NO));
-        docs.add(document);
-        document = new Document();
-        document.add(new StringField("__type", "parent", Field.Store.NO));
-        document.add(createField("field1", 4));
-        docs.add(document);
-        writer.addDocuments(docs);
-        writer.commit();
-
-        docs.clear();
-        document = new Document();
-        document.add(createField("field2", 3));
-        document.add(new StringField("filter_1", "F", Field.Store.NO));
-        docs.add(document);
-        document = new Document();
-        document.add(createField("field2", 3));
-        document.add(new StringField("filter_1", "F", Field.Store.NO));
-        docs.add(document);
-        document = new Document();
-        document.add(createField("field2", 5));
+        document.add(createField("field2", 4, Field.Store.NO));
         document.add(new StringField("filter_1", "F", Field.Store.NO));
         docs.add(document);
         document = new Document();
         document.add(new StringField("__type", "parent", Field.Store.NO));
-        document.add(createField("field1", 5));
+        document.add(createField("field1", 4, Field.Store.NO));
         docs.add(document);
         writer.addDocuments(docs);
         writer.commit();
 
         docs.clear();
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
+        document.add(new StringField("filter_1", "F", Field.Store.NO));
+        docs.add(document);
+        document = new Document();
+        document.add(createField("field2", 3, Field.Store.NO));
+        document.add(new StringField("filter_1", "F", Field.Store.NO));
+        docs.add(document);
+        document = new Document();
+        document.add(createField("field2", 5, Field.Store.NO));
+        document.add(new StringField("filter_1", "F", Field.Store.NO));
+        docs.add(document);
+        document = new Document();
+        document.add(new StringField("__type", "parent", Field.Store.NO));
+        document.add(createField("field1", 5, Field.Store.NO));
+        docs.add(document);
+        writer.addDocuments(docs);
+        writer.commit();
+
+        docs.clear();
+        document = new Document();
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 6));
+        document.add(createField("field2", 6, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
         document.add(new StringField("__type", "parent", Field.Store.NO));
-        document.add(createField("field1", 6));
+        document.add(createField("field1", 6, Field.Store.NO));
         docs.add(document);
         writer.addDocuments(docs);
         writer.commit();
@@ -182,26 +180,26 @@ public abstract class AbstractNumberNestedSortingTestCase extends AbstractFieldD
         // This doc will not be included, because it doesn't have nested docs
         document = new Document();
         document.add(new StringField("__type", "parent", Field.Store.NO));
-        document.add(createField("field1", 7));
+        document.add(createField("field1", 7, Field.Store.NO));
         writer.addDocument(document);
         writer.commit();
 
         docs.clear();
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "T", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 3));
+        document.add(createField("field2", 3, Field.Store.NO));
         document.add(new StringField("filter_1", "F", Field.Store.NO));
         docs.add(document);
         document = new Document();
-        document.add(createField("field2", 7));
+        document.add(createField("field2", 7, Field.Store.NO));
         document.add(new StringField("filter_1", "F", Field.Store.NO));
         docs.add(document);
         document = new Document();
         document.add(new StringField("__type", "parent", Field.Store.NO));
-        document.add(createField("field1", 8));
+        document.add(createField("field1", 8, Field.Store.NO));
         docs.add(document);
         writer.addDocuments(docs);
         writer.commit();
@@ -218,8 +216,8 @@ public abstract class AbstractNumberNestedSortingTestCase extends AbstractFieldD
         writer.addDocument(document);
 
         MultiValueMode sortMode = MultiValueMode.SUM;
-        DirectoryReader directoryReader = DirectoryReader.open(writer);
-        directoryReader = ElasticsearchDirectoryReader.wrap(directoryReader, new ShardId(indexService.index(), 0));
+        DirectoryReader directoryReader = DirectoryReader.open(writer, false);
+        directoryReader = ElasticsearchDirectoryReader.wrap(directoryReader, new ShardId(new Index("test"), 0));
         IndexSearcher searcher = new IndexSearcher(directoryReader);
         Query parentFilter = new TermQuery(new Term("__type", "parent"));
         Query childFilter = Queries.not(parentFilter);
@@ -352,7 +350,7 @@ public abstract class AbstractNumberNestedSortingTestCase extends AbstractFieldD
         assertThat(((Number) ((FieldDoc) topDocs.scoreDocs[4]).fields[0]).intValue(), equalTo(4));
     }
 
-    protected abstract IndexableField createField(String name, int value);
+    protected abstract IndexableField createField(String name, int value, Field.Store store);
 
     protected abstract IndexFieldData.XFieldComparatorSource createFieldComparator(String fieldName, MultiValueMode sortMode, Object missingValue, Nested nested);
 

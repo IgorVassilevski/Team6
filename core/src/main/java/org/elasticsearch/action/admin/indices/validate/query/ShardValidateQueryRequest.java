@@ -22,9 +22,9 @@ package org.elasticsearch.action.admin.indices.validate.query;
 import org.elasticsearch.action.support.broadcast.BroadcastShardRequest;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.shard.ShardId;
 
 import java.io.IOException;
@@ -34,7 +34,7 @@ import java.io.IOException;
  */
 public class ShardValidateQueryRequest extends BroadcastShardRequest {
 
-    private QueryBuilder query;
+    private BytesReference source;
     private String[] types = Strings.EMPTY_ARRAY;
     private boolean explain;
     private boolean rewrite;
@@ -49,7 +49,7 @@ public class ShardValidateQueryRequest extends BroadcastShardRequest {
 
     ShardValidateQueryRequest(ShardId shardId, @Nullable String[] filteringAliases, ValidateQueryRequest request) {
         super(shardId, request);
-        this.query = request.query();
+        this.source = request.source();
         this.types = request.types();
         this.explain = request.explain();
         this.rewrite = request.rewrite();
@@ -57,8 +57,8 @@ public class ShardValidateQueryRequest extends BroadcastShardRequest {
         this.nowInMillis = request.nowInMillis;
     }
 
-    public QueryBuilder query() {
-        return query;
+    public BytesReference source() {
+        return source;
     }
 
     public String[] types() {
@@ -84,7 +84,7 @@ public class ShardValidateQueryRequest extends BroadcastShardRequest {
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
-        query = in.readNamedWriteable(QueryBuilder.class);
+        source = in.readBytesReference();
 
         int typesSize = in.readVInt();
         if (typesSize > 0) {
@@ -109,7 +109,7 @@ public class ShardValidateQueryRequest extends BroadcastShardRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeNamedWriteable(query);
+        out.writeBytesReference(source);
 
         out.writeVInt(types.length);
         for (String type : types) {

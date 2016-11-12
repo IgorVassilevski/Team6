@@ -20,10 +20,12 @@
 package org.elasticsearch.common.unit;
 
 import org.elasticsearch.ElasticsearchParseException;
+import org.elasticsearch.cluster.metadata.MetaDataIndexUpgradeService;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
+import org.elasticsearch.common.settings.Settings;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -174,6 +176,7 @@ public class ByteSizeValue implements Streamable {
 
     public static ByteSizeValue parseBytesSizeValue(String sValue, ByteSizeValue defaultValue, String settingName) throws ElasticsearchParseException {
         settingName = Objects.requireNonNull(settingName);
+        assert settingName.startsWith("index.") == false || MetaDataIndexUpgradeService.INDEX_BYTES_SIZE_SETTINGS.contains(settingName);
         if (sValue == null) {
             return defaultValue;
         }
@@ -210,7 +213,12 @@ public class ByteSizeValue implements Streamable {
                 bytes = 0;
             } else {
                 // Missing units:
-                throw new ElasticsearchParseException("failed to parse setting [{}] with value [{}] as a size in bytes: unit is missing or unrecognized", settingName, sValue);
+                if (Settings.getSettingsRequireUnits()) {
+                    throw new ElasticsearchParseException("failed to parse setting [{}] with value [{}] as a size in bytes: unit is missing or unrecognized", settingName, sValue);
+                } else {
+                    // Leniency default to bytes:
+                    bytes = Long.parseLong(sValue);
+                }
             }
         } catch (NumberFormatException e) {
             throw new ElasticsearchParseException("failed to parse [{}]", e, sValue);
@@ -251,7 +259,7 @@ public class ByteSizeValue implements Streamable {
 
     @Override
     public int hashCode() {
-        int result = Long.hashCode(size);
+        int result = (int) (size ^ (size >>> 32));
         result = 31 * result + (sizeUnit != null ? sizeUnit.hashCode() : 0);
         return result;
     }

@@ -21,6 +21,7 @@ package org.elasticsearch.common.unit;
 
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import static org.hamcrest.Matchers.is;
 
@@ -28,6 +29,8 @@ import static org.hamcrest.Matchers.is;
  * Tests for the {@link RatioValue} class
  */
 public class RatioValueTests extends ESTestCase {
+
+    @Test
     public void testParsing() {
         assertThat(RatioValue.parseRatioValue("100%").toString(), is("100.0%"));
         assertThat(RatioValue.parseRatioValue("0%").toString(), is("0.0%"));
@@ -43,6 +46,7 @@ public class RatioValueTests extends ESTestCase {
         assertThat(RatioValue.parseRatioValue("0.001").toString(), is("0.1%"));
     }
 
+    @Test
     public void testNegativeCase() {
         testInvalidRatio("100.0001%");
         testInvalidRatio("-0.1%");

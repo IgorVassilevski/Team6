@@ -17,28 +17,21 @@
 
 package org.elasticsearch.common.inject.internal;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.ConfigurationException;
 import org.elasticsearch.common.inject.TypeLiteral;
 import org.elasticsearch.common.inject.spi.Message;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.GenericDeclaration;
-import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
-import java.lang.reflect.WildcardType;
+import java.io.Serializable;
+import java.lang.reflect.*;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-import static java.util.Collections.singleton;
-import static java.util.Collections.unmodifiableMap;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Static methods for working with types that we aren't publishing in the
@@ -53,20 +46,18 @@ public class MoreTypes {
     private MoreTypes() {
     }
 
-    private static final Map<TypeLiteral<?>, TypeLiteral<?>> PRIMITIVE_TO_WRAPPER;
-    static {
-        Map<TypeLiteral<?>, TypeLiteral<?>> primitiveToWrapper = new HashMap<>();
-        primitiveToWrapper.put(TypeLiteral.get(boolean.class), TypeLiteral.get(Boolean.class));
-        primitiveToWrapper.put(TypeLiteral.get(byte.class), TypeLiteral.get(Byte.class));
-        primitiveToWrapper.put(TypeLiteral.get(short.class), TypeLiteral.get(Short.class));
-        primitiveToWrapper.put(TypeLiteral.get(int.class), TypeLiteral.get(Integer.class));
-        primitiveToWrapper.put(TypeLiteral.get(long.class), TypeLiteral.get(Long.class));
-        primitiveToWrapper.put(TypeLiteral.get(float.class), TypeLiteral.get(Float.class));
-        primitiveToWrapper.put(TypeLiteral.get(double.class), TypeLiteral.get(Double.class));
-        primitiveToWrapper.put(TypeLiteral.get(char.class), TypeLiteral.get(Character.class));
-        primitiveToWrapper.put(TypeLiteral.get(void.class), TypeLiteral.get(Void.class));
-        PRIMITIVE_TO_WRAPPER = unmodifiableMap(primitiveToWrapper);
-    }
+    private static final Map<TypeLiteral<?>, TypeLiteral<?>> PRIMITIVE_TO_WRAPPER
+            = new ImmutableMap.Builder<TypeLiteral<?>, TypeLiteral<?>>()
+            .put(TypeLiteral.get(boolean.class), TypeLiteral.get(Boolean.class))
+            .put(TypeLiteral.get(byte.class), TypeLiteral.get(Byte.class))
+            .put(TypeLiteral.get(short.class), TypeLiteral.get(Short.class))
+            .put(TypeLiteral.get(int.class), TypeLiteral.get(Integer.class))
+            .put(TypeLiteral.get(long.class), TypeLiteral.get(Long.class))
+            .put(TypeLiteral.get(float.class), TypeLiteral.get(Float.class))
+            .put(TypeLiteral.get(double.class), TypeLiteral.get(Double.class))
+            .put(TypeLiteral.get(char.class), TypeLiteral.get(Character.class))
+            .put(TypeLiteral.get(void.class), TypeLiteral.get(Void.class))
+            .build();
 
     /**
      * Returns an equivalent type that's safe for use in a key. The returned type will be free of
@@ -77,7 +68,7 @@ public class MoreTypes {
     public static <T> TypeLiteral<T> makeKeySafe(TypeLiteral<T> type) {
         if (!isFullySpecified(type.getType())) {
             String message = type + " cannot be used as a key; It is not fully specified.";
-            throw new ConfigurationException(singleton(new Message(message)));
+            throw new ConfigurationException(ImmutableSet.of(new Message(message)));
         }
 
         @SuppressWarnings("unchecked")
@@ -107,7 +98,8 @@ public class MoreTypes {
 
     /**
      * Returns a type that is functionally equal but not necessarily equal
-     * according to {@link Object#equals(Object) Object.equals()}.
+     * according to {@link Object#equals(Object) Object.equals()}. The returned
+     * type is {@link Serializable}.
      */
     public static Type canonicalize(Type type) {
         if (type instanceof ParameterizedTypeImpl
@@ -138,6 +130,17 @@ public class MoreTypes {
         }
     }
 
+    /**
+     * Returns a type that's functionally equal but not necessarily equal
+     * according to {@link Object#equals(Object) Object.equals}. The returned
+     * member is {@link Serializable}.
+     */
+    public static Member serializableCopy(Member member) {
+        return member instanceof MemberImpl
+                ? member
+                : new MemberImpl(member);
+    }
+
     public static Class<?> getRawType(Type type) {
         if (type instanceof Class<?>) {
             // type is a normal class.
@@ -150,11 +153,8 @@ public class MoreTypes {
             // Neal isn't either but suspects some pathological case related
             // to nested classes exists.
             Type rawType = parameterizedType.getRawType();
-            if (!(rawType instanceof Class)) {
-                throw new IllegalArgumentException(
-                        "Expected a Class, but <" + type +"> is of type " + type.getClass().getName()
-                );
-            }
+            checkArgument(rawType instanceof Class,
+                    "Expected a Class, but <%s> is of type %s", type, type.getClass().getName());
             return (Class<?>) rawType;
 
         } else if (type instanceof GenericArrayType) {
@@ -316,7 +316,7 @@ public class MoreTypes {
      * Returns {@code Field.class}, {@code Method.class} or {@code Constructor.class}.
      */
     public static Class<? extends Member> memberType(Member member) {
-        Objects.requireNonNull(member, "member");
+        checkNotNull(member, "member");
 
         if (member instanceof MemberImpl) {
             return ((MemberImpl) member).memberType;
@@ -355,7 +355,7 @@ public class MoreTypes {
     }
 
     public static String memberKey(Member member) {
-        Objects.requireNonNull(member, "member");
+        checkNotNull(member, "member");
 
         return "<NO_MEMBER_KEY>";
     }
@@ -437,7 +437,7 @@ public class MoreTypes {
     }
 
     public static class ParameterizedTypeImpl
-            implements ParameterizedType, CompositeType {
+            implements ParameterizedType, Serializable, CompositeType {
         private final Type ownerType;
         private final Type rawType;
         private final Type[] typeArguments;
@@ -446,20 +446,17 @@ public class MoreTypes {
             // require an owner type if the raw type needs it
             if (rawType instanceof Class<?>) {
                 Class rawTypeAsClass = (Class) rawType;
-                if (ownerType == null && rawTypeAsClass.getEnclosingClass() != null) {
-                    throw new IllegalArgumentException("No owner type for enclosed " + rawType);
-                }
-                if (ownerType != null && rawTypeAsClass.getEnclosingClass() == null) {
-                    throw new IllegalArgumentException("Owner type for unenclosed " + rawType);
-                }
-
+                checkArgument(ownerType != null || rawTypeAsClass.getEnclosingClass() == null,
+                        "No owner type for enclosed %s", rawType);
+                checkArgument(ownerType == null || rawTypeAsClass.getEnclosingClass() != null,
+                        "Owner type for unenclosed %s", rawType);
             }
 
             this.ownerType = ownerType == null ? null : canonicalize(ownerType);
             this.rawType = canonicalize(rawType);
             this.typeArguments = typeArguments.clone();
             for (int t = 0; t < this.typeArguments.length; t++) {
-                Objects.requireNonNull(this.typeArguments[t], "type parameter");
+                checkNotNull(this.typeArguments[t], "type parameter");
                 checkNotPrimitive(this.typeArguments[t], "type parameters");
                 this.typeArguments[t] = canonicalize(this.typeArguments[t]);
             }
@@ -514,10 +511,12 @@ public class MoreTypes {
         public String toString() {
             return MoreTypes.toString(this);
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     public static class GenericArrayTypeImpl
-            implements GenericArrayType, CompositeType {
+            implements GenericArrayType, Serializable, CompositeType {
         private final Type componentType;
 
         public GenericArrayTypeImpl(Type componentType) {
@@ -549,6 +548,8 @@ public class MoreTypes {
         public String toString() {
             return MoreTypes.toString(this);
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -556,28 +557,23 @@ public class MoreTypes {
      * lower bounds. We only support what the Java 6 language needs - at most one
      * bound. If a lower bound is set, the upper bound must be Object.class.
      */
-    public static class WildcardTypeImpl implements WildcardType, CompositeType {
+    public static class WildcardTypeImpl implements WildcardType, Serializable, CompositeType {
         private final Type upperBound;
         private final Type lowerBound;
 
         public WildcardTypeImpl(Type[] upperBounds, Type[] lowerBounds) {
-            if (lowerBounds.length > 1) {
-                throw new IllegalArgumentException("Must have at most one lower bound.");
-            }
-            if (upperBounds.length != 1) {
-                throw new IllegalArgumentException("Must have exactly one upper bound.");
-            }
+            checkArgument(lowerBounds.length <= 1, "Must have at most one lower bound.");
+            checkArgument(upperBounds.length == 1, "Must have exactly one upper bound.");
+
             if (lowerBounds.length == 1) {
-                Objects.requireNonNull(lowerBounds[0], "lowerBound");
+                checkNotNull(lowerBounds[0], "lowerBound");
                 checkNotPrimitive(lowerBounds[0], "wildcard bounds");
-                if (upperBounds[0] != Object.class) {
-                    throw new IllegalArgumentException("bounded both ways");
-                }
+                checkArgument(upperBounds[0] == Object.class, "bounded both ways");
                 this.lowerBound = canonicalize(lowerBounds[0]);
                 this.upperBound = Object.class;
 
             } else {
-                Objects.requireNonNull(upperBounds[0], "upperBound");
+                checkNotNull(upperBounds[0], "upperBound");
                 checkNotPrimitive(upperBounds[0], "wildcard bounds");
                 this.lowerBound = null;
                 this.upperBound = canonicalize(upperBounds[0]);
@@ -615,12 +611,13 @@ public class MoreTypes {
         public String toString() {
             return MoreTypes.toString(this);
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     private static void checkNotPrimitive(Type type, String use) {
-        if (type instanceof Class<?> && ((Class) type).isPrimitive()) {
-            throw new IllegalArgumentException("Primitive types are not allowed in " + use + ": " + type);
-        }
+        checkArgument(!(type instanceof Class<?>) || !((Class) type).isPrimitive(),
+                "Primitive types are not allowed in %s: %s", use, type);
     }
 
     /**
@@ -628,7 +625,7 @@ public class MoreTypes {
      * our exception types. We workaround this with this serializable implementation. It includes all
      * of the API methods, plus everything we use for line numbers and messaging.
      */
-    public static class MemberImpl implements Member {
+    public static class MemberImpl implements Member, Serializable {
         private final Class<?> declaringClass;
         private final String name;
         private final int modifiers;

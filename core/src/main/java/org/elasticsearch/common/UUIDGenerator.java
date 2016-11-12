@@ -23,5 +23,5 @@ package org.elasticsearch.common;
  * Generates opaque unique strings.
  */
 interface UUIDGenerator {
-    String getBase64UUID();
+    public String getBase64UUID();
 }

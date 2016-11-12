@@ -19,14 +19,37 @@
 
 package org.elasticsearch.indices.query;
 
-import org.elasticsearch.common.xcontent.ParseFieldRegistry;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
+
+import org.elasticsearch.common.component.AbstractComponent;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.query.QueryParser;
 
-/**
- * Extensions to ParseFieldRegistry to make Guice happy.
- */
-public class IndicesQueriesRegistry extends ParseFieldRegistry<QueryParser<?>> {
-    public IndicesQueriesRegistry() {
-        super("query");
+import java.util.Map;
+import java.util.Set;
+
+public class IndicesQueriesRegistry extends AbstractComponent {
+
+    private ImmutableMap<String, QueryParser> queryParsers;
+
+    @Inject
+    public IndicesQueriesRegistry(Settings settings, Set<QueryParser> injectedQueryParsers) {
+        super(settings);
+        Map<String, QueryParser> queryParsers = Maps.newHashMap();
+        for (QueryParser queryParser : injectedQueryParsers) {
+            for (String name : queryParser.names()) {
+                queryParsers.put(name, queryParser);
+            }
+        }
+        this.queryParsers = ImmutableMap.copyOf(queryParsers);
+    }
+
+    /**
+     * Returns all the registered query parsers
+     */
+    public ImmutableMap<String, QueryParser> queryParsers() {
+        return queryParsers;
     }
 }

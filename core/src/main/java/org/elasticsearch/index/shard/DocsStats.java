@@ -24,6 +24,7 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 
 import java.io.IOException;
 
@@ -87,8 +88,8 @@ public class DocsStats implements Streamable, ToXContent {
     }
 
     static final class Fields {
-        static final String DOCS = "docs";
-        static final String COUNT = "count";
-        static final String DELETED = "deleted";
+        static final XContentBuilderString DOCS = new XContentBuilderString("docs");
+        static final XContentBuilderString COUNT = new XContentBuilderString("count");
+        static final XContentBuilderString DELETED = new XContentBuilderString("deleted");
     }
 }

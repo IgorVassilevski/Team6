@@ -16,6 +16,7 @@
 
 package org.elasticsearch.common.inject;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.internal.Errors;
 import org.elasticsearch.common.inject.internal.ErrorsException;
 import org.elasticsearch.common.inject.internal.InternalContext;
@@ -23,10 +24,6 @@ import org.elasticsearch.common.inject.spi.InjectionListener;
 import org.elasticsearch.common.inject.spi.InjectionPoint;
 
 import java.util.List;
-import java.util.Set;
-
-import static java.util.Collections.unmodifiableSet;
-import static java.util.stream.Collectors.toSet;
 
 /**
  * Injects members of instances of a given type.
@@ -115,9 +112,11 @@ class MembersInjectorImpl<T> implements MembersInjector<T> {
         return "MembersInjector<" + typeLiteral + ">";
     }
 
-    public Set<InjectionPoint> getInjectionPoints() {
-        return unmodifiableSet(memberInjectors.stream()
-                .map(SingleMemberInjector::getInjectionPoint)
-                .collect(toSet()));
+    public ImmutableSet<InjectionPoint> getInjectionPoints() {
+        ImmutableSet.Builder<InjectionPoint> builder = ImmutableSet.builder();
+        for (SingleMemberInjector memberInjector : memberInjectors) {
+            builder.add(memberInjector.getInjectionPoint());
+        }
+        return builder.build();
     }
 }

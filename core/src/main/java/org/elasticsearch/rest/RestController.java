@@ -19,30 +19,29 @@
 
 package org.elasticsearch.rest;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
-import org.elasticsearch.client.node.NodeClient;
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
-import org.elasticsearch.common.logging.DeprecationLogger;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.path.PathTrie;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.rest.support.RestUtils;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Set;
+import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.elasticsearch.rest.RestStatus.BAD_REQUEST;
-import static org.elasticsearch.rest.RestStatus.OK;
+import static org.elasticsearch.rest.RestStatus.*;
 
 /**
  *
  */
-public class RestController extends AbstractLifecycleComponent {
+public class RestController extends AbstractLifecycleComponent<RestController> {
+
+    private ImmutableSet<String> relevantHeaders = ImmutableSet.of();
+
     private final PathTrie<RestHandler> getHandlers = new PathTrie<>(RestUtils.REST_DECODER);
     private final PathTrie<RestHandler> postHandlers = new PathTrie<>(RestUtils.REST_DECODER);
     private final PathTrie<RestHandler> putHandlers = new PathTrie<>(RestUtils.REST_DECODER);
@@ -52,15 +51,12 @@ public class RestController extends AbstractLifecycleComponent {
 
     private final RestHandlerFilter handlerFilter = new RestHandlerFilter();
 
-    /** Rest headers that are copied to internal requests made during a rest request. */
-    private final Set<String> headersToCopy;
-
     // non volatile since the assumption is that pre processors are registered on startup
     private RestFilter[] filters = new RestFilter[0];
 
-    public RestController(Settings settings, Set<String> headersToCopy) {
+    @Inject
+    public RestController(Settings settings) {
         super(settings);
-        this.headersToCopy = headersToCopy;
     }
 
     @Override
@@ -79,81 +75,65 @@ public class RestController extends AbstractLifecycleComponent {
     }
 
     /**
+     * Controls which REST headers get copied over from a {@link org.elasticsearch.rest.RestRequest} to
+     * its corresponding {@link org.elasticsearch.transport.TransportRequest}(s).
+     *
+     * By default no headers get copied but it is possible to extend this behaviour via plugins by calling this method.
+     */
+    public synchronized void registerRelevantHeaders(String... headers) {
+        relevantHeaders = new ImmutableSet.Builder<String>().addAll(relevantHeaders).add(headers).build();
+    }
+
+    /**
+     * Returns the REST headers that get copied over from a {@link org.elasticsearch.rest.RestRequest} to
+     * its corresponding {@link org.elasticsearch.transport.TransportRequest}(s).
+     * By default no headers get copied but it is possible to extend this behaviour via plugins by calling {@link #registerRelevantHeaders(String...)}.
+     */
+    public ImmutableSet<String> relevantHeaders() {
+        return relevantHeaders;
+    }
+
+    /**
      * Registers a pre processor to be executed before the rest request is actually handled.
      */
     public synchronized void registerFilter(RestFilter preProcessor) {
         RestFilter[] copy = new RestFilter[filters.length + 1];
         System.arraycopy(filters, 0, copy, 0, filters.length);
         copy[filters.length] = preProcessor;
-        Arrays.sort(copy, (o1, o2) -> Integer.compare(o1.order(), o2.order()));
+        Arrays.sort(copy, new Comparator<RestFilter>() {
+            @Override
+            public int compare(RestFilter o1, RestFilter o2) {
+                return Integer.compare(o1.order(), o2.order());
+            }
+        });
         filters = copy;
     }
 
     /**
-     * Registers a REST handler to be executed when the provided {@code method} and {@code path} match the request.
-     *
-     * @param method GET, POST, etc.
-     * @param path Path to handle (e.g., "/{index}/{type}/_bulk")
-     * @param handler The handler to actually execute
-     * @param deprecationMessage The message to log and send as a header in the response
-     * @param logger The existing deprecation logger to use
-     */
-    public void registerAsDeprecatedHandler(RestRequest.Method method, String path, RestHandler handler,
-                                            String deprecationMessage, DeprecationLogger logger) {
-        assert (handler instanceof DeprecationRestHandler) == false;
-
-        registerHandler(method, path, new DeprecationRestHandler(handler, deprecationMessage, logger));
-    }
-
-    /**
-     * Registers a REST handler to be executed when the provided {@code method} and {@code path} match the request, or when provided
-     * with {@code deprecatedMethod} and {@code deprecatedPath}. Expected usage:
-     * <pre><code>
-     * // remove deprecation in next major release
-     * controller.registerWithDeprecatedHandler(POST, "/_forcemerge", this,
-     *                                          POST, "/_optimize", deprecationLogger);
-     * controller.registerWithDeprecatedHandler(POST, "/{index}/_forcemerge", this,
-     *                                          POST, "/{index}/_optimize", deprecationLogger);
-     * </code></pre>
-     * <p>
-     * The registered REST handler ({@code method} with {@code path}) is a normal REST handler that is not deprecated and it is
-     * replacing the deprecated REST handler ({@code deprecatedMethod} with {@code deprecatedPath}) that is using the <em>same</em>
-     * {@code handler}.
-     * <p>
-     * Deprecated REST handlers without a direct replacement should be deprecated directly using {@link #registerAsDeprecatedHandler}
-     * and a specific message.
-     *
-     * @param method GET, POST, etc.
-     * @param path Path to handle (e.g., "/_forcemerge")
-     * @param handler The handler to actually execute
-     * @param deprecatedMethod GET, POST, etc.
-     * @param deprecatedPath <em>Deprecated</em> path to handle (e.g., "/_optimize")
-     * @param logger The existing deprecation logger to use
-     */
-    public void registerWithDeprecatedHandler(RestRequest.Method method, String path, RestHandler handler,
-                                              RestRequest.Method deprecatedMethod, String deprecatedPath,
-                                              DeprecationLogger logger) {
-        // e.g., [POST /_optimize] is deprecated! Use [POST /_forcemerge] instead.
-        final String deprecationMessage =
-            "[" + deprecatedMethod.name() + " " + deprecatedPath + "] is deprecated! Use [" + method.name() + " " + path + "] instead.";
-
-        registerHandler(method, path, handler);
-        registerAsDeprecatedHandler(deprecatedMethod, deprecatedPath, handler, deprecationMessage, logger);
-    }
-
-    /**
-     * Registers a REST handler to be executed when the provided method and path match the request.
-     *
-     * @param method GET, POST, etc.
-     * @param path Path to handle (e.g., "/{index}/{type}/_bulk")
-     * @param handler The handler to actually execute
+     * Registers a rest handler to be execute when the provided method and path match the request.
      */
     public void registerHandler(RestRequest.Method method, String path, RestHandler handler) {
-        PathTrie<RestHandler> handlers = getHandlersForMethod(method);
-        if (handlers != null) {
-            handlers.insert(path, handler);
-        } else {
-            throw new IllegalArgumentException("Can't handle [" + method + "] for path [" + path + "]");
+        switch (method) {
+            case GET:
+                getHandlers.insert(path, handler);
+                break;
+            case DELETE:
+                deleteHandlers.insert(path, handler);
+                break;
+            case POST:
+                postHandlers.insert(path, handler);
+                break;
+            case PUT:
+                putHandlers.insert(path, handler);
+                break;
+            case OPTIONS:
+                optionsHandlers.insert(path, handler);
+                break;
+            case HEAD:
+                headHandlers.insert(path, handler);
+                break;
+            default:
+                throw new IllegalArgumentException("Can't handle [" + method + "] for path [" + path + "]");
         }
     }
 
@@ -176,41 +156,24 @@ public class RestController extends AbstractLifecycleComponent {
         return new ControllerFilterChain(executionFilter);
     }
 
-    /**
-     * @param request The current request. Must not be null.
-     * @return true iff the circuit breaker limit must be enforced for processing this request.
-     */
-    public boolean canTripCircuitBreaker(RestRequest request) {
-        RestHandler handler = getHandler(request);
-        return (handler != null) ? handler.canTripCircuitBreaker() : true;
-    }
-
-    public void dispatchRequest(final RestRequest request, final RestChannel channel, final NodeClient client, ThreadContext threadContext) throws Exception {
+    public void dispatchRequest(final RestRequest request, final RestChannel channel) {
         if (!checkRequestParameters(request, channel)) {
             return;
         }
-        try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
-            for (String key : headersToCopy) {
-                String httpHeader = request.header(key);
-                if (httpHeader != null) {
-                    threadContext.putHeader(key, httpHeader);
+
+        if (filters.length == 0) {
+            try {
+                executeHandler(request, channel);
+            } catch (Throwable e) {
+                try {
+                    channel.sendResponse(new BytesRestResponse(channel, e));
+                } catch (Throwable e1) {
+                    logger.error("failed to send failure response for uri [" + request.uri() + "]", e1);
                 }
             }
-            if (filters.length == 0) {
-                executeHandler(request, channel, client);
-            } else {
-                ControllerFilterChain filterChain = new ControllerFilterChain(handlerFilter);
-                filterChain.continueProcessing(request, channel, client);
-            }
-        }
-    }
-
-    public void sendErrorResponse(RestRequest request, RestChannel channel, Exception e) {
-        try {
-            channel.sendResponse(new BytesRestResponse(channel, e));
-        } catch (Exception inner) {
-            inner.addSuppressed(e);
-            logger.error((Supplier<?>) () -> new ParameterizedMessage("failed to send failure response for uri [{}]", request.uri()), inner);
+        } else {
+            ControllerFilterChain filterChain = new ControllerFilterChain(handlerFilter);
+            filterChain.continueProcessing(request, channel);
         }
     }
 
@@ -236,44 +199,35 @@ public class RestController extends AbstractLifecycleComponent {
         return true;
     }
 
-    void executeHandler(RestRequest request, RestChannel channel, NodeClient client) throws Exception {
+    void executeHandler(RestRequest request, RestChannel channel) throws Exception {
         final RestHandler handler = getHandler(request);
         if (handler != null) {
-            handler.handleRequest(request, channel, client);
+            handler.handleRequest(request, channel);
         } else {
             if (request.method() == RestRequest.Method.OPTIONS) {
                 // when we have OPTIONS request, simply send OK by default (with the Access Control Origin header which gets automatically added)
-                channel.sendResponse(new BytesRestResponse(OK, BytesRestResponse.TEXT_CONTENT_TYPE, BytesArray.EMPTY));
+                channel.sendResponse(new BytesRestResponse(OK));
             } else {
-                final String msg = "No handler found for uri [" + request.uri() + "] and method [" + request.method() + "]";
-                channel.sendResponse(new BytesRestResponse(BAD_REQUEST, msg));
+                channel.sendResponse(new BytesRestResponse(BAD_REQUEST, "No handler found for uri [" + request.uri() + "] and method [" + request.method() + "]"));
             }
         }
     }
 
     private RestHandler getHandler(RestRequest request) {
         String path = getPath(request);
-        PathTrie<RestHandler> handlers = getHandlersForMethod(request.method());
-        if (handlers != null) {
-            return handlers.retrieve(path, request.params());
-        } else {
-            return null;
-        }
-    }
-
-    private PathTrie<RestHandler> getHandlersForMethod(RestRequest.Method method) {
+        RestRequest.Method method = request.method();
         if (method == RestRequest.Method.GET) {
-            return getHandlers;
+            return getHandlers.retrieve(path, request.params());
         } else if (method == RestRequest.Method.POST) {
-            return postHandlers;
+            return postHandlers.retrieve(path, request.params());
         } else if (method == RestRequest.Method.PUT) {
-            return putHandlers;
+            return putHandlers.retrieve(path, request.params());
         } else if (method == RestRequest.Method.DELETE) {
-            return deleteHandlers;
+            return deleteHandlers.retrieve(path, request.params());
         } else if (method == RestRequest.Method.HEAD) {
-            return headHandlers;
+            return headHandlers.retrieve(path, request.params());
         } else if (method == RestRequest.Method.OPTIONS) {
-            return optionsHandlers;
+            return optionsHandlers.retrieve(path, request.params());
         } else {
             return null;
         }
@@ -297,22 +251,22 @@ public class RestController extends AbstractLifecycleComponent {
         }
 
         @Override
-        public void continueProcessing(RestRequest request, RestChannel channel, NodeClient client) {
+        public void continueProcessing(RestRequest request, RestChannel channel) {
             try {
                 int loc = index.getAndIncrement();
                 if (loc > filters.length) {
                     throw new IllegalStateException("filter continueProcessing was called more than expected");
                 } else if (loc == filters.length) {
-                    executionFilter.process(request, channel, client, this);
+                    executionFilter.process(request, channel, this);
                 } else {
                     RestFilter preProcessor = filters[loc];
-                    preProcessor.process(request, channel, client, this);
+                    preProcessor.process(request, channel, this);
                 }
             } catch (Exception e) {
                 try {
                     channel.sendResponse(new BytesRestResponse(channel, e));
                 } catch (IOException e1) {
-                    logger.error((Supplier<?>) () -> new ParameterizedMessage("Failed to send failure response for uri [{}]", request.uri()), e1);
+                    logger.error("Failed to send failure response for uri [" + request.uri() + "]", e1);
                 }
             }
         }
@@ -321,8 +275,8 @@ public class RestController extends AbstractLifecycleComponent {
     class RestHandlerFilter extends RestFilter {
 
         @Override
-        public void process(RestRequest request, RestChannel channel, NodeClient client, RestFilterChain filterChain) throws Exception {
-            executeHandler(request, channel, client);
+        public void process(RestRequest request, RestChannel channel, RestFilterChain filterChain) throws Exception {
+            executeHandler(request, channel);
         }
     }
 }

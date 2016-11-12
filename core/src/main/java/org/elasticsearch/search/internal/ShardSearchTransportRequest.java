@@ -28,10 +28,8 @@ import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.index.query.QueryShardContext;
-import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.script.Template;
 import org.elasticsearch.search.Scroll;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.transport.TransportRequest;
 
 import java.io.IOException;
@@ -52,6 +50,7 @@ public class ShardSearchTransportRequest extends TransportRequest implements Sha
 
     public ShardSearchTransportRequest(SearchRequest searchRequest, ShardRouting shardRouting, int numberOfShards,
                                        String[] filteringAliases, long nowInMillis) {
+        super(searchRequest);
         this.shardSearchLocalRequest = new ShardSearchLocalRequest(searchRequest, shardRouting, numberOfShards, filteringAliases, nowInMillis);
         this.originalIndices = new OriginalIndices(searchRequest);
     }
@@ -72,9 +71,13 @@ public class ShardSearchTransportRequest extends TransportRequest implements Sha
         return originalIndices.indicesOptions();
     }
 
+    @Override
+    public String index() {
+        return shardSearchLocalRequest.index();
+    }
 
     @Override
-    public ShardId shardId() {
+    public int shardId() {
         return shardSearchLocalRequest.shardId();
     }
 
@@ -84,13 +87,18 @@ public class ShardSearchTransportRequest extends TransportRequest implements Sha
     }
 
     @Override
-    public SearchSourceBuilder source() {
+    public BytesReference source() {
         return shardSearchLocalRequest.source();
     }
 
     @Override
-    public void source(SearchSourceBuilder source) {
+    public void source(BytesReference source) {
         shardSearchLocalRequest.source(source);
+    }
+
+    @Override
+    public BytesReference extraSource() {
+        return shardSearchLocalRequest.extraSource();
     }
 
     @Override
@@ -111,6 +119,16 @@ public class ShardSearchTransportRequest extends TransportRequest implements Sha
     @Override
     public long nowInMillis() {
         return shardSearchLocalRequest.nowInMillis();
+    }
+
+    @Override
+    public Template template() {
+        return shardSearchLocalRequest.template();
+    }
+
+    @Override
+    public BytesReference templateSource() {
+        return shardSearchLocalRequest.templateSource();
     }
 
     @Override
@@ -151,10 +169,5 @@ public class ShardSearchTransportRequest extends TransportRequest implements Sha
     @Override
     public boolean isProfile() {
         return shardSearchLocalRequest.isProfile();
-    }
-
-    @Override
-    public void rewrite(QueryShardContext context) throws IOException {
-        shardSearchLocalRequest.rewrite(context);
     }
 }

@@ -30,7 +30,6 @@ import org.elasticsearch.common.unit.TimeValue;
  * all the nodes have acknowledged a cluster state update request
  */
 public abstract class AckedClusterStateUpdateTask<Response> extends ClusterStateUpdateTask implements AckedClusterStateTaskListener {
-
     private final ActionListener<Response> listener;
     private final AckedRequest request;
 
@@ -58,9 +57,9 @@ public abstract class AckedClusterStateUpdateTask<Response> extends ClusterState
      * Called once all the nodes have acknowledged the cluster state update request. Must be
      * very lightweight execution, since it gets executed on the cluster service thread.
      *
-     * @param e optional error that might have been thrown
+     * @param t optional error that might have been thrown
      */
-    public void onAllNodesAcked(@Nullable Exception e) {
+    public void onAllNodesAcked(@Nullable Throwable t) {
         listener.onResponse(newResponse(true));
     }
 
@@ -75,8 +74,13 @@ public abstract class AckedClusterStateUpdateTask<Response> extends ClusterState
     }
 
     @Override
-    public void onFailure(String source, Exception e) {
-        listener.onFailure(e);
+    public void onFailure(String source, Throwable t) {
+        listener.onFailure(t);
+    }
+
+    @Override
+    public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
+
     }
 
     /**

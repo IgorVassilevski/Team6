@@ -19,10 +19,9 @@
 
 package org.elasticsearch.action.delete;
 
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.action.ActionWriteResponse;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
 
 import java.io.IOException;
 
@@ -32,38 +31,78 @@ import java.io.IOException;
  * @see org.elasticsearch.action.delete.DeleteRequest
  * @see org.elasticsearch.client.Client#delete(DeleteRequest)
  */
-public class DeleteResponse extends DocWriteResponse {
+public class DeleteResponse extends ActionWriteResponse {
+
+    private String index;
+    private String id;
+    private String type;
+    private long version;
+    private boolean found;
 
     public DeleteResponse() {
 
     }
 
-    public DeleteResponse(ShardId shardId, String type, String id, long version, boolean found) {
-        super(shardId, type, id, version, found ? Result.DELETED : Result.NOT_FOUND);
+    public DeleteResponse(String index, String type, String id, long version, boolean found) {
+        this.index = index;
+        this.id = id;
+        this.type = type;
+        this.version = version;
+        this.found = found;
+    }
+
+    /**
+     * The index the document was deleted from.
+     */
+    public String getIndex() {
+        return this.index;
+    }
+
+    /**
+     * The type of the document deleted.
+     */
+    public String getType() {
+        return this.type;
+    }
+
+    /**
+     * The id of the document deleted.
+     */
+    public String getId() {
+        return this.id;
+    }
+
+    /**
+     * The version of the delete operation.
+     */
+    public long getVersion() {
+        return this.version;
+    }
+
+    /**
+     * Returns <tt>true</tt> if a doc was found to delete.
+     */
+    public boolean isFound() {
+        return found;
     }
 
     @Override
-    public RestStatus status() {
-        return result == Result.DELETED ? super.status() : RestStatus.NOT_FOUND;
+    public void readFrom(StreamInput in) throws IOException {
+        super.readFrom(in);
+        index = in.readString();
+        type = in.readString();
+        id = in.readString();
+        version = in.readLong();
+        found = in.readBoolean();
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.field("found", result == Result.DELETED);
-        super.toXContent(builder, params);
-        return builder;
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("DeleteResponse[");
-        builder.append("index=").append(getIndex());
-        builder.append(",type=").append(getType());
-        builder.append(",id=").append(getId());
-        builder.append(",version=").append(getVersion());
-        builder.append(",result=").append(getResult().getLowercase());
-        builder.append(",shards=").append(getShardInfo());
-        return builder.append("]").toString();
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        out.writeString(index);
+        out.writeString(type);
+        out.writeString(id);
+        out.writeLong(version);
+        out.writeBoolean(found);
     }
 }

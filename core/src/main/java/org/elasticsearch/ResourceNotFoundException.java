@@ -32,7 +32,7 @@ public class ResourceNotFoundException extends ElasticsearchException {
         super(msg, args);
     }
 
-    public ResourceNotFoundException(String msg, Throwable cause, Object... args) {
+    protected ResourceNotFoundException(String msg, Throwable cause, Object... args) {
         super(msg, cause, args);
     }
 

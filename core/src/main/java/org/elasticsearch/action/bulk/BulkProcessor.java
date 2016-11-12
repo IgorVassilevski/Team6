@@ -32,11 +32,7 @@ import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
 
 import java.io.Closeable;
-import java.util.Objects;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -168,8 +164,9 @@ public class BulkProcessor implements Closeable {
     }
 
     public static Builder builder(Client client, Listener listener) {
-        Objects.requireNonNull(client, "client");
-        Objects.requireNonNull(listener, "listener");
+        if (client == null) {
+            throw new NullPointerException("The client you specified while building a BulkProcessor is null");
+        }
 
         return new Builder(client, listener);
     }
@@ -179,7 +176,7 @@ public class BulkProcessor implements Closeable {
 
 
     private final ScheduledThreadPoolExecutor scheduler;
-    private final ScheduledFuture<?> scheduledFuture;
+    private final ScheduledFuture scheduledFuture;
 
     private final AtomicLong executionIdGen = new AtomicLong();
 
@@ -250,24 +247,24 @@ public class BulkProcessor implements Closeable {
      * (for example, if no id is provided, one will be generated, or usage of the create flag).
      */
     public BulkProcessor add(IndexRequest request) {
-        return add((ActionRequest<?>) request);
+        return add((ActionRequest) request);
     }
 
     /**
      * Adds an {@link DeleteRequest} to the list of actions to execute.
      */
     public BulkProcessor add(DeleteRequest request) {
-        return add((ActionRequest<?>) request);
+        return add((ActionRequest) request);
     }
 
     /**
      * Adds either a delete or an index request.
      */
-    public BulkProcessor add(ActionRequest<?> request) {
+    public BulkProcessor add(ActionRequest request) {
         return add(request, null);
     }
 
-    public BulkProcessor add(ActionRequest<?> request, @Nullable Object payload) {
+    public BulkProcessor add(ActionRequest request, @Nullable Object payload) {
         internalAdd(request, payload);
         return this;
     }
@@ -282,18 +279,18 @@ public class BulkProcessor implements Closeable {
         }
     }
 
-    private synchronized void internalAdd(ActionRequest<?> request, @Nullable Object payload) {
+    private synchronized void internalAdd(ActionRequest request, @Nullable Object payload) {
         ensureOpen();
         bulkRequest.add(request, payload);
         executeIfNeeded();
     }
 
     public BulkProcessor add(BytesReference data, @Nullable String defaultIndex, @Nullable String defaultType) throws Exception {
-        return add(data, defaultIndex, defaultType, null, null);
+        return add(data, defaultIndex, defaultType, null);
     }
 
-    public synchronized BulkProcessor add(BytesReference data, @Nullable String defaultIndex, @Nullable String defaultType, @Nullable String defaultPipeline, @Nullable Object payload) throws Exception {
-        bulkRequest.add(data, defaultIndex, defaultType, null, null, defaultPipeline, payload, true);
+    public synchronized BulkProcessor add(BytesReference data, @Nullable String defaultIndex, @Nullable String defaultType, @Nullable Object payload) throws Exception {
+        bulkRequest.add(data, defaultIndex, defaultType, null, null, payload, true);
         executeIfNeeded();
         return this;
     }

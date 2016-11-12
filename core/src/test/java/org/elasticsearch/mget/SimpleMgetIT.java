@@ -27,26 +27,25 @@ import org.elasticsearch.action.get.MultiGetResponse;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
+import org.elasticsearch.search.fetch.source.FetchSourceContext;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Map;
 
-import static org.elasticsearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.*;
 
 public class SimpleMgetIT extends ESIntegTestCase {
+
+    @Test
     public void testThatMgetShouldWorkWithOneIndexMissing() throws IOException {
         createIndex("test");
+        ensureYellow();
 
-        client().prepareIndex("test", "test", "1").setSource(jsonBuilder().startObject().field("foo", "bar").endObject())
-                .setRefreshPolicy(IMMEDIATE).get();
+        client().prepareIndex("test", "test", "1").setSource(jsonBuilder().startObject().field("foo", "bar").endObject()).setRefresh(true).execute().actionGet();
 
         MultiGetResponse mgetResponse = client().prepareMultiGet()
                 .add(new MultiGetRequest.Item("test", "test", "1"))
@@ -60,7 +59,7 @@ public class SimpleMgetIT extends ESIntegTestCase {
         assertThat(mgetResponse.getResponses()[1].getIndex(), is("nonExistingIndex"));
         assertThat(mgetResponse.getResponses()[1].isFailed(), is(true));
         assertThat(mgetResponse.getResponses()[1].getFailure().getMessage(), is("no such index"));
-        assertThat(((ElasticsearchException) mgetResponse.getResponses()[1].getFailure().getFailure()).getIndex().getName(), is("nonExistingIndex"));
+        assertThat(((ElasticsearchException)mgetResponse.getResponses()[1].getFailure().getFailure()).getIndex(), is("nonExistingIndex"));
 
 
         mgetResponse = client().prepareMultiGet()
@@ -70,11 +69,12 @@ public class SimpleMgetIT extends ESIntegTestCase {
         assertThat(mgetResponse.getResponses()[0].getIndex(), is("nonExistingIndex"));
         assertThat(mgetResponse.getResponses()[0].isFailed(), is(true));
         assertThat(mgetResponse.getResponses()[0].getFailure().getMessage(), is("no such index"));
-        assertThat(((ElasticsearchException) mgetResponse.getResponses()[0].getFailure().getFailure()).getIndex().getName(), is("nonExistingIndex"));
+        assertThat(((ElasticsearchException)mgetResponse.getResponses()[0].getFailure().getFailure()).getIndex(), is("nonExistingIndex"));
 
 
     }
 
+    @Test
     public void testThatParentPerDocumentIsSupported() throws Exception {
         assertAcked(prepareCreate("test").addAlias(new Alias("alias"))
                 .addMapping("test", jsonBuilder()
@@ -85,10 +85,11 @@ public class SimpleMgetIT extends ESIntegTestCase {
                         .endObject()
                         .endObject()
                         .endObject()));
+        ensureYellow();
 
-        client().prepareIndex("test", "test", "1").setParent("4").setRefreshPolicy(IMMEDIATE)
+        client().prepareIndex("test", "test", "1").setParent("4").setRefresh(true)
                 .setSource(jsonBuilder().startObject().field("foo", "bar").endObject())
-                .get();
+                .execute().actionGet();
 
         MultiGetResponse mgetResponse = client().prepareMultiGet()
                 .add(new MultiGetRequest.Item(indexOrAlias(), "test", "1").parent("4"))
@@ -105,8 +106,10 @@ public class SimpleMgetIT extends ESIntegTestCase {
     }
 
     @SuppressWarnings("unchecked")
+    @Test
     public void testThatSourceFilteringIsSupported() throws Exception {
         assertAcked(prepareCreate("test").addAlias(new Alias("alias")));
+        ensureYellow();
         BytesReference sourceBytesRef = jsonBuilder().startObject()
                 .field("field", "1", "2")
                 .startObject("included").field("field", "should be seen").field("hidden_field", "should not be seen").endObject()
@@ -143,18 +146,20 @@ public class SimpleMgetIT extends ESIntegTestCase {
         }
     }
 
+    @Test
     public void testThatRoutingPerDocumentIsSupported() throws Exception {
         assertAcked(prepareCreate("test").addAlias(new Alias("alias"))
                 .setSettings(Settings.builder()
                         .put(indexSettings())
                         .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, between(2, DEFAULT_MAX_NUM_SHARDS))));
+        ensureYellow();
 
-        final String id = routingKeyForShard("test", 0);
-        final String routingOtherShard = routingKeyForShard("test", 1);
+        final String id = routingKeyForShard("test", "test", 0);
+        final String routingOtherShard = routingKeyForShard("test", "test", 1);
 
-        client().prepareIndex("test", "test", id).setRefreshPolicy(IMMEDIATE).setRouting(routingOtherShard)
+        client().prepareIndex("test", "test", id).setRefresh(true).setRouting(routingOtherShard)
                 .setSource(jsonBuilder().startObject().field("foo", "bar").endObject())
-                .get();
+                .execute().actionGet();
 
         MultiGetResponse mgetResponse = client().prepareMultiGet()
                 .add(new MultiGetRequest.Item(indexOrAlias(), "test", id).routing(routingOtherShard))

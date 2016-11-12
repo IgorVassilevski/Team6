@@ -19,13 +19,13 @@
 
 package org.elasticsearch.action.bulk;
 
+import com.google.common.collect.Iterators;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.unit.TimeValue;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Iterator;
 
 /**
@@ -35,51 +35,29 @@ import java.util.Iterator;
  */
 public class BulkResponse extends ActionResponse implements Iterable<BulkItemResponse> {
 
-    public static final long NO_INGEST_TOOK = -1L;
-
     private BulkItemResponse[] responses;
     private long tookInMillis;
-    private long ingestTookInMillis;
 
     BulkResponse() {
     }
 
     public BulkResponse(BulkItemResponse[] responses, long tookInMillis) {
-        this(responses, tookInMillis, NO_INGEST_TOOK);
-    }
-
-    public BulkResponse(BulkItemResponse[] responses, long tookInMillis, long ingestTookInMillis) {
         this.responses = responses;
         this.tookInMillis = tookInMillis;
-        this.ingestTookInMillis = ingestTookInMillis;
     }
 
     /**
-     * How long the bulk execution took. Excluding ingest preprocessing.
+     * How long the bulk execution took.
      */
     public TimeValue getTook() {
         return new TimeValue(tookInMillis);
     }
 
     /**
-     * How long the bulk execution took in milliseconds. Excluding ingest preprocessing.
+     * How long the bulk execution took in milliseconds.
      */
     public long getTookInMillis() {
         return tookInMillis;
-    }
-
-    /**
-     * If ingest is enabled returns the bulk ingest preprocessing time, otherwise 0 is returned.
-     */
-    public TimeValue getIngestTook() {
-        return new TimeValue(ingestTookInMillis);
-    }
-
-    /**
-     * If ingest is enabled returns the bulk ingest preprocessing time. in milliseconds, otherwise -1 is returned.
-     */
-    public long getIngestTookInMillis() {
-        return ingestTookInMillis;
     }
 
     /**
@@ -117,7 +95,7 @@ public class BulkResponse extends ActionResponse implements Iterable<BulkItemRes
 
     @Override
     public Iterator<BulkItemResponse> iterator() {
-        return Arrays.stream(responses).iterator();
+        return Iterators.forArray(responses);
     }
 
     @Override
@@ -128,7 +106,6 @@ public class BulkResponse extends ActionResponse implements Iterable<BulkItemRes
             responses[i] = BulkItemResponse.readBulkItem(in);
         }
         tookInMillis = in.readVLong();
-        ingestTookInMillis = in.readZLong();
     }
 
     @Override
@@ -139,6 +116,5 @@ public class BulkResponse extends ActionResponse implements Iterable<BulkItemRes
             response.writeTo(out);
         }
         out.writeVLong(tookInMillis);
-        out.writeZLong(ingestTookInMillis);
     }
 }

@@ -25,15 +25,12 @@ import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
 
-import static org.elasticsearch.cluster.metadata.IndexMetaData.INDEX_METADATA_BLOCK;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_METADATA;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_READ;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_WRITE;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_READ_ONLY;
+import static org.elasticsearch.cluster.metadata.IndexMetaData.*;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertBlocked;
 import static org.hamcrest.Matchers.equalTo;
@@ -44,20 +41,25 @@ import static org.hamcrest.Matchers.notNullValue;
  */
 @ClusterScope(randomDynamicTemplates = false)
 public class SimpleGetMappingsIT extends ESIntegTestCase {
-    public void testGetMappingsWhereThereAreNone() {
+
+    @Test
+    public void getMappingsWhereThereAreNone() {
         createIndex("index");
         GetMappingsResponse response = client().admin().indices().prepareGetMappings().execute().actionGet();
         assertThat(response.mappings().containsKey("index"), equalTo(true));
         assertThat(response.mappings().get("index").size(), equalTo(0));
     }
 
+
     private XContentBuilder getMappingForType(String type) throws IOException {
         return jsonBuilder().startObject().startObject(type).startObject("properties")
-                .startObject("field1").field("type", "text").endObject()
+                .startObject("field1").field("type", "string").endObject()
                 .endObject().endObject().endObject();
     }
 
-    public void testSimpleGetMappings() throws Exception {
+
+    @Test
+    public void simpleGetMappings() throws Exception {
         client().admin().indices().prepareCreate("indexa")
                 .addMapping("typeA", getMappingForType("typeA"))
                 .addMapping("typeB", getMappingForType("typeB"))
@@ -144,6 +146,7 @@ public class SimpleGetMappingsIT extends ESIntegTestCase {
         assertThat(response.mappings().get("indexb").get("Btype"), notNullValue());
     }
 
+    @Test
     public void testGetMappingsWithBlocks() throws IOException {
         client().admin().indices().prepareCreate("test")
                 .addMapping("typeA", getMappingForType("typeA"))

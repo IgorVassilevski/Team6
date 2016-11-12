@@ -20,18 +20,17 @@
 package org.elasticsearch.common.lucene.search.function;
 
 import org.apache.lucene.search.Explanation;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
 
-import java.io.IOException;
-import java.util.Locale;
-
-public enum CombineFunction implements Writeable {
-    MULTIPLY {
+public enum CombineFunction {
+    MULT {
         @Override
         public float combine(double queryScore, double funcScore, double maxBoost) {
             return toFloat(queryScore * Math.min(funcScore, maxBoost));
+        }
+
+        @Override
+        public String getName() {
+            return "multiply";
         }
 
         @Override
@@ -52,6 +51,11 @@ public enum CombineFunction implements Writeable {
         }
 
         @Override
+        public String getName() {
+            return "replace";
+        }
+
+        @Override
         public Explanation explain(Explanation queryExpl, Explanation funcExpl, float maxBoost) {
             Explanation boostExpl = Explanation.match(maxBoost, "maxBoost");
             return Explanation.match(
@@ -65,6 +69,11 @@ public enum CombineFunction implements Writeable {
         @Override
         public float combine(double queryScore, double funcScore, double maxBoost) {
             return toFloat(queryScore + Math.min(funcScore, maxBoost));
+        }
+
+        @Override
+        public String getName() {
+            return "sum";
         }
 
         @Override
@@ -83,6 +92,11 @@ public enum CombineFunction implements Writeable {
         }
 
         @Override
+        public String getName() {
+            return "avg";
+        }
+
+        @Override
         public Explanation explain(Explanation queryExpl, Explanation funcExpl, float maxBoost) {
             Explanation minExpl = Explanation.match(Math.min(funcExpl.getValue(), maxBoost), "min of:",
                     funcExpl, Explanation.match(maxBoost, "maxBoost"));
@@ -96,6 +110,11 @@ public enum CombineFunction implements Writeable {
         @Override
         public float combine(double queryScore, double funcScore, double maxBoost) {
             return toFloat(Math.min(queryScore, Math.min(funcScore, maxBoost)));
+        }
+
+        @Override
+        public String getName() {
+            return "min";
         }
 
         @Override
@@ -116,6 +135,11 @@ public enum CombineFunction implements Writeable {
         }
 
         @Override
+        public String getName() {
+            return "max";
+        }
+
+        @Override
         public Explanation explain(Explanation queryExpl, Explanation funcExpl, float maxBoost) {
             Explanation innerMinExpl = Explanation.match(
                     Math.min(funcExpl.getValue(), maxBoost), "min of:",
@@ -129,6 +153,8 @@ public enum CombineFunction implements Writeable {
 
     public abstract float combine(double queryScore, double funcScore, double maxBoost);
 
+    public abstract String getName();
+
     public static float toFloat(double input) {
         assert deviation(input) <= 0.001 : "input " + input + " out of float scope for function score deviation: " + deviation(input);
         return (float) input;
@@ -140,21 +166,4 @@ public enum CombineFunction implements Writeable {
     }
 
     public abstract Explanation explain(Explanation queryExpl, Explanation funcExpl, float maxBoost);
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeVInt(this.ordinal());
-    }
-
-    public static CombineFunction readFromStream(StreamInput in) throws IOException {
-        int ordinal = in.readVInt();
-        if (ordinal < 0 || ordinal >= values().length) {
-            throw new IOException("Unknown CombineFunction ordinal [" + ordinal + "]");
-        }
-        return values()[ordinal];
-    }
-
-    public static CombineFunction fromString(String combineFunction) {
-        return valueOf(combineFunction.toUpperCase(Locale.ROOT));
-    }
 }

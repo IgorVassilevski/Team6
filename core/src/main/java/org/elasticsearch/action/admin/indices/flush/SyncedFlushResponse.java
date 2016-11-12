@@ -18,14 +18,16 @@
  */
 package org.elasticsearch.action.admin.indices.flush;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
-import org.elasticsearch.common.util.iterable.Iterables;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.indices.flush.ShardsSyncedFlushResult;
 import org.elasticsearch.indices.flush.SyncedFlushService;
 import org.elasticsearch.rest.RestStatus;
@@ -36,8 +38,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static java.util.Collections.unmodifiableMap;
 
 /**
  * The result of performing a sync flush operation on all shards of multiple indices
@@ -52,11 +52,8 @@ public class SyncedFlushResponse extends ActionResponse implements ToXContent {
     }
 
     public SyncedFlushResponse(Map<String, List<ShardsSyncedFlushResult>> shardsResultPerIndex) {
-        // shardsResultPerIndex is never modified after it is passed to this
-        // constructor so this is safe even though shardsResultPerIndex is a
-        // ConcurrentHashMap
-        this.shardsResultPerIndex = unmodifiableMap(shardsResultPerIndex);
-        this.shardCounts = calculateShardCounts(Iterables.flatten(shardsResultPerIndex.values()));
+        this.shardsResultPerIndex = ImmutableMap.copyOf(shardsResultPerIndex);
+        this.shardCounts = calculateShardCounts(Iterables.concat(shardsResultPerIndex.values()));
     }
 
     /**
@@ -180,14 +177,14 @@ public class SyncedFlushResponse extends ActionResponse implements ToXContent {
     }
 
     static final class Fields {
-        static final String _SHARDS = "_shards";
-        static final String TOTAL = "total";
-        static final String SUCCESSFUL = "successful";
-        static final String FAILED = "failed";
-        static final String FAILURES = "failures";
-        static final String SHARD = "shard";
-        static final String ROUTING = "routing";
-        static final String REASON = "reason";
+        static final XContentBuilderString _SHARDS = new XContentBuilderString("_shards");
+        static final XContentBuilderString TOTAL = new XContentBuilderString("total");
+        static final XContentBuilderString SUCCESSFUL = new XContentBuilderString("successful");
+        static final XContentBuilderString FAILED = new XContentBuilderString("failed");
+        static final XContentBuilderString FAILURES = new XContentBuilderString("failures");
+        static final XContentBuilderString SHARD = new XContentBuilderString("shard");
+        static final XContentBuilderString ROUTING = new XContentBuilderString("routing");
+        static final XContentBuilderString REASON = new XContentBuilderString("reason");
     }
 
     @Override

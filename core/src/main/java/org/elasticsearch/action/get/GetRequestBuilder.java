@@ -24,7 +24,7 @@ import org.elasticsearch.client.ElasticsearchClient;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.index.VersionType;
-import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
+import org.elasticsearch.search.fetch.source.FetchSourceContext;
 
 /**
  * A get document action request builder.
@@ -109,6 +109,23 @@ public class GetRequestBuilder extends SingleShardOperationRequestBuilder<GetReq
     }
 
     /**
+     * Should the source be transformed using the script to used at index time
+     * (if any)? Note that calling this without having called setFetchSource
+     * will automatically turn on source fetching.
+     *
+     * @return this for chaining
+     */
+    public GetRequestBuilder setTransformSource(boolean transform) {
+        FetchSourceContext context = request.fetchSourceContext();
+        if (context == null) {
+            context = new FetchSourceContext(true);
+            request.fetchSourceContext(context);
+        }
+        context.transformSource(transform);
+        return this;
+    }
+
+    /**
      * Indicate that _source should be returned, with an "include" and/or "exclude" set which can include simple wildcard
      * elements.
      *
@@ -150,7 +167,7 @@ public class GetRequestBuilder extends SingleShardOperationRequestBuilder<GetReq
         return this;
     }
 
-    public GetRequestBuilder setRealtime(boolean realtime) {
+    public GetRequestBuilder setRealtime(Boolean realtime) {
         request.realtime(realtime);
         return this;
     }

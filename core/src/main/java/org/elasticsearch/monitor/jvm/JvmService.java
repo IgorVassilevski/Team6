@@ -20,8 +20,7 @@
 package org.elasticsearch.monitor.jvm;
 
 import org.elasticsearch.common.component.AbstractComponent;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 
@@ -36,18 +35,15 @@ public class JvmService extends AbstractComponent {
 
     private JvmStats jvmStats;
 
-    public static final Setting<TimeValue> REFRESH_INTERVAL_SETTING =
-        Setting.timeSetting("monitor.jvm.refresh_interval", TimeValue.timeValueSeconds(1), TimeValue.timeValueSeconds(1),
-            Property.NodeScope);
-
+    @Inject
     public JvmService(Settings settings) {
         super(settings);
         this.jvmInfo = JvmInfo.jvmInfo();
         this.jvmStats = JvmStats.jvmStats();
 
-        this.refreshInterval = REFRESH_INTERVAL_SETTING.get(settings);
+        this.refreshInterval = this.settings.getAsTime("refresh_interval", TimeValue.timeValueSeconds(1));
 
-        logger.debug("using refresh_interval [{}]", refreshInterval);
+        logger.debug("Using refresh_interval [{}]", refreshInterval);
     }
 
     public JvmInfo info() {

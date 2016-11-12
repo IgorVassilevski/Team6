@@ -19,11 +19,7 @@
 
 package org.elasticsearch.index.similarity;
 
-import org.apache.lucene.search.similarities.Normalization;
-import org.apache.lucene.search.similarities.NormalizationH1;
-import org.apache.lucene.search.similarities.NormalizationH2;
-import org.apache.lucene.search.similarities.NormalizationH3;
-import org.apache.lucene.search.similarities.NormalizationZ;
+import org.apache.lucene.search.similarities.*;
 import org.elasticsearch.common.settings.Settings;
 
 /**

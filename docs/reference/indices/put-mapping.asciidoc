@@ -12,7 +12,7 @@ PUT twitter <1>
     "tweet": {
       "properties": {
         "message": {
-          "type": "text"
+          "type": "string"
         }
       }
     }
@@ -23,7 +23,7 @@ PUT twitter/_mapping/user <2>
 {
   "properties": {
     "name": {
-      "type": "text"
+      "type": "string"
     }
   }
 }
@@ -32,12 +32,12 @@ PUT twitter/_mapping/tweet <3>
 {
   "properties": {
     "user_name": {
-      "type": "text"
+      "type": "string"
     }
   }
 }
 --------------------------------------------------
-// CONSOLE
+// AUTOSENSE
 <1> <<indices-create-index,Creates an index>> called `twitter` with the `message` field in the `tweet` <<mapping-type,mapping type>>.
 <2> Uses the PUT mapping API to add a new mapping type called `user`.
 <3> Uses the PUT mapping API to add a new field called `user_name` to the `tweet` mapping type.
@@ -86,12 +86,13 @@ PUT my_index <1>
         "name": {
           "properties": {
             "first": {
-              "type": "text"
+              "type": "string"
             }
           }
         },
         "user_id": {
-          "type": "keyword"
+          "type": "string",
+          "index": "not_analyzed"
         }
       }
     }
@@ -104,18 +105,19 @@ PUT my_index/_mapping/user
     "name": {
       "properties": {
         "last": { <2>
-          "type": "text"
+          "type": "string"
         }
       }
     },
     "user_id": {
-      "type": "keyword",
+      "type": "string",
+      "index": "not_analyzed",
       "ignore_above": 100 <3>
     }
   }
 }
 -----------------------------------
-// CONSOLE
+// AUTOSENSE
 <1> Create an index with a `first` field under the `name` <<object>> field, and a `user_id` field.
 <2> Add a `last` field under the `name` object field.
 <3> Update the `ignore_above` setting from its default of 0.
@@ -135,9 +137,9 @@ exists in more than one type will throw an exception, unless you specify the
 across all fields with the same name in the same index.
 
 TIP: The only parameters which are exempt from this rule -- they can be set to
-different values on each field -- can be found in <<field-conflicts>>.
+different values on each field -- can be found in  <<field-conflicts>>.
 
-For example, this fails:
+For example:
 
 [source,js]
 -----------------------------------
@@ -147,7 +149,7 @@ PUT my_index
     "type_one": {
       "properties": {
         "text": { <1>
-          "type": "text",
+          "type": "string",
           "analyzer": "standard"
         }
       }
@@ -155,7 +157,7 @@ PUT my_index
     "type_two": {
       "properties": {
         "text": { <1>
-          "type": "text",
+          "type": "string",
           "analyzer": "standard"
         }
       }
@@ -167,33 +169,27 @@ PUT my_index/_mapping/type_one <2>
 {
   "properties": {
     "text": {
-      "type": "text",
+      "type": "string",
       "analyzer": "standard",
       "search_analyzer": "whitespace"
     }
   }
 }
------------------------------------
-// CONSOLE
-// TEST[catch:request]
-<1> Create an index with two types, both of which contain a `text` field which have the same mapping.
-<2> Trying to update the `search_analyzer` just for `type_one` throws an exception like `"Merge failed with failures..."`.
 
-But this then running this succeeds:
-
-[source,js]
------------------------------------
-PUT my_index/_mapping/type_one?update_all_types <1>
+PUT my_index/_mapping/type_one?update_all_types <3>
 {
   "properties": {
     "text": {
-      "type": "text",
+      "type": "string",
       "analyzer": "standard",
       "search_analyzer": "whitespace"
     }
   }
 }
 -----------------------------------
-// CONSOLE
-// TEST[continued]
-<1> Adding the `update_all_types` parameter updates the `text` field in `type_one` and `type_two`.
+// AUTOSENSE
+<1> Create an index with two types, both of which contain a `text` field which have the same mapping.
+<2> Trying to update the `search_analyzer` just for `type_one` throws an exception like `"Merge failed with failures..."`.
+<3> Adding the `update_all_types` parameter updates the `text` field in `type_one` and `type_two`.
+
+

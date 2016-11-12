@@ -19,7 +19,6 @@
 
 package org.elasticsearch.cluster;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.LatchedActionListener;
 import org.elasticsearch.action.admin.cluster.node.stats.NodeStats;
@@ -30,27 +29,28 @@ import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.action.admin.indices.stats.ShardStats;
 import org.elasticsearch.action.admin.indices.stats.TransportIndicesStatsAction;
+import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.ShardRouting;
-import org.elasticsearch.cluster.routing.allocation.DiskThresholdSettings;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.collect.ImmutableOpenMap;
+import org.elasticsearch.cluster.routing.allocation.decider.DiskThresholdDecider;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.settings.ClusterSettings;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.EsRejectedExecutionException;
 import org.elasticsearch.monitor.fs.FsInfo;
+import org.elasticsearch.node.settings.NodeSettingsService;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.ReceiveTimeoutTransportException;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -68,19 +68,15 @@ import java.util.concurrent.TimeUnit;
  */
 public class InternalClusterInfoService extends AbstractComponent implements ClusterInfoService, LocalNodeMasterListener, ClusterStateListener {
 
-    public static final Setting<TimeValue> INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL_SETTING =
-        Setting.timeSetting("cluster.info.update.interval", TimeValue.timeValueSeconds(30), TimeValue.timeValueSeconds(10),
-            Property.Dynamic, Property.NodeScope);
-    public static final Setting<TimeValue> INTERNAL_CLUSTER_INFO_TIMEOUT_SETTING =
-        Setting.positiveTimeSetting("cluster.info.update.timeout", TimeValue.timeValueSeconds(15),
-            Property.Dynamic, Property.NodeScope);
+    public static final String INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL = "cluster.info.update.interval";
+    public static final String INTERNAL_CLUSTER_INFO_TIMEOUT = "cluster.info.update.timeout";
 
     private volatile TimeValue updateFrequency;
 
-    private volatile ImmutableOpenMap<String, DiskUsage> leastAvailableSpaceUsages;
-    private volatile ImmutableOpenMap<String, DiskUsage> mostAvailableSpaceUsages;
-    private volatile ImmutableOpenMap<ShardRouting, String> shardRoutingToDataPath;
-    private volatile ImmutableOpenMap<String, Long> shardSizes;
+    private volatile Map<String, DiskUsage> leastAvailableSpaceUsages;
+    private volatile Map<String, DiskUsage> mostAvailableSpaceUsages;
+    private volatile Map<ShardRouting, String> shardRoutingToDataPath;
+    private volatile Map<String, Long> shardSizes;
     private volatile boolean isMaster = false;
     private volatile boolean enabled;
     private volatile TimeValue fetchTimeout;
@@ -91,25 +87,23 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
 
     @Inject
-    public InternalClusterInfoService(Settings settings, ClusterSettings clusterSettings,
+    public InternalClusterInfoService(Settings settings, NodeSettingsService nodeSettingsService,
                                       TransportNodesStatsAction transportNodesStatsAction,
                                       TransportIndicesStatsAction transportIndicesStatsAction, ClusterService clusterService,
                                       ThreadPool threadPool) {
         super(settings);
-        this.leastAvailableSpaceUsages = ImmutableOpenMap.of();
-        this.mostAvailableSpaceUsages = ImmutableOpenMap.of();
-        this.shardRoutingToDataPath = ImmutableOpenMap.of();
-        this.shardSizes = ImmutableOpenMap.of();
+        this.leastAvailableSpaceUsages = Collections.emptyMap();
+        this.mostAvailableSpaceUsages = Collections.emptyMap();
+        this.shardRoutingToDataPath = Collections.emptyMap();
+        this.shardSizes = Collections.emptyMap();
         this.transportNodesStatsAction = transportNodesStatsAction;
         this.transportIndicesStatsAction = transportIndicesStatsAction;
         this.clusterService = clusterService;
         this.threadPool = threadPool;
-        this.updateFrequency = INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL_SETTING.get(settings);
-        this.fetchTimeout = INTERNAL_CLUSTER_INFO_TIMEOUT_SETTING.get(settings);
-        this.enabled = DiskThresholdSettings.CLUSTER_ROUTING_ALLOCATION_DISK_THRESHOLD_ENABLED_SETTING.get(settings);
-        clusterSettings.addSettingsUpdateConsumer(INTERNAL_CLUSTER_INFO_TIMEOUT_SETTING, this::setFetchTimeout);
-        clusterSettings.addSettingsUpdateConsumer(INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL_SETTING, this::setUpdateFrequency);
-        clusterSettings.addSettingsUpdateConsumer(DiskThresholdSettings.CLUSTER_ROUTING_ALLOCATION_DISK_THRESHOLD_ENABLED_SETTING, this::setEnabled);
+        this.updateFrequency = settings.getAsTime(INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL, TimeValue.timeValueSeconds(30));
+        this.fetchTimeout = settings.getAsTime(INTERNAL_CLUSTER_INFO_TIMEOUT, TimeValue.timeValueSeconds(15));
+        this.enabled = settings.getAsBoolean(DiskThresholdDecider.CLUSTER_ROUTING_ALLOCATION_DISK_THRESHOLD_ENABLED, true);
+        nodeSettingsService.addListener(new ApplySettings());
 
         // Add InternalClusterInfoService to listen for Master changes
         this.clusterService.add((LocalNodeMasterListener)this);
@@ -117,16 +111,35 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
         this.clusterService.add((ClusterStateListener)this);
     }
 
-    private void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
+    class ApplySettings implements NodeSettingsService.Listener {
+        @Override
+        public void onRefreshSettings(Settings settings) {
+            TimeValue newUpdateFrequency = settings.getAsTime(INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL, null);
+            // ClusterInfoService is only enabled if the DiskThresholdDecider is enabled
+            Boolean newEnabled = settings.getAsBoolean(DiskThresholdDecider.CLUSTER_ROUTING_ALLOCATION_DISK_THRESHOLD_ENABLED, null);
 
-    private void setFetchTimeout(TimeValue fetchTimeout) {
-        this.fetchTimeout = fetchTimeout;
-    }
+            if (newUpdateFrequency != null) {
+                if (newUpdateFrequency.getMillis() < TimeValue.timeValueSeconds(10).getMillis()) {
+                    logger.warn("[{}] set too low [{}] (< 10s)", INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL, newUpdateFrequency);
+                    throw new IllegalStateException("Unable to set " + INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL + " less than 10 seconds");
+                } else {
+                    logger.info("updating [{}] from [{}] to [{}]", INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL, updateFrequency, newUpdateFrequency);
+                    InternalClusterInfoService.this.updateFrequency = newUpdateFrequency;
+                }
+            }
 
-    void setUpdateFrequency(TimeValue updateFrequency) {
-        this.updateFrequency = updateFrequency;
+            TimeValue newFetchTimeout = settings.getAsTime(INTERNAL_CLUSTER_INFO_TIMEOUT, null);
+            if (newFetchTimeout != null) {
+                logger.info("updating fetch timeout [{}] from [{}] to [{}]", INTERNAL_CLUSTER_INFO_TIMEOUT, fetchTimeout, newFetchTimeout);
+                InternalClusterInfoService.this.fetchTimeout = newFetchTimeout;
+            }
+
+
+            // We don't log about enabling it here, because the DiskThresholdDecider will already be logging about enable/disable
+            if (newEnabled != null) {
+                InternalClusterInfoService.this.enabled = newEnabled;
+            }
+        }
     }
 
     @Override
@@ -140,7 +153,12 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
             threadPool.schedule(updateFrequency, executorName(), new SubmitReschedulingClusterInfoUpdatedJob());
             if (clusterService.state().getNodes().getDataNodes().size() > 1) {
                 // Submit an info update job to be run immediately
-                threadPool.executor(executorName()).execute(() -> maybeRefresh());
+                threadPool.executor(executorName()).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        maybeRefresh();
+                    }
+                });
             }
         } catch (EsRejectedExecutionException ex) {
             if (logger.isDebugEnabled()) {
@@ -168,7 +186,7 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
         // Check whether it was a data node that was added
         boolean dataNodeAdded = false;
         for (DiscoveryNode addedNode : event.nodesDelta().addedNodes()) {
-            if (addedNode.isDataNode()) {
+            if (addedNode.dataNode()) {
                 dataNodeAdded = true;
                 break;
             }
@@ -178,24 +196,29 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
             if (logger.isDebugEnabled()) {
                 logger.debug("data node was added, retrieving new cluster info");
             }
-            threadPool.executor(executorName()).execute(() -> maybeRefresh());
+            threadPool.executor(executorName()).execute(new Runnable() {
+                @Override
+                public void run() {
+                    maybeRefresh();
+                }
+            });
         }
 
         if (this.isMaster && event.nodesRemoved()) {
             for (DiscoveryNode removedNode : event.nodesDelta().removedNodes()) {
-                if (removedNode.isDataNode()) {
+                if (removedNode.dataNode()) {
                     if (logger.isTraceEnabled()) {
                         logger.trace("Removing node from cluster info: {}", removedNode.getId());
                     }
                     if (leastAvailableSpaceUsages.containsKey(removedNode.getId())) {
-                        ImmutableOpenMap.Builder<String, DiskUsage> newMaxUsages = ImmutableOpenMap.builder(leastAvailableSpaceUsages);
+                        Map<String, DiskUsage> newMaxUsages = new HashMap<>(leastAvailableSpaceUsages);
                         newMaxUsages.remove(removedNode.getId());
-                        leastAvailableSpaceUsages = newMaxUsages.build();
+                        leastAvailableSpaceUsages = Collections.unmodifiableMap(newMaxUsages);
                     }
                     if (mostAvailableSpaceUsages.containsKey(removedNode.getId())) {
-                        ImmutableOpenMap.Builder<String, DiskUsage> newMinUsages = ImmutableOpenMap.builder(mostAvailableSpaceUsages);
+                        Map<String, DiskUsage> newMinUsages = new HashMap<>(mostAvailableSpaceUsages);
                         newMinUsages.remove(removedNode.getId());
-                        mostAvailableSpaceUsages = newMinUsages.build();
+                        mostAvailableSpaceUsages = Collections.unmodifiableMap(newMinUsages);
                     }
                 }
             }
@@ -225,18 +248,21 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
                 logger.trace("Submitting new rescheduling cluster info update job");
             }
             try {
-                threadPool.executor(executorName()).execute(() -> {
-                    try {
-                        maybeRefresh();
-                    } finally { //schedule again after we refreshed
-                        if (isMaster) {
-                            if (logger.isTraceEnabled()) {
-                                logger.trace("Scheduling next run for updating cluster info in: {}", updateFrequency.toString());
-                            }
-                            try {
-                                threadPool.schedule(updateFrequency, executorName(), this);
-                            } catch (EsRejectedExecutionException ex) {
-                                logger.debug("Reschedule cluster info service was rejected", ex);
+                threadPool.executor(executorName()).execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            maybeRefresh();
+                        } finally { //schedule again after we refreshed
+                            if (isMaster) {
+                                if (logger.isTraceEnabled()) {
+                                    logger.trace("Scheduling next run for updating cluster info in: {}", updateFrequency.toString());
+                                }
+                                try {
+                                    threadPool.schedule(updateFrequency, executorName(), this);
+                                } catch (EsRejectedExecutionException ex) {
+                                    logger.debug("Reschedule cluster info service was rejected", ex);
+                                }
                             }
                         }
                     }
@@ -278,7 +304,7 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
         return latch;
     }
 
-    private void maybeRefresh() {
+    private final void maybeRefresh() {
         // Short-circuit if not enabled
         if (enabled) {
             refresh();
@@ -299,17 +325,17 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
         final CountDownLatch nodeLatch = updateNodeStats(new ActionListener<NodesStatsResponse>() {
             @Override
             public void onResponse(NodesStatsResponse nodeStatses) {
-                ImmutableOpenMap.Builder<String, DiskUsage> newLeastAvaiableUsages = ImmutableOpenMap.builder();
-                ImmutableOpenMap.Builder<String, DiskUsage> newMostAvaiableUsages = ImmutableOpenMap.builder();
+                Map<String, DiskUsage> newLeastAvaiableUsages = new HashMap<>();
+                Map<String, DiskUsage> newMostAvaiableUsages = new HashMap<>();
                 fillDiskUsagePerNode(logger, nodeStatses.getNodes(), newLeastAvaiableUsages, newMostAvaiableUsages);
-                leastAvailableSpaceUsages = newLeastAvaiableUsages.build();
-                mostAvailableSpaceUsages = newMostAvaiableUsages.build();
+                leastAvailableSpaceUsages = Collections.unmodifiableMap(newLeastAvaiableUsages);
+                mostAvailableSpaceUsages = Collections.unmodifiableMap(newMostAvaiableUsages);
             }
 
             @Override
-            public void onFailure(Exception e) {
+            public void onFailure(Throwable e) {
                 if (e instanceof ReceiveTimeoutTransportException) {
-                    logger.error("NodeStatsAction timed out for ClusterInfoUpdateJob", e);
+                    logger.error("NodeStatsAction timed out for ClusterInfoUpdateJob (reason [{}])", e.getMessage());
                 } else {
                     if (e instanceof ClusterBlockException) {
                         if (logger.isTraceEnabled()) {
@@ -319,8 +345,8 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
                         logger.warn("Failed to execute NodeStatsAction for ClusterInfoUpdateJob", e);
                     }
                     // we empty the usages list, to be safe - we don't know what's going on.
-                    leastAvailableSpaceUsages = ImmutableOpenMap.of();
-                    mostAvailableSpaceUsages = ImmutableOpenMap.of();
+                    leastAvailableSpaceUsages = Collections.emptyMap();
+                    mostAvailableSpaceUsages = Collections.emptyMap();
                 }
             }
         });
@@ -329,17 +355,17 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
             @Override
             public void onResponse(IndicesStatsResponse indicesStatsResponse) {
                 ShardStats[] stats = indicesStatsResponse.getShards();
-                ImmutableOpenMap.Builder<String, Long> newShardSizes = ImmutableOpenMap.builder();
-                ImmutableOpenMap.Builder<ShardRouting, String> newShardRoutingToDataPath = ImmutableOpenMap.builder();
+                final HashMap<String, Long> newShardSizes = new HashMap<>();
+                final HashMap<ShardRouting, String> newShardRoutingToDataPath = new HashMap<>();
                 buildShardLevelInfo(logger, stats, newShardSizes, newShardRoutingToDataPath, clusterService.state());
-                shardSizes = newShardSizes.build();
-                shardRoutingToDataPath = newShardRoutingToDataPath.build();
+                shardSizes = Collections.unmodifiableMap(newShardSizes);
+                shardRoutingToDataPath = Collections.unmodifiableMap(newShardRoutingToDataPath);
             }
 
             @Override
-            public void onFailure(Exception e) {
+            public void onFailure(Throwable e) {
                 if (e instanceof ReceiveTimeoutTransportException) {
-                    logger.error("IndicesStatsAction timed out for ClusterInfoUpdateJob", e);
+                    logger.error("IndicesStatsAction timed out for ClusterInfoUpdateJob (reason [{}])", e.getMessage());
                 } else {
                     if (e instanceof ClusterBlockException) {
                         if (logger.isTraceEnabled()) {
@@ -349,8 +375,8 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
                         logger.warn("Failed to execute IndicesStatsAction for ClusterInfoUpdateJob", e);
                     }
                     // we empty the usages list, to be safe - we don't know what's going on.
-                    shardSizes = ImmutableOpenMap.of();
-                    shardRoutingToDataPath = ImmutableOpenMap.of();
+                    shardSizes = Collections.emptyMap();
+                    shardRoutingToDataPath = Collections.emptyMap();
                 }
             }
         });
@@ -379,8 +405,7 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
         return clusterInfo;
     }
 
-    static void buildShardLevelInfo(Logger logger, ShardStats[] stats, ImmutableOpenMap.Builder<String, Long> newShardSizes,
-                                    ImmutableOpenMap.Builder<ShardRouting, String> newShardRoutingToDataPath, ClusterState state) {
+    static void buildShardLevelInfo(ESLogger logger, ShardStats[] stats, HashMap<String, Long> newShardSizes, HashMap<ShardRouting, String> newShardRoutingToDataPath, ClusterState state) {
         MetaData meta = state.getMetaData();
         for (ShardStats s : stats) {
             IndexMetaData indexMeta = meta.index(s.getShardRouting().index());
@@ -402,12 +427,10 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
         }
     }
 
-    static void fillDiskUsagePerNode(Logger logger, List<NodeStats> nodeStatsArray,
-            ImmutableOpenMap.Builder<String, DiskUsage> newLeastAvaiableUsages,
-            ImmutableOpenMap.Builder<String, DiskUsage> newMostAvaiableUsages) {
+    static void fillDiskUsagePerNode(ESLogger logger, NodeStats[] nodeStatsArray, Map<String, DiskUsage> newLeastAvaiableUsages, Map<String, DiskUsage> newMostAvaiableUsages) {
         for (NodeStats nodeStats : nodeStatsArray) {
             if (nodeStats.getFs() == null) {
-                logger.warn("Unable to retrieve node FS stats for {}", nodeStats.getNode().getName());
+                logger.warn("Unable to retrieve node FS stats for {}", nodeStats.getNode().name());
             } else {
                 FsInfo.Path leastAvailablePath = null;
                 FsInfo.Path mostAvailablePath = null;
@@ -421,7 +444,7 @@ public class InternalClusterInfoService extends AbstractComponent implements Clu
                         mostAvailablePath = info;
                     }
                 }
-                String nodeId = nodeStats.getNode().getId();
+                String nodeId = nodeStats.getNode().id();
                 String nodeName = nodeStats.getNode().getName();
                 if (logger.isTraceEnabled()) {
                     logger.trace("node: [{}], most available: total disk: {}, available disk: {} / least available: total disk: {}, available disk: {}",

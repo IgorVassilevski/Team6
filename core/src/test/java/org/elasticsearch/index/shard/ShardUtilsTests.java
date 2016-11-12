@@ -21,10 +21,7 @@ package org.elasticsearch.index.shard;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.StringField;
-import org.apache.lucene.index.CompositeReaderContext;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.*;
 import org.apache.lucene.store.BaseDirectoryWrapper;
 import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.common.lucene.index.ElasticsearchDirectoryReader;
@@ -38,8 +35,8 @@ public class ShardUtilsTests extends ESTestCase {
         BaseDirectoryWrapper dir = newDirectory();
         IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig());
         writer.commit();
-        ShardId id = new ShardId("foo", "_na_", random().nextInt());
-        try (DirectoryReader reader = DirectoryReader.open(writer)) {
+        ShardId id = new ShardId("foo", random().nextInt());
+        try (DirectoryReader reader = DirectoryReader.open(writer, random().nextBoolean())) {
             ElasticsearchDirectoryReader wrap = ElasticsearchDirectoryReader.wrap(reader, id);
             assertEquals(id, ShardUtils.extractShardId(wrap));
         }
@@ -53,7 +50,7 @@ public class ShardUtilsTests extends ESTestCase {
             }
         }
 
-        try (DirectoryReader reader = DirectoryReader.open(writer)) {
+        try (DirectoryReader reader = DirectoryReader.open(writer, random().nextBoolean())) {
             ElasticsearchDirectoryReader wrap = ElasticsearchDirectoryReader.wrap(reader, id);
             assertEquals(id, ShardUtils.extractShardId(wrap));
             CompositeReaderContext context = wrap.getContext();

@@ -19,6 +19,7 @@
 
 package org.elasticsearch.transport;
 
+import com.google.common.collect.Maps;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -26,9 +27,9 @@ import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.transport.BoundTransportAddress;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -48,10 +49,10 @@ public class TransportInfo implements Streamable, ToXContent {
     }
 
     static final class Fields {
-        static final String TRANSPORT = "transport";
-        static final String BOUND_ADDRESS = "bound_address";
-        static final String PUBLISH_ADDRESS = "publish_address";
-        static final String PROFILES = "profiles";
+        static final XContentBuilderString TRANSPORT = new XContentBuilderString("transport");
+        static final XContentBuilderString BOUND_ADDRESS = new XContentBuilderString("bound_address");
+        static final XContentBuilderString PUBLISH_ADDRESS = new XContentBuilderString("publish_address");
+        static final XContentBuilderString PROFILES = new XContentBuilderString("profiles");
     }
 
     @Override
@@ -84,7 +85,7 @@ public class TransportInfo implements Streamable, ToXContent {
         address = BoundTransportAddress.readBoundTransportAddress(in);
         int size = in.readVInt();
         if (size > 0) {
-            profileAddresses = new HashMap<>(size);
+            profileAddresses = Maps.newHashMapWithExpectedSize(size);
             for (int i = 0; i < size; i++) {
                 String key = in.readString();
                 BoundTransportAddress value = BoundTransportAddress.readBoundTransportAddress(in);

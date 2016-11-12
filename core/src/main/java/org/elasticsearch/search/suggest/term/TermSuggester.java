@@ -27,13 +27,11 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.elasticsearch.common.bytes.BytesArray;
-import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.text.Text;
-import org.elasticsearch.index.query.QueryParseContext;
+import org.elasticsearch.search.suggest.SuggestContextParser;
+import org.elasticsearch.search.suggest.SuggestUtils;
 import org.elasticsearch.search.suggest.Suggester;
-import org.elasticsearch.search.suggest.SuggestionBuilder;
 import org.elasticsearch.search.suggest.SuggestionSearchContext.SuggestionContext;
-import org.elasticsearch.search.suggest.phrase.DirectCandidateGenerator;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -41,14 +39,9 @@ import java.util.List;
 
 public final class TermSuggester extends Suggester<TermSuggestionContext> {
 
-    public static final TermSuggester INSTANCE = new TermSuggester();
-
-    private TermSuggester() {}
-
     @Override
-    public TermSuggestion innerExecute(String name, TermSuggestionContext suggestion, IndexSearcher searcher, CharsRefBuilder spare)
-            throws IOException {
-        DirectSpellChecker directSpellChecker = suggestion.getDirectSpellCheckerSettings().createDirectSpellChecker();
+    public TermSuggestion innerExecute(String name, TermSuggestionContext suggestion, IndexSearcher searcher, CharsRefBuilder spare) throws IOException {
+        DirectSpellChecker directSpellChecker = SuggestUtils.getDirectSpellChecker(suggestion.getDirectSpellCheckerSettings());
         final IndexReader indexReader = searcher.getIndexReader();
         TermSuggestion response = new TermSuggestion(
                 name, suggestion.getSize(), suggestion.getDirectSpellCheckerSettings().sort()
@@ -70,28 +63,23 @@ public final class TermSuggester extends Suggester<TermSuggestionContext> {
         return response;
     }
 
-    private static List<Token> queryTerms(SuggestionContext suggestion, CharsRefBuilder spare) throws IOException {
+    @Override
+    public SuggestContextParser getContextParser() {
+        return new TermSuggestParser(this);
+    }
+
+
+    private List<Token> queryTerms(SuggestionContext suggestion, CharsRefBuilder spare) throws IOException {
         final List<Token> result = new ArrayList<>();
         final String field = suggestion.getField();
-        DirectCandidateGenerator.analyze(suggestion.getAnalyzer(), suggestion.getText(), field,
-                new DirectCandidateGenerator.TokenConsumer() {
+        SuggestUtils.analyze(suggestion.getAnalyzer(), suggestion.getText(), field, new SuggestUtils.TokenConsumer() {
             @Override
             public void nextToken() {
                 Term term = new Term(field, BytesRef.deepCopyOf(fillBytesRef(new BytesRefBuilder())));
-                result.add(new Token(term, offsetAttr.startOffset(), offsetAttr.endOffset()));
+                result.add(new Token(term, offsetAttr.startOffset(), offsetAttr.endOffset())); 
             }
         }, spare);
        return result;
-    }
-
-    @Override
-    public SuggestionBuilder<?> innerFromXContent(QueryParseContext context) throws IOException {
-        return TermSuggestionBuilder.innerFromXContent(context);
-    }
-
-    @Override
-    public SuggestionBuilder<?> read(StreamInput in) throws IOException {
-        return new TermSuggestionBuilder(in);
     }
 
     private static class Token {
@@ -107,4 +95,5 @@ public final class TermSuggester extends Suggester<TermSuggestionContext> {
         }
 
     }
+
 }

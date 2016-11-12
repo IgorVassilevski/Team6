@@ -19,45 +19,35 @@
 
 package org.elasticsearch.index.reindex;
 
-import org.elasticsearch.action.ActionRequest;
-import org.elasticsearch.action.ActionResponse;
-import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.plugins.ActionPlugin;
+import org.elasticsearch.action.ActionModule;
+import org.elasticsearch.common.network.NetworkModule;
 import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.rest.RestHandler;
-import org.elasticsearch.tasks.Task;
+import org.elasticsearch.rest.RestModule;
 
-import java.util.Arrays;
-import java.util.List;
-
-import static java.util.Collections.singletonList;
-
-public class ReindexPlugin extends Plugin implements ActionPlugin {
+public class ReindexPlugin extends Plugin {
     public static final String NAME = "reindex";
 
     @Override
-    public List<ActionHandler<? extends ActionRequest<?>, ? extends ActionResponse>> getActions() {
-        return Arrays.asList(new ActionHandler<>(ReindexAction.INSTANCE, TransportReindexAction.class),
-                new ActionHandler<>(UpdateByQueryAction.INSTANCE, TransportUpdateByQueryAction.class),
-                new ActionHandler<>(DeleteByQueryAction.INSTANCE, TransportDeleteByQueryAction.class),
-                new ActionHandler<>(RethrottleAction.INSTANCE, TransportRethrottleAction.class));
+    public String name() {
+        return NAME;
     }
 
     @Override
-    public List<NamedWriteableRegistry.Entry> getNamedWriteables() {
-        return singletonList(
-                new NamedWriteableRegistry.Entry(Task.Status.class, BulkByScrollTask.Status.NAME, BulkByScrollTask.Status::new));
+    public String description() {
+        return "The Reindex module adds APIs to reindex from one index to another or update documents in place.";
     }
 
-    @Override
-    public List<Class<? extends RestHandler>> getRestHandlers() {
-        return Arrays.asList(RestReindexAction.class, RestUpdateByQueryAction.class, RestDeleteByQueryAction.class,
-                RestRethrottleAction.class);
+    public void onModule(ActionModule actionModule) {
+        actionModule.registerAction(ReindexAction.INSTANCE, TransportReindexAction.class);
+        actionModule.registerAction(UpdateByQueryAction.INSTANCE, TransportUpdateByQueryAction.class);
     }
 
-    @Override
-    public List<Setting<?>> getSettings() {
-        return singletonList(TransportReindexAction.REMOTE_CLUSTER_WHITELIST);
+    public void onModule(RestModule restModule) {
+        restModule.addRestAction(RestReindexAction.class);
+        restModule.addRestAction(RestUpdateByQueryAction.class);
+    }
+
+    public void onModule(NetworkModule networkModule) {
+        networkModule.registerTaskStatus(BulkByScrollTask.Status.PROTOTYPE);
     }
 }

@@ -24,6 +24,7 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.List;
@@ -31,21 +32,23 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
 import static org.hamcrest.Matchers.emptyIterable;
 
 @ESIntegTestCase.ClusterScope(randomDynamicTemplates = false) // this test takes a long time to delete the idx if all fields are eager loading
 public class ConcurrentDynamicTemplateIT extends ESIntegTestCase {
+
     private final String mappingType = "test-mapping";
 
-    // see #3544
+    @Test // see #3544
     public void testConcurrentDynamicMapping() throws Exception {
         final String fieldName = "field";
         final String mapping = "{ \"" + mappingType + "\": {" +
                 "\"dynamic_templates\": ["
-                + "{ \"" + fieldName + "\": {" + "\"path_match\": \"*\"," + "\"mapping\": {" + "\"type\": \"text\"," + "\"store\": true,"
-                + "\"analyzer\": \"whitespace\" } } } ] } }";
+                + "{ \"" + fieldName + "\": {" + "\"path_match\": \"*\"," + "\"mapping\": {" + "\"type\": \"string\"," + "\"store\": \"yes\","
+                + "\"index\": \"analyzed\", \"analyzer\": \"whitespace\" } } } ] } }";
         // The 'fieldNames' array is used to help with retrieval of index terms
         // after testing
 
@@ -54,6 +57,7 @@ public class ConcurrentDynamicTemplateIT extends ESIntegTestCase {
             cluster().wipeIndices("test");
             assertAcked(prepareCreate("test")
                     .addMapping(mappingType, mapping));
+            ensureYellow();
             int numDocs = scaledRandomIntBetween(10, 100);
             final CountDownLatch latch = new CountDownLatch(numDocs);
             final List<Throwable> throwable = new CopyOnWriteArrayList<>();
@@ -68,7 +72,7 @@ public class ConcurrentDynamicTemplateIT extends ESIntegTestCase {
                     }
 
                     @Override
-                    public void onFailure(Exception e) {
+                    public void onFailure(Throwable e) {
                         throwable.add(e);
                         latch.countDown();
                     }

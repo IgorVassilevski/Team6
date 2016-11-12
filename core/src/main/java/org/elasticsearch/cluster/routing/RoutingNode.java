@@ -19,18 +19,13 @@
 
 package org.elasticsearch.cluster.routing;
 
-import org.apache.lucene.util.CollectionUtil;
+import com.google.common.collect.Iterators;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.common.Nullable;
-import org.elasticsearch.index.shard.ShardId;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
+import java.util.Collection;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * A {@link RoutingNode} represents a cluster node associated with a single {@link DiscoveryNode} including all shards
@@ -42,51 +37,38 @@ public class RoutingNode implements Iterable<ShardRouting> {
 
     private final DiscoveryNode node;
 
-    private final LinkedHashMap<ShardId, ShardRouting> shards; // LinkedHashMap to preserve order
+    private final List<ShardRouting> shards;
 
-    public RoutingNode(String nodeId, DiscoveryNode node, ShardRouting... shards) {
-        this(nodeId, node, buildShardRoutingMap(shards));
+    public RoutingNode(String nodeId, DiscoveryNode node) {
+        this(nodeId, node, new ArrayList<ShardRouting>());
     }
 
-    RoutingNode(String nodeId, DiscoveryNode node, LinkedHashMap<ShardId, ShardRouting> shards) {
+    public RoutingNode(String nodeId, DiscoveryNode node, List<ShardRouting> shards) {
         this.nodeId = nodeId;
         this.node = node;
         this.shards = shards;
     }
 
-    private static LinkedHashMap<ShardId, ShardRouting> buildShardRoutingMap(ShardRouting... shardRoutings) {
-        final LinkedHashMap<ShardId, ShardRouting> shards = new LinkedHashMap<>();
-        for (ShardRouting shardRouting : shardRoutings) {
-            ShardRouting previousValue = shards.put(shardRouting.shardId(), shardRouting);
-            if (previousValue != null) {
-                throw new IllegalArgumentException("Cannot have two different shards with same shard id " + shardRouting.shardId() +
-                    " on same node ");
-            }
-        }
-        return shards;
-    }
-
     @Override
     public Iterator<ShardRouting> iterator() {
-        return Collections.unmodifiableCollection(shards.values()).iterator();
+        return Iterators.unmodifiableIterator(shards.iterator());
+    }
+
+    Iterator<ShardRouting> mutableIterator() {
+        return shards.iterator();
     }
 
     /**
      * Returns the nodes {@link DiscoveryNode}.
-     *
+     * 
      * @return discoveryNode of this node
      */
     public DiscoveryNode node() {
         return this.node;
     }
 
-    @Nullable
-    public ShardRouting getByShardId(ShardId id) {
-        return shards.get(id);
-    }
-
     /**
-     * Get the id of this node
+     * Get the id of this node 
      * @return id of the node
      */
     public String nodeId() {
@@ -102,31 +84,19 @@ public class RoutingNode implements Iterable<ShardRouting> {
      * @param shard Shard to crate on this Node
      */
     void add(ShardRouting shard) {
-        if (shards.containsKey(shard.shardId())) {
-            throw new IllegalStateException("Trying to add a shard " + shard.shardId() + " to a node [" + nodeId + "] where it already exists");
+        // TODO use Set with ShardIds for faster lookup.
+        for (ShardRouting shardRouting : shards) {
+            if (shardRouting.isSameShard(shard)) {
+                throw new IllegalStateException("Trying to add a shard [" + shard.shardId().index().name() + "][" + shard.shardId().id() + "] to a node [" + nodeId + "] where it already exists");
+            }
         }
-        shards.put(shard.shardId(), shard);
-    }
-
-    void update(ShardRouting oldShard, ShardRouting newShard) {
-        if (shards.containsKey(oldShard.shardId()) == false) {
-            // Shard was already removed by routing nodes iterator
-            // TODO: change caller logic in RoutingNodes so that this check can go away
-            return;
-        }
-        ShardRouting previousValue = shards.put(newShard.shardId(), newShard);
-        assert previousValue == oldShard : "expected shard " + previousValue + " but was " + oldShard;
-    }
-
-    void remove(ShardRouting shard) {
-        ShardRouting previousValue = shards.remove(shard.shardId());
-        assert previousValue == shard : "expected shard " + previousValue + " but was " + shard;
+        shards.add(shard);
     }
 
     /**
      * Determine the number of shards with a specific state
      * @param states set of states which should be counted
-     * @return number of shards
+     * @return number of shards 
      */
     public int numberOfShardsWithState(ShardRoutingState... states) {
         int count = 0;
@@ -143,7 +113,7 @@ public class RoutingNode implements Iterable<ShardRouting> {
     /**
      * Determine the shards with a specific state
      * @param states set of states which should be listed
-     * @return List of shards
+     * @return List of shards 
      */
     public List<ShardRouting> shardsWithState(ShardRoutingState... states) {
         List<ShardRouting> shards = new ArrayList<>();
@@ -158,7 +128,7 @@ public class RoutingNode implements Iterable<ShardRouting> {
     }
 
     /**
-     * Determine the shards of an index with a specific state
+     * Determine the shards of an index with a specific state 
      * @param index id of the index
      * @param states set of states which should be listed
      * @return a list of shards
@@ -167,7 +137,7 @@ public class RoutingNode implements Iterable<ShardRouting> {
         List<ShardRouting> shards = new ArrayList<>();
 
         for (ShardRouting shardEntry : this) {
-            if (!shardEntry.getIndexName().equals(index)) {
+            if (!shardEntry.index().equals(index)) {
                 continue;
             }
             for (ShardRoutingState state : states) {
@@ -196,7 +166,7 @@ public class RoutingNode implements Iterable<ShardRouting> {
     public String prettyPrint() {
         StringBuilder sb = new StringBuilder();
         sb.append("-----node_id[").append(nodeId).append("][" + (node == null ? "X" : "V") + "]\n");
-        for (ShardRouting entry : shards.values()) {
+        for (ShardRouting entry : shards) {
             sb.append("--------").append(entry.shortSummary()).append('\n');
         }
         return sb.toString();
@@ -218,8 +188,12 @@ public class RoutingNode implements Iterable<ShardRouting> {
         return sb.toString();
     }
 
-    public List<ShardRouting> copyShards() {
-        return new ArrayList<>(shards.values());
+    public ShardRouting get(int i) {
+        return shards.get(i) ;
+    }
+
+    public Collection<ShardRouting> copyShards() {
+        return new ArrayList<>(shards);
     }
 
     public boolean isEmpty() {

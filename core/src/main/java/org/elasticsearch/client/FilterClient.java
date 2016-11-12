@@ -18,14 +18,8 @@
  */
 package org.elasticsearch.client;
 
-import org.elasticsearch.action.Action;
-import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.ActionRequest;
-import org.elasticsearch.action.ActionRequestBuilder;
-import org.elasticsearch.action.ActionResponse;
+import org.elasticsearch.action.*;
 import org.elasticsearch.client.support.AbstractClient;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.threadpool.ThreadPool;
 
 
 /**
@@ -44,15 +38,7 @@ public abstract class FilterClient extends AbstractClient {
      * @see #in()
      */
     public FilterClient(Client in) {
-        this(in.settings(), in.threadPool(), in);
-    }
-
-    /**
-     * A Constructor that allows to pass settings and threadpool separately. This is useful if the
-     * client is a proxy and not yet fully constructed ie. both dependencies are not available yet.
-     */
-    protected FilterClient(Settings settings, ThreadPool threadPool, Client in) {
-        super(settings, threadPool);
+        super(in.settings(), in.threadPool(), in.headers());
         this.in = in;
     }
 
@@ -62,8 +48,7 @@ public abstract class FilterClient extends AbstractClient {
     }
 
     @Override
-    protected <Request extends ActionRequest<Request>, Response extends ActionResponse, RequestBuilder extends ActionRequestBuilder<Request, Response, RequestBuilder>> void doExecute(
-            Action<Request, Response, RequestBuilder> action, Request request, ActionListener<Response> listener) {
+    protected <Request extends ActionRequest, Response extends ActionResponse, RequestBuilder extends ActionRequestBuilder<Request, Response, RequestBuilder>> void doExecute(Action<Request, Response, RequestBuilder> action, Request request, ActionListener<Response> listener) {
         in().execute(action, request, listener);
     }
 

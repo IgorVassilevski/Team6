@@ -16,7 +16,7 @@
 
 package org.elasticsearch.common.inject.spi;
 
-import org.apache.logging.log4j.Logger;
+import com.google.common.collect.Sets;
 import org.elasticsearch.common.inject.AbstractModule;
 import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.Binding;
@@ -41,6 +41,7 @@ import org.elasticsearch.common.inject.internal.PrivateElementsImpl;
 import org.elasticsearch.common.inject.internal.ProviderMethodsModule;
 import org.elasticsearch.common.inject.internal.SourceProvider;
 import org.elasticsearch.common.inject.matcher.Matcher;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 
 import java.lang.annotation.Annotation;
@@ -48,9 +49,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Exposes elements of a module so they can be inspected, validated or {@link
@@ -78,6 +80,13 @@ public final class Elements {
      */
     public static List<Element> getElements(Module... modules) {
         return getElements(Stage.DEVELOPMENT, Arrays.asList(modules));
+    }
+
+    /**
+     * Records the elements executed by {@code modules}.
+     */
+    public static List<Element> getElements(Stage stage, Module... modules) {
+        return getElements(stage, Arrays.asList(modules));
     }
 
     /**
@@ -112,6 +121,11 @@ public final class Elements {
         };
     }
 
+    @SuppressWarnings("unchecked")
+    static <T> BindingTargetVisitor<T, T> getInstanceVisitor() {
+        return (BindingTargetVisitor<T, T>) GET_INSTANCE_VISITOR;
+    }
+
     private static class RecordingBinder implements Binder, PrivateBinder {
         private final Stage stage;
         private final Set<Module> modules;
@@ -127,7 +141,7 @@ public final class Elements {
 
         private RecordingBinder(Stage stage) {
             this.stage = stage;
-            this.modules = new HashSet<>();
+            this.modules = Sets.newHashSet();
             this.elements = new ArrayList<>();
             this.source = null;
             this.sourceProvider = new SourceProvider().plusSkippedClasses(
@@ -142,9 +156,7 @@ public final class Elements {
          */
         private RecordingBinder(
                 RecordingBinder prototype, Object source, SourceProvider sourceProvider) {
-            if (!(source == null ^ sourceProvider == null)) {
-                throw new IllegalArgumentException();
-            }
+            checkArgument(source == null ^ sourceProvider == null);
 
             this.stage = prototype.stage;
             this.modules = prototype.modules;
@@ -160,7 +172,7 @@ public final class Elements {
          */
         private RecordingBinder(RecordingBinder parent, PrivateElementsImpl privateElements) {
             this.stage = parent.stage;
-            this.modules = new HashSet<>();
+            this.modules = Sets.newHashSet();
             this.elements = privateElements.getElementsMutable();
             this.source = parent.source;
             this.sourceProvider = parent.sourceProvider;
@@ -351,7 +363,7 @@ public final class Elements {
             return builder;
         }
 
-        private static Logger logger = Loggers.getLogger(Elements.class);
+        private static ESLogger logger = Loggers.getLogger(Elements.class);
 
         protected Object getSource() {
             Object ret;

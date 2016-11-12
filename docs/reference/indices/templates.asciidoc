@@ -13,7 +13,7 @@ For example:
 
 [source,js]
 --------------------------------------------------
-PUT _template/template_1
+PUT /_template/template_1
 {
   "template": "te*",
   "settings": {
@@ -26,7 +26,8 @@ PUT _template/template_1
       },
       "properties": {
         "host_name": {
-          "type": "keyword"
+          "type": "string",
+          "index": "not_analyzed"
         },
         "created_at": {
           "type": "date",
@@ -37,7 +38,7 @@ PUT _template/template_1
   }
 }
 --------------------------------------------------
-// CONSOLE
+// AUTOSENSE
 
 Defines a template named template_1, with a template pattern of `te*`.
 The settings and mappings will be applied to any index name that matches

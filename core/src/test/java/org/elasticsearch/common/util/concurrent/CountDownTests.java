@@ -21,6 +21,7 @@ package org.elasticsearch.common.util.concurrent;
 
 import org.elasticsearch.test.ESTestCase;
 import org.hamcrest.Matchers;
+import org.junit.Test;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,6 +31,8 @@ import static org.hamcrest.Matchers.greaterThan;
 
 
 public class CountDownTests extends ESTestCase {
+
+    @Test
     public void testConcurrent() throws InterruptedException {
         final AtomicInteger count = new AtomicInteger(0);
         final CountDown countDown = new CountDown(scaledRandomIntBetween(10, 1000));
@@ -43,7 +46,7 @@ public class CountDownTests extends ESTestCase {
                     try {
                         latch.await();
                     } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+                        throw new RuntimeException();
                     }
                     while (true) {
                         if(frequently()) {
@@ -77,7 +80,8 @@ public class CountDownTests extends ESTestCase {
         assertThat(countDown.isCountedDown(), equalTo(true));
         assertThat(count.get(), Matchers.equalTo(1));
     }
-
+    
+    @Test
     public void testSingleThreaded() {
         int atLeast = scaledRandomIntBetween(10, 1000);
         final CountDown countDown = new CountDown(atLeast);
@@ -96,5 +100,6 @@ public class CountDownTests extends ESTestCase {
             }
             assertThat(atLeast, greaterThan(0));
         }
+
     }
 }

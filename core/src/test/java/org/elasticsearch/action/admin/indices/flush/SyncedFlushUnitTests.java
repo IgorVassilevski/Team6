@@ -21,6 +21,7 @@ package org.elasticsearch.action.admin.indices.flush;
 
 import com.carrotsearch.hppc.ObjectIntHashMap;
 import com.carrotsearch.hppc.ObjectIntMap;
+import org.elasticsearch.action.admin.indices.flush.SyncedFlushResponse;
 import org.elasticsearch.action.admin.indices.flush.SyncedFlushResponse.ShardCounts;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardRoutingState;
@@ -84,7 +85,7 @@ public class SyncedFlushUnitTests extends ESTestCase {
         assertThat(testPlan.result.restStatus(), equalTo(testPlan.totalCounts.failed > 0 ? RestStatus.CONFLICT : RestStatus.OK));
         BytesStreamOutput out = new BytesStreamOutput();
         testPlan.result.writeTo(out);
-        StreamInput in = out.bytes().streamInput();
+        StreamInput in = StreamInput.wrap(out.bytes());
         SyncedFlushResponse readResponse = new SyncedFlushResponse();
         readResponse.readFrom(in);
         assertThat(readResponse.totalShards(), equalTo(testPlan.totalCounts.total));
@@ -148,7 +149,7 @@ public class SyncedFlushUnitTests extends ESTestCase {
             int failures = 0;
             List<ShardsSyncedFlushResult> shardsResults = new ArrayList<>();
             for (int shard = 0; shard < shards; shard++) {
-                final ShardId shardId = new ShardId(index, "_na_", shard);
+                final ShardId shardId = new ShardId(index, shard);
                 if (randomInt(5) < 2) {
                     // total shard failure
                     failed += replicas + 1;
@@ -158,7 +159,7 @@ public class SyncedFlushUnitTests extends ESTestCase {
                     Map<ShardRouting, SyncedFlushService.ShardSyncedFlushResponse> shardResponses = new HashMap<>();
                     for (int copy = 0; copy < replicas + 1; copy++) {
                         final ShardRouting shardRouting = TestShardRouting.newShardRouting(index, shard, "node_" + shardId + "_" + copy, null,
-                            copy == 0, ShardRoutingState.STARTED);
+                            copy == 0, ShardRoutingState.STARTED, 0);
                         if (randomInt(5) < 2) {
                             // shard copy failure
                             failed++;

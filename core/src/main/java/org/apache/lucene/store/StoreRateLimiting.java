@@ -26,7 +26,7 @@ import org.elasticsearch.common.unit.ByteSizeValue;
  */
 public class StoreRateLimiting {
 
-    public interface Provider {
+    public static interface Provider {
 
         StoreRateLimiting rateLimiting();
     }
@@ -36,7 +36,7 @@ public class StoreRateLimiting {
         void onPause(long nanos);
     }
 
-    public enum Type {
+    public static enum Type {
         NONE,
         MERGE,
         ALL;

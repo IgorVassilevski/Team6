@@ -19,10 +19,11 @@
 
 package org.elasticsearch.index.reindex;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.common.lucene.uid.Versions;
-import org.elasticsearch.script.ScriptService;
+import org.elasticsearch.common.util.Consumer;
 
 import java.util.Map;
 
@@ -32,39 +33,63 @@ import static org.hamcrest.Matchers.containsString;
 /**
  * Tests index-by-search with a script modifying the documents.
  */
-public class ReindexScriptTests extends AbstractAsyncBulkIndexByScrollActionScriptTestCase<ReindexRequest, BulkIndexByScrollResponse> {
-
+public class ReindexScriptTests extends AbstractAsyncBulkIndexByScrollActionScriptTestCase<ReindexRequest, ReindexResponse> {
     public void testSetIndex() throws Exception {
-        Object dest = randomFrom(new Object[] {234, 234L, "pancake"});
-        IndexRequest index = applyScript((Map<String, Object> ctx) -> ctx.put("_index", dest));
+        final Object dest = randomFrom(new Object[] { 234, 234L, "pancake" });
+        IndexRequest index = applyScript(new Consumer<Map<String, Object>>() {
+            @Override
+            public void accept(Map<String, Object> ctx) {
+                ctx.put("_index", dest);
+            }
+        });
         assertEquals(dest.toString(), index.index());
     }
 
     public void testSettingIndexToNullIsError() throws Exception {
         try {
-            applyScript((Map<String, Object> ctx) -> ctx.put("_index", null));
+            applyScript(new Consumer<Map<String, Object>>() {
+                @Override
+                public void accept(Map<String, Object> ctx) {
+                    ctx.put("_index", null);
+                }
+            });
         } catch (NullPointerException e) {
             assertThat(e.getMessage(), containsString("Can't reindex without a destination index!"));
         }
     }
 
     public void testSetType() throws Exception {
-        Object type = randomFrom(new Object[] {234, 234L, "pancake"});
-        IndexRequest index = applyScript((Map<String, Object> ctx) -> ctx.put("_type", type));
+        final Object type = randomFrom(new Object[] {234, 234L, "pancake"});
+        IndexRequest index = applyScript(new Consumer<Map<String, Object>>() {
+            @Override
+            public void accept(Map<String, Object> ctx) {
+                ctx.put("_type", type);
+            }
+        });
         assertEquals(type.toString(), index.type());
     }
 
     public void testSettingTypeToNullIsError() throws Exception {
         try {
-            applyScript((Map<String, Object> ctx) -> ctx.put("_type", null));
+            applyScript(new Consumer<Map<String, Object>>() {
+                @Override
+                public void accept(Map<String, Object> ctx) {
+                    ctx.put("_type", null);
+                }
+            });
         } catch (NullPointerException e) {
             assertThat(e.getMessage(), containsString("Can't reindex without a destination type!"));
         }
     }
 
     public void testSetId() throws Exception {
-        Object id = randomFrom(new Object[] {null, 234, 234L, "pancake"});
-        IndexRequest index = applyScript((Map<String, Object> ctx) -> ctx.put("_id", id));
+        final Object id = randomFrom(new Object[] { null, 234, 234L, "pancake" });
+        IndexRequest index = applyScript(new Consumer<Map<String, Object>>() {
+            @Override
+            public void accept(Map<String, Object> ctx) {
+                ctx.put("_id", id);
+            }
+        });
         if (id == null) {
             assertNull(index.id());
         } else {
@@ -73,8 +98,13 @@ public class ReindexScriptTests extends AbstractAsyncBulkIndexByScrollActionScri
     }
 
     public void testSetVersion() throws Exception {
-        Number version = randomFrom(new Number[] {null, 234, 234L});
-        IndexRequest index = applyScript((Map<String, Object> ctx) -> ctx.put("_version", version));
+        final Number version = randomFrom(new Number[] { null, 234, 234L });
+        IndexRequest index = applyScript(new Consumer<Map<String, Object>>() {
+            @Override
+            public void accept(Map<String, Object> ctx) {
+                ctx.put("_version", version);
+            }
+        });
         if (version == null) {
             assertEquals(Versions.MATCH_ANY, index.version());
         } else {
@@ -83,9 +113,14 @@ public class ReindexScriptTests extends AbstractAsyncBulkIndexByScrollActionScri
     }
 
     public void testSettingVersionToJunkIsAnError() throws Exception {
-        Object junkVersion = randomFrom(new Object[] { "junk", Math.PI });
+        final Object junkVersion = randomFrom(new Object[] { "junk", Math.PI });
         try {
-            applyScript((Map<String, Object> ctx) -> ctx.put("_version", junkVersion));
+            applyScript(new Consumer<Map<String, Object>>() {
+                @Override
+                public void accept(Map<String, Object> ctx) {
+                    ctx.put("_version", junkVersion);
+                }
+            });
         } catch (IllegalArgumentException e) {
             assertThat(e.getMessage(), containsString("_version may only be set to an int or a long but was ["));
             assertThat(e.getMessage(), containsString(junkVersion.toString()));
@@ -93,26 +128,46 @@ public class ReindexScriptTests extends AbstractAsyncBulkIndexByScrollActionScri
     }
 
     public void testSetParent() throws Exception {
-        String parent = randomRealisticUnicodeOfLengthBetween(5, 20);
-        IndexRequest index = applyScript((Map<String, Object> ctx) -> ctx.put("_parent", parent));
+        final String parent = randomRealisticUnicodeOfLengthBetween(5, 20);
+        IndexRequest index = applyScript(new Consumer<Map<String, Object>>() {
+            @Override
+            public void accept(Map<String, Object> ctx) {
+                ctx.put("_parent", parent);
+            }
+        });
         assertEquals(parent, index.parent());
     }
 
     public void testSetRouting() throws Exception {
-        String routing = randomRealisticUnicodeOfLengthBetween(5, 20);
-        IndexRequest index = applyScript((Map<String, Object> ctx) -> ctx.put("_routing", routing));
+        final String routing = randomRealisticUnicodeOfLengthBetween(5, 20);
+        IndexRequest index = applyScript(new Consumer<Map<String, Object>>() {
+            @Override
+            public void accept(Map<String, Object> ctx) {
+                ctx.put("_routing", routing);
+            }
+        });
         assertEquals(routing, index.routing());
     }
 
     public void testSetTimestamp() throws Exception {
-        String timestamp = randomFrom("now", "1234", null);
-        IndexRequest index = applyScript((Map<String, Object> ctx) -> ctx.put("_timestamp", timestamp));
+        final String timestamp = randomFrom(null, "now", "1234");
+        IndexRequest index = applyScript(new Consumer<Map<String, Object>>() {
+            @Override
+            public void accept(Map<String, Object> ctx) {
+                ctx.put("_timestamp", timestamp);
+            }
+        });
         assertEquals(timestamp, index.timestamp());
     }
 
     public void testSetTtl() throws Exception {
-        Number ttl = randomFrom(new Number[] { null, 1233214, 134143797143L });
-        IndexRequest index = applyScript((Map<String, Object> ctx) -> ctx.put("_ttl", ttl));
+        final Number ttl = randomFrom(new Number[] { null, 1233214, 134143797143L });
+        IndexRequest index = applyScript(new Consumer<Map<String, Object>>() {
+            @Override
+            public void accept(Map<String, Object> ctx) {
+                ctx.put("_ttl", ttl);
+            }
+        });
         if (ttl == null) {
             assertEquals(null, index.ttl());
         } else {
@@ -121,9 +176,14 @@ public class ReindexScriptTests extends AbstractAsyncBulkIndexByScrollActionScri
     }
 
     public void testSettingTtlToJunkIsAnError() throws Exception {
-        Object junkTtl = randomFrom(new Object[] { "junk", Math.PI });
+        final Object junkTtl = randomFrom(new Object[] { "junk", Math.PI });
         try {
-            applyScript((Map<String, Object> ctx) -> ctx.put("_ttl", junkTtl));
+            applyScript(new Consumer<Map<String, Object>>() {
+                @Override
+                public void accept(Map<String, Object> ctx) {
+                    ctx.put("_ttl", junkTtl);
+                }
+            });
         } catch (IllegalArgumentException e) {
             assertThat(e.getMessage(), containsString("_ttl may only be set to an int or a long but was ["));
             assertThat(e.getMessage(), containsString(junkTtl.toString()));
@@ -136,8 +196,8 @@ public class ReindexScriptTests extends AbstractAsyncBulkIndexByScrollActionScri
     }
 
     @Override
-    protected AbstractAsyncBulkIndexByScrollAction<ReindexRequest> action(ScriptService scriptService, ReindexRequest request) {
-        return new TransportReindexAction.AsyncIndexBySearchAction(task, logger, null, threadPool, request, listener(), scriptService,
-                null);
+    protected AbstractAsyncBulkIndexByScrollAction<ReindexRequest, ReindexResponse> action() {
+        return new TransportReindexAction.AsyncIndexBySearchAction(task, logger, null, null, threadPool, Version.V_2_3_0, request(),
+                listener());
     }
 }

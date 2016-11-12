@@ -18,44 +18,50 @@
  */
 package org.elasticsearch.index.fieldvisitor;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.index.mapper.DocumentMapper;
+import org.elasticsearch.index.mapper.FieldMapper;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
-import org.elasticsearch.index.mapper.ParentFieldMapper;
-import org.elasticsearch.index.mapper.RoutingFieldMapper;
-import org.elasticsearch.index.mapper.SourceFieldMapper;
-import org.elasticsearch.index.mapper.TTLFieldMapper;
-import org.elasticsearch.index.mapper.TimestampFieldMapper;
 import org.elasticsearch.index.mapper.Uid;
-import org.elasticsearch.index.mapper.UidFieldMapper;
+import org.elasticsearch.index.mapper.internal.ParentFieldMapper;
+import org.elasticsearch.index.mapper.internal.RoutingFieldMapper;
+import org.elasticsearch.index.mapper.internal.SourceFieldMapper;
+import org.elasticsearch.index.mapper.internal.TTLFieldMapper;
+import org.elasticsearch.index.mapper.internal.TimestampFieldMapper;
+import org.elasticsearch.index.mapper.internal.UidFieldMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.unmodifiableSet;
-import static org.elasticsearch.common.util.set.Sets.newHashSet;
+import static com.google.common.collect.Maps.newHashMap;
+
+import org.apache.lucene.index.StoredFieldVisitor;
 
 /**
  * Base {@link StoredFieldVisitor} that retrieves all non-redundant metadata.
  */
 public class FieldsVisitor extends StoredFieldVisitor {
-    private static final Set<String> BASE_REQUIRED_FIELDS = unmodifiableSet(newHashSet(
+
+    private static final Set<String> BASE_REQUIRED_FIELDS = ImmutableSet.of(
             UidFieldMapper.NAME,
             TimestampFieldMapper.NAME,
             TTLFieldMapper.NAME,
             RoutingFieldMapper.NAME,
-            ParentFieldMapper.NAME));
+            ParentFieldMapper.NAME
+   );
 
     private final boolean loadSource;
     private final Set<String> requiredFields;
@@ -82,15 +88,47 @@ public class FieldsVisitor extends StoredFieldVisitor {
     }
 
     public void postProcess(MapperService mapperService) {
+        if (uid != null) {
+            DocumentMapper documentMapper = mapperService.documentMapper(uid.type());
+            if (documentMapper != null) {
+                // we can derive the exact type for the mapping
+                postProcess(documentMapper);
+                return;
+            }
+        }
+        // can't derive exact mapping type
         for (Map.Entry<String, List<Object>> entry : fields().entrySet()) {
-            MappedFieldType fieldType = mapperService.fullName(entry.getKey());
+            MappedFieldType fieldType = mapperService.indexName(entry.getKey());
             if (fieldType == null) {
-                throw new IllegalStateException("Field [" + entry.getKey()
-                    + "] exists in the index but not in mappings");
+                continue;
             }
             List<Object> fieldValues = entry.getValue();
             for (int i = 0; i < fieldValues.size(); i++) {
                 fieldValues.set(i, fieldType.valueForSearch(fieldValues.get(i)));
+            }
+        }
+    }
+
+    public void postProcess(DocumentMapper documentMapper) {
+        for (Map.Entry<String, List<Object>> entry : fields().entrySet()) {
+            String indexName = entry.getKey();
+            FieldMapper fieldMapper = documentMapper.mappers().getMapper(indexName);
+            if (fieldMapper == null) {
+                // it's possible index name doesn't match field name (legacy feature)
+                for (FieldMapper mapper : documentMapper.mappers()) {
+                    if (mapper.fieldType().names().indexName().equals(indexName)) {
+                        fieldMapper = mapper;
+                        break;
+                    }
+                }
+                if (fieldMapper == null) {
+                    // no index name or full name found, so skip
+                    continue;
+                }
+            }
+            List<Object> fieldValues = entry.getValue();
+            for (int i = 0; i < fieldValues.size(); i++) {
+                fieldValues.set(i, fieldMapper.fieldType().valueForSearch(fieldValues.get(i)));
             }
         }
     }
@@ -155,7 +193,9 @@ public class FieldsVisitor extends StoredFieldVisitor {
     }
 
     public Map<String, List<Object>> fields() {
-        return fieldsValues != null ? fieldsValues : emptyMap();
+        return fieldsValues != null
+                ? fieldsValues
+                : ImmutableMap.<String, List<Object>>of();
     }
 
     public void reset() {
@@ -171,7 +211,7 @@ public class FieldsVisitor extends StoredFieldVisitor {
 
     void addValue(String name, Object value) {
         if (fieldsValues == null) {
-            fieldsValues = new HashMap<>();
+            fieldsValues = newHashMap();
         }
 
         List<Object> values = fieldsValues.get(name);

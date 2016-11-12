@@ -19,18 +19,25 @@
 
 package org.elasticsearch.index.cache.request;
 
-import org.apache.lucene.util.Accountable;
-import org.elasticsearch.common.metrics.CounterMetric;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
 
-/**
- * Tracks the portion of the request cache in use for a particular shard.
- */
-public final class ShardRequestCache {
+import org.elasticsearch.common.metrics.CounterMetric;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.shard.AbstractIndexShardComponent;
+import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.indices.cache.request.IndicesRequestCache;
+
+public class ShardRequestCache extends AbstractIndexShardComponent implements RemovalListener<IndicesRequestCache.Key, IndicesRequestCache.Value> {
 
     final CounterMetric evictionsMetric = new CounterMetric();
     final CounterMetric totalMetric = new CounterMetric();
     final CounterMetric hitCount = new CounterMetric();
     final CounterMetric missCount = new CounterMetric();
+
+    public ShardRequestCache(ShardId shardId, Settings indexSettings) {
+        super(shardId, indexSettings);
+    }
 
     public RequestCacheStats stats() {
         return new RequestCacheStats(totalMetric.count(), evictionsMetric.count(), hitCount.count(), missCount.count());
@@ -44,20 +51,21 @@ public final class ShardRequestCache {
         missCount.inc();
     }
 
-    public void onCached(Accountable key, Accountable value) {
+    public void onCached(IndicesRequestCache.Key key, IndicesRequestCache.Value value) {
         totalMetric.inc(key.ramBytesUsed() + value.ramBytesUsed());
     }
 
-    public void onRemoval(Accountable key, Accountable value, boolean evicted) {
-        if (evicted) {
+    @Override
+    public void onRemoval(RemovalNotification<IndicesRequestCache.Key, IndicesRequestCache.Value> removalNotification) {
+        if (removalNotification.wasEvicted()) {
             evictionsMetric.inc();
         }
         long dec = 0;
-        if (key != null) {
-            dec += key.ramBytesUsed();
+        if (removalNotification.getKey() != null) {
+            dec += removalNotification.getKey().ramBytesUsed();
         }
-        if (value != null) {
-            dec += value.ramBytesUsed();
+        if (removalNotification.getValue() != null) {
+            dec += removalNotification.getValue().ramBytesUsed();
         }
         totalMetric.dec(dec);
     }

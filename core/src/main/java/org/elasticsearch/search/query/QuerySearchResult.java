@@ -19,26 +19,25 @@
 
 package org.elasticsearch.search.query;
 
-import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.TopDocs;
 import org.elasticsearch.Version;
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.SearchShardTarget;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.InternalAggregations;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
+import org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorStreams;
 import org.elasticsearch.search.aggregations.pipeline.SiblingPipelineAggregator;
 import org.elasticsearch.search.profile.ProfileShardResult;
 import org.elasticsearch.search.suggest.Suggest;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyList;
 import static org.elasticsearch.common.lucene.Lucene.readTopDocs;
 import static org.elasticsearch.common.lucene.Lucene.writeTopDocs;
 
@@ -52,13 +51,12 @@ public class QuerySearchResult extends QuerySearchResultProvider {
     private int from;
     private int size;
     private TopDocs topDocs;
-    private DocValueFormat[] sortValueFormats;
     private InternalAggregations aggregations;
     private List<SiblingPipelineAggregator> pipelineAggregators;
     private Suggest suggest;
     private boolean searchTimedOut;
     private Boolean terminatedEarly = null;
-    private ProfileShardResult profileShardResults;
+    private List<ProfileShardResult> profileShardResults;
 
     public QuerySearchResult() {
 
@@ -114,20 +112,8 @@ public class QuerySearchResult extends QuerySearchResultProvider {
         return topDocs;
     }
 
-    public void topDocs(TopDocs topDocs, DocValueFormat[] sortValueFormats) {
+    public void topDocs(TopDocs topDocs) {
         this.topDocs = topDocs;
-        if (topDocs.scoreDocs.length > 0 && topDocs.scoreDocs[0] instanceof FieldDoc) {
-            int numFields = ((FieldDoc) topDocs.scoreDocs[0]).fields.length;
-            if (numFields != sortValueFormats.length) {
-                throw new IllegalArgumentException("The number of sort fields does not match: "
-                        + numFields + " != " + sortValueFormats.length);
-            }
-        }
-        this.sortValueFormats = sortValueFormats;
-    }
-
-    public DocValueFormat[] sortValueFormats() {
-        return sortValueFormats;
     }
 
     public Aggregations aggregations() {
@@ -142,7 +128,7 @@ public class QuerySearchResult extends QuerySearchResultProvider {
      * Returns the profiled results for this search, or potentially null if result was empty
      * @return The profiled results, or null
      */
-    @Nullable public ProfileShardResult profileResults() {
+    public @Nullable List<ProfileShardResult> profileResults() {
         return profileShardResults;
     }
 
@@ -150,7 +136,7 @@ public class QuerySearchResult extends QuerySearchResultProvider {
      * Sets the finalized profiling results for this query
      * @param shardResults The finalized profile
      */
-    public void profileResults(ProfileShardResult shardResults) {
+    public void profileResults(List<ProfileShardResult> shardResults) {
         this.profileShardResults = shardResults;
     }
 
@@ -188,12 +174,6 @@ public class QuerySearchResult extends QuerySearchResultProvider {
         return this;
     }
 
-    /** Returns true iff the result has hits */
-    public boolean hasHits() {
-        return (topDocs != null && topDocs.scoreDocs.length > 0) ||
-            (suggest != null && suggest.hasScoreDocs());
-    }
-
     public static QuerySearchResult readQuerySearchResult(StreamInput in) throws IOException {
         QuerySearchResult result = new QuerySearchResult();
         result.readFrom(in);
@@ -212,29 +192,33 @@ public class QuerySearchResult extends QuerySearchResultProvider {
 //        shardTarget = readSearchShardTarget(in);
         from = in.readVInt();
         size = in.readVInt();
-        int numSortFieldsPlus1 = in.readVInt();
-        if (numSortFieldsPlus1 == 0) {
-            sortValueFormats = null;
-        } else {
-            sortValueFormats = new DocValueFormat[numSortFieldsPlus1 - 1];
-            for (int i = 0; i < sortValueFormats.length; ++i) {
-                sortValueFormats[i] = in.readNamedWriteable(DocValueFormat.class);
-            }
-        }
         topDocs = readTopDocs(in);
         if (in.readBoolean()) {
             aggregations = InternalAggregations.readAggregations(in);
         }
-        pipelineAggregators = in.readNamedWriteableList(PipelineAggregator.class).stream().map(a -> (SiblingPipelineAggregator) a)
-                .collect(Collectors.toList());
         if (in.readBoolean()) {
-            suggest = Suggest.readSuggest(in);
+            int size = in.readVInt();
+            List<SiblingPipelineAggregator> pipelineAggregators = new ArrayList<>(size);
+            for (int i = 0; i < size; i++) {
+                BytesReference type = in.readBytesReference();
+                PipelineAggregator pipelineAggregator = PipelineAggregatorStreams.stream(type).readResult(in);
+                pipelineAggregators.add((SiblingPipelineAggregator) pipelineAggregator);
+            }
+            this.pipelineAggregators = pipelineAggregators;
+        }
+        if (in.readBoolean()) {
+            suggest = Suggest.readSuggest(Suggest.Fields.SUGGEST, in);
         }
         searchTimedOut = in.readBoolean();
         terminatedEarly = in.readOptionalBoolean();
 
         if (in.getVersion().onOrAfter(Version.V_2_2_0) && in.readBoolean()) {
-            profileShardResults = new ProfileShardResult(in);
+            int profileSize = in.readVInt();
+            profileShardResults = new ArrayList<>(profileSize);
+            for (int i = 0; i < profileSize; i++) {
+                ProfileShardResult result = new ProfileShardResult(in);
+                profileShardResults.add(result);
+            }
         }
     }
 
@@ -249,14 +233,6 @@ public class QuerySearchResult extends QuerySearchResultProvider {
 //        shardTarget.writeTo(out);
         out.writeVInt(from);
         out.writeVInt(size);
-        if (sortValueFormats == null) {
-            out.writeVInt(0);
-        } else {
-            out.writeVInt(1 + sortValueFormats.length);
-            for (int i = 0; i < sortValueFormats.length; ++i) {
-                out.writeNamedWriteable(sortValueFormats[i]);
-            }
-        }
         writeTopDocs(out, topDocs);
         if (aggregations == null) {
             out.writeBoolean(false);
@@ -264,7 +240,16 @@ public class QuerySearchResult extends QuerySearchResultProvider {
             out.writeBoolean(true);
             aggregations.writeTo(out);
         }
-        out.writeNamedWriteableList(pipelineAggregators == null ? emptyList() : pipelineAggregators);
+        if (pipelineAggregators == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            out.writeVInt(pipelineAggregators.size());
+            for (PipelineAggregator pipelineAggregator : pipelineAggregators) {
+                out.writeBytesReference(pipelineAggregator.type().stream());
+                pipelineAggregator.writeTo(out);
+            }
+        }
         if (suggest == null) {
             out.writeBoolean(false);
         } else {
@@ -279,7 +264,10 @@ public class QuerySearchResult extends QuerySearchResultProvider {
                 out.writeBoolean(false);
             } else {
                 out.writeBoolean(true);
-                profileShardResults.writeTo(out);
+                out.writeVInt(profileShardResults.size());
+                for (ProfileShardResult shardResult : profileShardResults) {
+                    shardResult.writeTo(out);
+                }
             }
         }
     }

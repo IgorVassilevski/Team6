@@ -21,36 +21,35 @@ package org.elasticsearch.cluster;
 
 import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.cluster.node.stats.NodeStats;
+import org.elasticsearch.action.admin.cluster.node.stats.NodesStatsResponse;
 import org.elasticsearch.action.admin.indices.stats.CommonStats;
 import org.elasticsearch.action.admin.indices.stats.ShardStats;
+import org.elasticsearch.cluster.ClusterName;
+import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.cluster.routing.RecoverySource;
-import org.elasticsearch.cluster.routing.RecoverySource.PeerRecoverySource;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardRoutingHelper;
 import org.elasticsearch.cluster.routing.UnassignedInfo;
-import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.LocalTransportAddress;
-import org.elasticsearch.index.Index;
-import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.common.transport.DummyTransportAddress;
 import org.elasticsearch.index.shard.ShardPath;
 import org.elasticsearch.index.store.StoreStats;
 import org.elasticsearch.monitor.fs.FsInfo;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static org.hamcrest.Matchers.equalTo;
 
 public class DiskUsageTests extends ESTestCase {
-    public void testDiskUsageCalc() {
+
+    @Test
+    public void diskUsageCalcTest() {
         DiskUsage du = new DiskUsage("node1", "n1", "random", 100, 40);
         assertThat(du.getFreeDiskAsPercentage(), equalTo(40.0));
         assertThat(du.getUsedDiskAsPercentage(), equalTo(100.0 - 40.0));
@@ -79,7 +78,8 @@ public class DiskUsageTests extends ESTestCase {
         assertThat(du4.getTotalBytes(), equalTo(0L));
     }
 
-    public void testRandomDiskUsage() {
+    @Test
+    public void randomDiskUsageTest() {
         int iters = scaledRandomIntBetween(1000, 10000);
         for (int i = 1; i < iters; i++) {
             long total = between(Integer.MIN_VALUE, Integer.MAX_VALUE);
@@ -102,32 +102,31 @@ public class DiskUsageTests extends ESTestCase {
     }
 
     public void testFillShardLevelInfo() {
-        final Index index = new Index("test", "0xdeadbeef");
-        ShardRouting test_0 = ShardRouting.newUnassigned(new ShardId(index, 0), false, PeerRecoverySource.INSTANCE, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
-        test_0 = ShardRoutingHelper.initialize(test_0, "node1");
-        test_0 = ShardRoutingHelper.moveToStarted(test_0);
-        Path test0Path = createTempDir().resolve("indices").resolve(index.getUUID()).resolve("0");
+        ShardRouting test_0 = ShardRouting.newUnassigned("test", 0, null, false, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
+        ShardRoutingHelper.initialize(test_0, "node1");
+        ShardRoutingHelper.moveToStarted(test_0);
+        Path test0Path = createTempDir().resolve("indices").resolve("test").resolve("0");
         CommonStats commonStats0 = new CommonStats();
         commonStats0.store = new StoreStats(100, 1);
-        ShardRouting test_1 = ShardRouting.newUnassigned(new ShardId(index, 1), false, PeerRecoverySource.INSTANCE, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
-        test_1 = ShardRoutingHelper.initialize(test_1, "node2");
-        test_1 = ShardRoutingHelper.moveToStarted(test_1);
-        Path test1Path = createTempDir().resolve("indices").resolve(index.getUUID()).resolve("1");
+        ShardRouting test_1 = ShardRouting.newUnassigned("test", 1, null, false, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
+        ShardRoutingHelper.initialize(test_1, "node2");
+        ShardRoutingHelper.moveToStarted(test_1);
+        Path test1Path = createTempDir().resolve("indices").resolve("test").resolve("1");
         CommonStats commonStats1 = new CommonStats();
         commonStats1.store = new StoreStats(1000, 1);
         ShardStats[] stats  = new ShardStats[] {
-                new ShardStats(test_0, new ShardPath(false, test0Path, test0Path, test_0.shardId()), commonStats0 , null),
-                new ShardStats(test_1, new ShardPath(false, test1Path, test1Path, test_1.shardId()), commonStats1 , null)
+                new ShardStats(test_0, new ShardPath(false, test0Path, test0Path, "0xdeadbeef", test_0.shardId()), commonStats0 , null),
+                new ShardStats(test_1, new ShardPath(false, test1Path, test1Path, "0xdeadbeef", test_1.shardId()), commonStats1 , null)
         };
-        ImmutableOpenMap.Builder<String, Long> shardSizes = ImmutableOpenMap.builder();
-        ImmutableOpenMap.Builder<ShardRouting, String> routingToPath = ImmutableOpenMap.builder();
+        HashMap<String, Long> shardSizes = new HashMap<>();
+        HashMap<ShardRouting, String> routingToPath = new HashMap<>();
         ClusterState state = ClusterState.builder(new ClusterName("blarg")).version(0).build();
         InternalClusterInfoService.buildShardLevelInfo(logger, stats, shardSizes, routingToPath, state);
         assertEquals(2, shardSizes.size());
         assertTrue(shardSizes.containsKey(ClusterInfo.shardIdentifierFromRouting(test_0)));
         assertTrue(shardSizes.containsKey(ClusterInfo.shardIdentifierFromRouting(test_1)));
-        assertEquals(100L, shardSizes.get(ClusterInfo.shardIdentifierFromRouting(test_0)).longValue());
-        assertEquals(1000L, shardSizes.get(ClusterInfo.shardIdentifierFromRouting(test_1)).longValue());
+        assertEquals(100l, shardSizes.get(ClusterInfo.shardIdentifierFromRouting(test_0)).longValue());
+        assertEquals(1000l, shardSizes.get(ClusterInfo.shardIdentifierFromRouting(test_1)).longValue());
 
         assertEquals(2, routingToPath.size());
         assertTrue(routingToPath.containsKey(test_0));
@@ -137,26 +136,24 @@ public class DiskUsageTests extends ESTestCase {
     }
 
     public void testFillShardsWithShadowIndices() {
-        final Index index = new Index("non-shadow", "0xcafe0000");
-        ShardRouting s0 = ShardRouting.newUnassigned(new ShardId(index, 0), false, PeerRecoverySource.INSTANCE, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
-        s0 = ShardRoutingHelper.initialize(s0, "node1");
-        s0 = ShardRoutingHelper.moveToStarted(s0);
-        Path i0Path = createTempDir().resolve("indices").resolve(index.getUUID()).resolve("0");
+        ShardRouting s0 = ShardRouting.newUnassigned("non-shadow", 0, null, false, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
+        ShardRoutingHelper.initialize(s0, "node1");
+        ShardRoutingHelper.moveToStarted(s0);
+        Path i0Path = createTempDir().resolve("indices").resolve("non-shadow").resolve("0");
         CommonStats commonStats0 = new CommonStats();
         commonStats0.store = new StoreStats(100, 1);
-        final Index index2 = new Index("shadow", "0xcafe0001");
-        ShardRouting s1 = ShardRouting.newUnassigned(new ShardId(index2, 0), false, PeerRecoverySource.INSTANCE, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
-        s1 = ShardRoutingHelper.initialize(s1, "node2");
-        s1 = ShardRoutingHelper.moveToStarted(s1);
-        Path i1Path = createTempDir().resolve("indices").resolve(index2.getUUID()).resolve("0");
+        ShardRouting s1 = ShardRouting.newUnassigned("shadow", 0, null, false, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
+        ShardRoutingHelper.initialize(s1, "node2");
+        ShardRoutingHelper.moveToStarted(s1);
+        Path i1Path = createTempDir().resolve("indices").resolve("shadow").resolve("0");
         CommonStats commonStats1 = new CommonStats();
         commonStats1.store = new StoreStats(1000, 1);
         ShardStats[] stats  = new ShardStats[] {
-                new ShardStats(s0, new ShardPath(false, i0Path, i0Path, s0.shardId()), commonStats0 , null),
-                new ShardStats(s1, new ShardPath(false, i1Path, i1Path, s1.shardId()), commonStats1 , null)
+            new ShardStats(s0, new ShardPath(false, i0Path, i0Path, "0xcafe0000", s0.shardId()), commonStats0 , null),
+            new ShardStats(s1, new ShardPath(false, i1Path, i1Path, "0xcafe0001", s1.shardId()), commonStats1 , null)
         };
-        ImmutableOpenMap.Builder<String, Long> shardSizes = ImmutableOpenMap.builder();
-        ImmutableOpenMap.Builder<ShardRouting, String> routingToPath = ImmutableOpenMap.builder();
+        HashMap<String, Long> shardSizes = new HashMap<>();
+        HashMap<ShardRouting, String> routingToPath = new HashMap<>();
         ClusterState state = ClusterState.builder(new ClusterName("blarg"))
                 .version(0)
                 .metaData(MetaData.builder()
@@ -184,8 +181,8 @@ public class DiskUsageTests extends ESTestCase {
     }
 
     public void testFillDiskUsage() {
-        ImmutableOpenMap.Builder<String, DiskUsage> newLeastAvaiableUsages = ImmutableOpenMap.builder();
-        ImmutableOpenMap.Builder<String, DiskUsage> newMostAvaiableUsages = ImmutableOpenMap.builder();
+        Map<String, DiskUsage> newLeastAvaiableUsages = new HashMap<>();
+        Map<String, DiskUsage> newMostAvaiableUsages = new HashMap<>();
         FsInfo.Path[] node1FSInfo =  new FsInfo.Path[] {
                 new FsInfo.Path("/middle", "/dev/sda", 100, 90, 80),
                 new FsInfo.Path("/least", "/dev/sdb", 200, 190, 70),
@@ -199,14 +196,14 @@ public class DiskUsageTests extends ESTestCase {
                 new FsInfo.Path("/least", "/dev/sda", 100, 90, 70),
                 new FsInfo.Path("/most", "/dev/sda", 100, 90, 80),
         };
-        List<NodeStats> nodeStats = Arrays.asList(
-                new NodeStats(new DiscoveryNode("node_1", LocalTransportAddress.buildUnique(), emptyMap(), emptySet(), Version.CURRENT), 0,
-                        null,null,null,null,null,new FsInfo(0, null, node1FSInfo), null,null,null,null,null, null),
-                new NodeStats(new DiscoveryNode("node_2", LocalTransportAddress.buildUnique(), emptyMap(), emptySet(), Version.CURRENT), 0,
-                        null,null,null,null,null, new FsInfo(0, null, node2FSInfo), null,null,null,null,null, null),
-                new NodeStats(new DiscoveryNode("node_3", LocalTransportAddress.buildUnique(), emptyMap(), emptySet(), Version.CURRENT), 0,
-                        null,null,null,null,null, new FsInfo(0, null, node3FSInfo), null,null,null,null,null, null)
-        );
+        NodeStats[] nodeStats = new NodeStats[] {
+                new NodeStats(new DiscoveryNode("node_1", DummyTransportAddress.INSTANCE, Version.CURRENT), 0,
+                        null,null,null,null,null,new FsInfo(0, node1FSInfo), null,null,null,null),
+                new NodeStats(new DiscoveryNode("node_2", DummyTransportAddress.INSTANCE, Version.CURRENT), 0,
+                        null,null,null,null,null, new FsInfo(0, node2FSInfo), null,null,null,null),
+                new NodeStats(new DiscoveryNode("node_3", DummyTransportAddress.INSTANCE, Version.CURRENT), 0,
+                        null,null,null,null,null, new FsInfo(0, node3FSInfo), null,null,null,null)
+        };
         InternalClusterInfoService.fillDiskUsagePerNode(logger, nodeStats, newLeastAvaiableUsages, newMostAvaiableUsages);
         DiskUsage leastNode_1 = newLeastAvaiableUsages.get("node_1");
         DiskUsage mostNode_1 = newMostAvaiableUsages.get("node_1");
@@ -225,8 +222,8 @@ public class DiskUsageTests extends ESTestCase {
     }
 
     public void testFillDiskUsageSomeInvalidValues() {
-        ImmutableOpenMap.Builder<String, DiskUsage> newLeastAvailableUsages = ImmutableOpenMap.builder();
-        ImmutableOpenMap.Builder<String, DiskUsage> newMostAvailableUsages = ImmutableOpenMap.builder();
+        Map<String, DiskUsage> newLeastAvailableUsages = new HashMap<>();
+        Map<String, DiskUsage> newMostAvailableUsages = new HashMap<>();
         FsInfo.Path[] node1FSInfo =  new FsInfo.Path[] {
                 new FsInfo.Path("/middle", "/dev/sda", 100, 90, 80),
                 new FsInfo.Path("/least", "/dev/sdb", -1, -1, -1),
@@ -240,14 +237,14 @@ public class DiskUsageTests extends ESTestCase {
                 new FsInfo.Path("/most", "/dev/sda", 100, 90, 70),
                 new FsInfo.Path("/least", "/dev/sda", 10, -8, 0),
         };
-        List<NodeStats> nodeStats = Arrays.asList(
-                new NodeStats(new DiscoveryNode("node_1", LocalTransportAddress.buildUnique(), emptyMap(), emptySet(), Version.CURRENT), 0,
-                        null,null,null,null,null,new FsInfo(0, null, node1FSInfo), null,null,null,null,null, null),
-                new NodeStats(new DiscoveryNode("node_2", LocalTransportAddress.buildUnique(), emptyMap(), emptySet(), Version.CURRENT), 0,
-                        null,null,null,null,null, new FsInfo(0, null, node2FSInfo), null,null,null,null,null, null),
-                new NodeStats(new DiscoveryNode("node_3", LocalTransportAddress.buildUnique(), emptyMap(), emptySet(), Version.CURRENT), 0,
-                        null,null,null,null,null, new FsInfo(0, null, node3FSInfo), null,null,null,null,null, null)
-        );
+        NodeStats[] nodeStats = new NodeStats[] {
+                new NodeStats(new DiscoveryNode("node_1", DummyTransportAddress.INSTANCE, Version.CURRENT), 0,
+                        null,null,null,null,null,new FsInfo(0, node1FSInfo), null,null,null,null),
+                new NodeStats(new DiscoveryNode("node_2", DummyTransportAddress.INSTANCE, Version.CURRENT), 0,
+                        null,null,null,null,null, new FsInfo(0, node2FSInfo), null,null,null,null),
+                new NodeStats(new DiscoveryNode("node_3", DummyTransportAddress.INSTANCE, Version.CURRENT), 0,
+                        null,null,null,null,null, new FsInfo(0, node3FSInfo), null,null,null,null)
+        };
         InternalClusterInfoService.fillDiskUsagePerNode(logger, nodeStats, newLeastAvailableUsages, newMostAvailableUsages);
         DiskUsage leastNode_1 = newLeastAvailableUsages.get("node_1");
         DiskUsage mostNode_1 = newMostAvailableUsages.get("node_1");

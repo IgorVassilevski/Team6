@@ -19,18 +19,17 @@
 
 package org.elasticsearch.index.mapper.size;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
 import org.elasticsearch.env.NodeEnvironment;
 import org.elasticsearch.plugin.mapper.MapperSizePlugin;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.InternalTestCluster;
 import org.elasticsearch.test.hamcrest.ElasticsearchAssertions;
 
 import java.io.IOException;
@@ -48,13 +47,12 @@ public class SizeFieldMapperUpgradeTests extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Collections.singleton(MapperSizePlugin.class);
+        return Collections.<Class<? extends Plugin>>singleton(MapperSizePlugin.class);
     }
 
-    public void testUpgradeOldMapping() throws IOException, ExecutionException, InterruptedException {
-        final String indexName = "index-mapper-size-2.0.0";
-        final String indexUUID = "ENCw7sG0SWuTPcH60bHheg";
-        InternalTestCluster.Async<String> master = internalCluster().startNodeAsync();
+    public void doTestUpgradeOldMapping(String version) throws IOException, ExecutionException, InterruptedException {
+        ListenableFuture<String> master = internalCluster().startNodeAsync();
+        final String indexName = "index-mapper-size-" + version;
         Path unzipDir = createTempDir();
         Path unzipDataDir = unzipDir.resolve("data");
         Path backwardsIndex = getBwcIndicesPath().resolve(indexName + ".zip");
@@ -65,17 +63,15 @@ public class SizeFieldMapperUpgradeTests extends ESIntegTestCase {
 
         Path dataPath = createTempDir();
         Settings settings = Settings.builder()
-                .put(Environment.PATH_DATA_SETTING.getKey(), dataPath)
+                .put("path.data", dataPath)
                 .build();
-        // workaround for dangling index loading issue when node is master
-        final String node = internalCluster().startDataOnlyNode(settings);
+        final String node = internalCluster().startDataOnlyNode(settings); // workaround for dangling index loading issue when node is master
         Path[] nodePaths = internalCluster().getInstance(NodeEnvironment.class, node).nodeDataPaths();
         assertEquals(1, nodePaths.length);
         dataPath = nodePaths[0].resolve(NodeEnvironment.INDICES_FOLDER);
         assertFalse(Files.exists(dataPath));
         Path src = unzipDataDir.resolve(indexName + "/nodes/0/indices");
         Files.move(src, dataPath);
-        Files.move(dataPath.resolve(indexName), dataPath.resolve(indexUUID));
         master.get();
         // force reloading dangling indices with a cluster state republish
         client().admin().cluster().prepareReroute().get();
@@ -84,8 +80,8 @@ public class SizeFieldMapperUpgradeTests extends ESIntegTestCase {
         ElasticsearchAssertions.assertHitCount(countResponse, 3L);
 
         final SearchResponse sizeResponse = client().prepareSearch(indexName)
-                .addStoredField("_source")
-                .addStoredField("_size")
+                .addField("_source")
+                .addFieldDataField("_size")
                 .get();
         ElasticsearchAssertions.assertHitCount(sizeResponse, 3L);
         for (SearchHit hit : sizeResponse.getHits().getHits()) {
@@ -99,4 +95,11 @@ public class SizeFieldMapperUpgradeTests extends ESIntegTestCase {
         }
     }
 
+    public void testUpgradeOldMapping200() throws IOException, ExecutionException, InterruptedException {
+        doTestUpgradeOldMapping("2.0.0");
+    }
+
+    public void testUpgradeOldMapping173() throws IOException, ExecutionException, InterruptedException {
+        doTestUpgradeOldMapping("1.7.3");
+    }
 }

@@ -18,11 +18,9 @@
  */
 package org.elasticsearch.action.bulk;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.util.concurrent.EsRejectedExecutionException;
 
@@ -33,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  * Abstracts the low-level details of bulk request handling
  */
 abstract class BulkRequestHandler {
-    protected final Logger logger;
+    protected final ESLogger logger;
     protected final Client client;
 
     protected BulkRequestHandler(Client client) {
@@ -78,14 +76,14 @@ abstract class BulkRequestHandler {
                 listener.afterBulk(executionId, bulkRequest, bulkResponse);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                logger.info((Supplier<?>) () -> new ParameterizedMessage("Bulk request {} has been cancelled.", executionId), e);
+                logger.info("Bulk request {} has been cancelled.", e, executionId);
                 if (!afterCalled) {
                     listener.afterBulk(executionId, bulkRequest, e);
                 }
-            } catch (Exception e) {
-                logger.warn((Supplier<?>) () -> new ParameterizedMessage("Failed to execute bulk request {}.", executionId), e);
+            } catch (Throwable t) {
+                logger.warn("Failed to execute bulk request {}.", t, executionId);
                 if (!afterCalled) {
-                    listener.afterBulk(executionId, bulkRequest, e);
+                    listener.afterBulk(executionId, bulkRequest, t);
                 }
             }
         }
@@ -113,7 +111,7 @@ abstract class BulkRequestHandler {
         }
 
         @Override
-        public void execute(BulkRequest bulkRequest, long executionId) {
+        public void execute(final BulkRequest bulkRequest, final long executionId) {
             boolean bulkRequestSetupSuccessful = false;
             boolean acquired = false;
             try {
@@ -133,7 +131,7 @@ abstract class BulkRequestHandler {
                             }
 
                             @Override
-                            public void onFailure(Exception e) {
+                            public void onFailure(Throwable e) {
                                 try {
                                     listener.afterBulk(executionId, bulkRequest, e);
                                 } finally {
@@ -144,11 +142,11 @@ abstract class BulkRequestHandler {
                 bulkRequestSetupSuccessful = true;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                logger.info((Supplier<?>) () -> new ParameterizedMessage("Bulk request {} has been cancelled.", executionId), e);
+                logger.info("Bulk request {} has been cancelled.", e, executionId);
                 listener.afterBulk(executionId, bulkRequest, e);
-            } catch (Exception e) {
-                logger.warn((Supplier<?>) () -> new ParameterizedMessage("Failed to execute bulk request {}.", executionId), e);
-                listener.afterBulk(executionId, bulkRequest, e);
+            } catch (Throwable t) {
+                logger.warn("Failed to execute bulk request {}.", t, executionId);
+                listener.afterBulk(executionId, bulkRequest, t);
             } finally {
                 if (!bulkRequestSetupSuccessful && acquired) {  // if we fail on client.bulk() release the semaphore
                     semaphore.release();

@@ -28,20 +28,23 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.rest.RestStatus;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
+/**
+ *
+ */
 public class SearchPhaseExecutionException extends ElasticsearchException {
     private final String phaseName;
     private final ShardSearchFailure[] shardFailures;
 
     public SearchPhaseExecutionException(String phaseName, String msg, ShardSearchFailure[] shardFailures) {
-        this(phaseName, msg, null, shardFailures);
+        super(msg);
+        this.phaseName = phaseName;
+        this.shardFailures = shardFailures;
     }
 
     public SearchPhaseExecutionException(String phaseName, String msg, Throwable cause, ShardSearchFailure[] shardFailures) {
-        super(msg, deduplicateCause(cause, shardFailures));
+        super(msg, cause);
         this.phaseName = phaseName;
         this.shardFailures = shardFailures;
     }
@@ -60,26 +63,12 @@ public class SearchPhaseExecutionException extends ElasticsearchException {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeOptionalString(phaseName);
-        out.writeVInt(shardFailures.length);
-        for (ShardSearchFailure failure : shardFailures) {
-            failure.writeTo(out);
-        }
-    }
-
-    private static Throwable deduplicateCause(Throwable cause, ShardSearchFailure[] shardFailures) {
-        if (shardFailures == null) {
-            throw new IllegalArgumentException("shardSearchFailures must not be null");
-        }
-        // if the cause of this exception is also the cause of one of the shard failures we don't add it
-        // to prevent duplication in stack traces rendered to the REST layer
-        if (cause != null) {
+        out.writeVInt(shardFailures == null ? 0 : shardFailures.length);
+        if (shardFailures != null) {
             for (ShardSearchFailure failure : shardFailures) {
-                if (failure.getCause() == cause) {
-                    return null;
-                }
+                failure.writeTo(out);
             }
         }
-        return cause;
     }
 
     @Override

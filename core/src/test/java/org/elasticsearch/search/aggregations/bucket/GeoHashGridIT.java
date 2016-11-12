@@ -21,6 +21,7 @@ package org.elasticsearch.search.aggregations.bucket;
 import com.carrotsearch.hppc.ObjectIntHashMap;
 import com.carrotsearch.hppc.ObjectIntMap;
 import com.carrotsearch.hppc.cursors.ObjectIntCursor;
+
 import org.elasticsearch.Version;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
@@ -29,41 +30,32 @@ import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.query.GeoBoundingBoxQueryBuilder;
-import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoHashGrid;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoHashGrid.Bucket;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.InternalSettingsPlugin;
 import org.elasticsearch.test.VersionUtils;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-import static org.elasticsearch.common.geo.GeoHashUtils.PRECISION;
-import static org.elasticsearch.common.geo.GeoHashUtils.stringEncode;
+import static org.apache.lucene.spatial.util.GeoHashUtils.PRECISION;
+import static org.apache.lucene.spatial.util.GeoHashUtils.stringEncode;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.geohashGrid;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertSearchResponse;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 @ESIntegTestCase.SuiteScopeTestCase
 public class GeoHashGridIT extends ESIntegTestCase {
-
-    @Override
-    protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(InternalSettingsPlugin.class); // uses index.version.created
-    }
-
-    private Version version = VersionUtils.randomVersionBetween(random(), Version.V_2_0_0, Version.CURRENT);
 
     static ObjectIntMap<String> expectedDocCountsForGeoHash = null;
     static ObjectIntMap<String> multiValuedExpectedDocCountsForGeoHash = null;
@@ -88,13 +80,13 @@ public class GeoHashGridIT extends ESIntegTestCase {
     public void setupSuiteScopeCluster() throws Exception {
         createIndex("idx_unmapped");
 
-        Settings settings = Settings.builder().put(IndexMetaData.SETTING_VERSION_CREATED, version).build();
-
+        Version version = VersionUtils.randomVersionBetween(random(), Version.V_1_0_0, Version.CURRENT);
+        Settings settings = Settings.settingsBuilder().put(IndexMetaData.SETTING_VERSION_CREATED, version).build();
         assertAcked(prepareCreate("idx").setSettings(settings)
-                .addMapping("type", "location", "type=geo_point", "city", "type=keyword"));
+                .addMapping("type", "location", "type=geo_point", "city", "type=string,index=not_analyzed"));
 
         List<IndexRequestBuilder> cities = new ArrayList<>();
-        Random random = random();
+        Random random = getRandom();
         expectedDocCountsForGeoHash = new ObjectIntHashMap<>(numDocs * 2);
         for (int i = 0; i < numDocs; i++) {
             //generate random point
@@ -116,7 +108,7 @@ public class GeoHashGridIT extends ESIntegTestCase {
         indexRandom(true, cities);
 
         assertAcked(prepareCreate("multi_valued_idx").setSettings(settings)
-                .addMapping("type", "location", "type=geo_point", "city", "type=keyword"));
+                .addMapping("type", "location", "type=geo_point", "city", "type=string,index=not_analyzed"));
 
         cities = new ArrayList<>();
         multiValuedExpectedDocCountsForGeoHash = new ObjectIntHashMap<>(numDocs * 2);
@@ -144,7 +136,8 @@ public class GeoHashGridIT extends ESIntegTestCase {
         ensureSearchable();
     }
 
-    public void testSimple() throws Exception {
+    @Test
+    public void simple() throws Exception {
         for (int precision = 1; precision <= PRECISION; precision++) {
             SearchResponse response = client().prepareSearch("idx")
                     .addAggregation(geohashGrid("geohashgrid")
@@ -175,7 +168,8 @@ public class GeoHashGridIT extends ESIntegTestCase {
         }
     }
 
-    public void testMultivalued() throws Exception {
+    @Test
+    public void multivalued() throws Exception {
         for (int precision = 1; precision <= PRECISION; precision++) {
             SearchResponse response = client().prepareSearch("multi_valued_idx")
                     .addAggregation(geohashGrid("geohashgrid")
@@ -199,13 +193,14 @@ public class GeoHashGridIT extends ESIntegTestCase {
         }
     }
 
-    public void testFiltered() throws Exception {
+    @Test
+    public void filtered() throws Exception {
         GeoBoundingBoxQueryBuilder bbox = new GeoBoundingBoxQueryBuilder("location");
-        bbox.setCorners(smallestGeoHash).queryName("bbox");
+        bbox.topLeft(smallestGeoHash).bottomRight(smallestGeoHash).queryName("bbox");
         for (int precision = 1; precision <= PRECISION; precision++) {
             SearchResponse response = client().prepareSearch("idx")
                     .addAggregation(
-                            AggregationBuilders.filter("filtered", bbox)
+                            AggregationBuilders.filter("filtered").filter(bbox)
                                     .subAggregation(
                                             geohashGrid("geohashgrid")
                                                     .field("location")
@@ -232,7 +227,8 @@ public class GeoHashGridIT extends ESIntegTestCase {
         }
     }
 
-    public void testUnmapped() throws Exception {
+    @Test
+    public void unmapped() throws Exception {
         for (int precision = 1; precision <= PRECISION; precision++) {
             SearchResponse response = client().prepareSearch("idx_unmapped")
                     .addAggregation(geohashGrid("geohashgrid")
@@ -249,7 +245,8 @@ public class GeoHashGridIT extends ESIntegTestCase {
 
     }
 
-    public void testPartiallyUnmapped() throws Exception {
+    @Test
+    public void partiallyUnmapped() throws Exception {
         for (int precision = 1; precision <= PRECISION; precision++) {
             SearchResponse response = client().prepareSearch("idx", "idx_unmapped")
                     .addAggregation(geohashGrid("geohashgrid")
@@ -273,6 +270,7 @@ public class GeoHashGridIT extends ESIntegTestCase {
         }
     }
 
+    @Test
     public void testTopMatch() throws Exception {
         for (int precision = 1; precision <= PRECISION; precision++) {
             SearchResponse response = client().prepareSearch("idx")
@@ -305,24 +303,24 @@ public class GeoHashGridIT extends ESIntegTestCase {
         }
     }
 
-    public void testSizeIsZero() {
-        final int size = 0;
-        final int shardSize = 10000;
-        IllegalArgumentException exception = expectThrows(IllegalArgumentException.class,
-                () -> client().prepareSearch("idx")
-                        .addAggregation(geohashGrid("geohashgrid").field("location").size(size).shardSize(shardSize)).execute()
-                        .actionGet());
-        assertThat(exception.getMessage(), containsString("[size] must be greater than 0. Found [0] in [geohashgrid]"));
-    }
+    @Test
+    // making sure this doesn't runs into an OOME
+    public void sizeIsZero() {
+        for (int precision = 1; precision <= PRECISION; precision++) {
+            final int size = randomBoolean() ? 0 : randomIntBetween(1, Integer.MAX_VALUE);
+            final int shardSize = randomBoolean() ? -1 : 0;
+            SearchResponse response = client().prepareSearch("idx")
+                    .addAggregation(geohashGrid("geohashgrid")
+                            .field("location")
+                            .size(size)
+                            .shardSize(shardSize)
+                            .precision(precision)
+                    )
+                    .execute().actionGet();
 
-    public void testShardSizeIsZero() {
-        final int size = 100;
-        final int shardSize = 0;
-        IllegalArgumentException exception = expectThrows(IllegalArgumentException.class,
-                () -> client().prepareSearch("idx")
-                        .addAggregation(geohashGrid("geohashgrid").field("location").size(size).shardSize(shardSize))
-                        .execute().actionGet());
-        assertThat(exception.getMessage(), containsString("[shardSize] must be greater than 0. Found [0] in [geohashgrid]"));
+            assertSearchResponse(response);
+            GeoHashGrid geoGrid = response.getAggregations().get("geohashgrid");
+            assertThat(geoGrid.getBuckets().size(), greaterThanOrEqualTo(1));
+        }
     }
-
 }

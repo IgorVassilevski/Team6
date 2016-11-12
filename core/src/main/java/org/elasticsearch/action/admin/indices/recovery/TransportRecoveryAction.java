@@ -19,16 +19,17 @@
 
 package org.elasticsearch.action.admin.indices.recovery;
 
+import com.google.common.collect.Maps;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.broadcast.node.TransportBroadcastByNodeAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardsIterator;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.settings.Settings;
@@ -41,7 +42,6 @@ import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,7 +58,7 @@ public class TransportRecoveryAction extends TransportBroadcastByNodeAction<Reco
                                    TransportService transportService, IndicesService indicesService,
                                    ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
         super(settings, RecoveryAction.NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver,
-                RecoveryRequest::new, ThreadPool.Names.MANAGEMENT);
+                RecoveryRequest.class, ThreadPool.Names.MANAGEMENT);
         this.indicesService = indicesService;
     }
 
@@ -70,14 +70,14 @@ public class TransportRecoveryAction extends TransportBroadcastByNodeAction<Reco
 
     @Override
     protected RecoveryResponse newResponse(RecoveryRequest request, int totalShards, int successfulShards, int failedShards, List<RecoveryState> responses, List<ShardOperationFailedException> shardFailures, ClusterState clusterState) {
-        Map<String, List<RecoveryState>> shardResponses = new HashMap<>();
+        Map<String, List<RecoveryState>> shardResponses = Maps.newHashMap();
         for (RecoveryState recoveryState : responses) {
             if (recoveryState == null) {
                 continue;
             }
-            String indexName = recoveryState.getShardId().getIndexName();
+            String indexName = recoveryState.getShardId().getIndex();
             if (!shardResponses.containsKey(indexName)) {
-                shardResponses.put(indexName, new ArrayList<>());
+                shardResponses.put(indexName, new ArrayList<RecoveryState>());
             }
             if (request.activeOnly()) {
                 if (recoveryState.getStage() != RecoveryState.Stage.DONE) {
@@ -100,7 +100,7 @@ public class TransportRecoveryAction extends TransportBroadcastByNodeAction<Reco
     @Override
     protected RecoveryState shardOperation(RecoveryRequest request, ShardRouting shardRouting) {
         IndexService indexService = indicesService.indexServiceSafe(shardRouting.shardId().getIndex());
-        IndexShard indexShard = indexService.getShard(shardRouting.shardId().id());
+        IndexShard indexShard = indexService.shardSafe(shardRouting.shardId().id());
         return indexShard.recoveryState();
     }
 

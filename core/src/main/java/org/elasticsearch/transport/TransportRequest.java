@@ -19,47 +19,30 @@
 
 package org.elasticsearch.transport;
 
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.tasks.Task;
-import org.elasticsearch.tasks.TaskId;
-
-import java.io.IOException;
 
 /**
  */
-public abstract class TransportRequest extends TransportMessage {
-    public static class Empty extends TransportRequest {
-        public static final Empty INSTANCE = new Empty();
-    }
+public abstract class TransportRequest extends TransportMessage<TransportRequest> {
 
-    /**
-     * Parent of this request. Defaults to {@link TaskId#EMPTY_TASK_ID}, meaning "no parent".
-     */
-    private TaskId parentTaskId = TaskId.EMPTY_TASK_ID;
+    public static class Empty extends TransportRequest {
+
+        public static final Empty INSTANCE = new Empty();
+
+        public Empty() {
+            super();
+        }
+
+        public Empty(TransportRequest request) {
+            super(request);
+        }
+    }
 
     public TransportRequest() {
     }
 
-    /**
-     * Set a reference to task that caused this task to be run.
-     */
-    public void setParentTask(String parentTaskNode, long parentTaskId) {
-        setParentTask(new TaskId(parentTaskNode, parentTaskId));
-    }
-
-    /**
-     * Set a reference to task that created this request.
-     */
-    public void setParentTask(TaskId taskId) {
-        this.parentTaskId = taskId;
-    }
-
-    /**
-     * Get a reference to the task that created this request. Defaults to {@link TaskId#EMPTY_TASK_ID}, meaning "there is no parent".
-     */
-    public TaskId getParentTask() {
-        return parentTaskId;
+    protected TransportRequest(TransportRequest request) {
+        super(request);
     }
 
     /**
@@ -67,8 +50,8 @@ public abstract class TransportRequest extends TransportMessage {
      *
      * A request can override this method and return null to avoid being tracked by the task manager.
      */
-    public Task createTask(long id, String type, String action, TaskId parentTaskId) {
-        return new Task(id, type, action, getDescription(), parentTaskId);
+    public Task createTask(long id, String type, String action) {
+        return new Task(id, type, action, getDescription());
     }
 
     /**
@@ -78,15 +61,4 @@ public abstract class TransportRequest extends TransportMessage {
         return "";
     }
 
-    @Override
-    public void readFrom(StreamInput in) throws IOException {
-        super.readFrom(in);
-        parentTaskId = TaskId.readFromStream(in);
-    }
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        super.writeTo(out);
-        parentTaskId.writeTo(out);
-    }
 }

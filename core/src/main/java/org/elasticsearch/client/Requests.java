@@ -23,7 +23,6 @@ import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.stats.NodesStatsRequest;
 import org.elasticsearch.action.admin.cluster.node.tasks.cancel.CancelTasksRequest;
-import org.elasticsearch.action.admin.cluster.node.tasks.get.GetTaskRequest;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksRequest;
 import org.elasticsearch.action.admin.cluster.repositories.delete.DeleteRepositoryRequest;
 import org.elasticsearch.action.admin.cluster.repositories.get.GetRepositoriesRequest;
@@ -46,21 +45,24 @@ import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.flush.FlushRequest;
-import org.elasticsearch.action.admin.indices.flush.SyncedFlushRequest;
-import org.elasticsearch.action.admin.indices.forcemerge.ForceMergeRequest;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.action.admin.indices.open.OpenIndexRequest;
+import org.elasticsearch.action.admin.indices.forcemerge.ForceMergeRequest;
 import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
 import org.elasticsearch.action.admin.indices.segments.IndicesSegmentsRequest;
 import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsRequest;
 import org.elasticsearch.action.admin.indices.shards.IndicesShardStoresRequest;
+import org.elasticsearch.action.admin.indices.flush.SyncedFlushRequest;
 import org.elasticsearch.action.admin.indices.upgrade.post.UpgradeRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.count.CountRequest;
 import org.elasticsearch.action.delete.DeleteRequest;
+import org.elasticsearch.action.exists.ExistsRequest;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchScrollRequest;
+import org.elasticsearch.action.suggest.SuggestRequest;
 import org.elasticsearch.common.xcontent.XContentType;
 
 /**
@@ -107,7 +109,7 @@ public class Requests {
     }
 
     /**
-     * Creates a new bulk request.
+     * Creats a new bulk request.
      */
     public static BulkRequest bulkRequest() {
         return new BulkRequest();
@@ -123,6 +125,43 @@ public class Requests {
      */
     public static GetRequest getRequest(String index) {
         return new GetRequest(index);
+    }
+
+    /**
+     * Creates a count request which counts the hits matched against a query. Note, the query itself must be set
+     * either using the JSON source of the query, or using a {@link org.elasticsearch.index.query.QueryBuilder} (using {@link org.elasticsearch.index.query.QueryBuilders}).
+     *
+     * @param indices The indices to count matched documents against a query. Use <tt>null</tt> or <tt>_all</tt> to execute against all indices
+     * @return The count request
+     * @see org.elasticsearch.client.Client#count(org.elasticsearch.action.count.CountRequest)
+     * @deprecated use {@link #searchRequest(String...)} instead and set size to 0
+     */
+    @Deprecated
+    public static CountRequest countRequest(String... indices) {
+        return new CountRequest(indices);
+    }
+
+    /**
+     * Creates a exists request which checks if any of the hits matched against a query exists. Note, the query itself must be set
+     * either using the JSON source of the query, or using a {@link org.elasticsearch.index.query.QueryBuilder} (using {@link org.elasticsearch.index.query.QueryBuilders}).
+     *
+     * @param indices The indices to count matched documents against a query. Use <tt>null</tt> or <tt>_all</tt> to execute against all indices
+     * @return The exists request
+     * @deprecated use {@link org.elasticsearch.action.search.SearchRequest} instead and set `size` to `0` and `terminate_after` to `1`
+     */
+    @Deprecated
+    public static ExistsRequest existsRequest(String... indices) {
+        return new ExistsRequest(indices);
+    }
+
+    /**
+     * Creates a suggest request for getting suggestions from provided <code>indices</code>.
+     * The suggest query has to be set using the JSON source using {@link org.elasticsearch.action.suggest.SuggestRequest#suggest(org.elasticsearch.common.bytes.BytesReference)}.
+     * @param indices The indices to suggest from. Use <tt>null</tt> or <tt>_all</tt> to execute against all indices
+     * @see org.elasticsearch.client.Client#suggest(org.elasticsearch.action.suggest.SuggestRequest)
+     */
+    public static SuggestRequest suggestRequest(String... indices) {
+        return new SuggestRequest(indices);
     }
 
     /**
@@ -332,8 +371,7 @@ public class Requests {
     /**
      * Creates a cluster health request.
      *
-     * @param indices The indices to provide additional cluster health information for.
-     *                Use <tt>null</tt> or <tt>_all</tt> to execute against all indices
+     * @param indices The indices to provide additional cluster health information for. Use <tt>null</tt> or <tt>_all</tt> to execute against all indices
      * @return The cluster health request
      * @see org.elasticsearch.client.ClusterAdminClient#health(org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest)
      */
@@ -405,16 +443,6 @@ public class Requests {
      */
     public static ListTasksRequest listTasksRequest() {
         return new ListTasksRequest();
-    }
-
-    /**
-     * Creates a get task request.
-     *
-     * @return The nodes tasks request
-     * @see org.elasticsearch.client.ClusterAdminClient#getTask(GetTaskRequest)
-     */
-    public static GetTaskRequest getTaskRequest() {
-        return new GetTaskRequest();
     }
 
     /**

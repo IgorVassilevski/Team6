@@ -20,7 +20,8 @@ import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.Key;
 import org.elasticsearch.common.inject.Provider;
 
-import java.util.Objects;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 /**
  * A lookup of the provider for a type. Lookups are created explicitly in a module using
@@ -34,7 +35,7 @@ import java.util.Objects;
  */
 public final class ProviderLookup<T> implements Element {
 
-    // NOTE: this class is not part of guice and was added so the provider lookup's key can be accessible for tests
+    // NOTE: this class is not part of guice and was added so the provder lookup's key can be acessible for tests
     public static class ProviderImpl<T> implements Provider<T> {
         private ProviderLookup<T> lookup;
 
@@ -44,9 +45,8 @@ public final class ProviderLookup<T> implements Element {
 
         @Override
         public T get() {
-            if (lookup.delegate == null) {
-                throw new IllegalStateException( "This Provider cannot be used until the Injector has been created.");
-            }
+            checkState(lookup.delegate != null,
+                "This Provider cannot be used until the Injector has been created.");
             return lookup.delegate.get();
         }
 
@@ -64,8 +64,8 @@ public final class ProviderLookup<T> implements Element {
     private Provider<T> delegate;
 
     public ProviderLookup(Object source, Key<T> key) {
-        this.source = Objects.requireNonNull(source, "source");
-        this.key = Objects.requireNonNull(key, "key");
+        this.source = checkNotNull(source, "source");
+        this.key = checkNotNull(key, "key");
     }
 
     @Override
@@ -88,10 +88,8 @@ public final class ProviderLookup<T> implements Element {
      * @throws IllegalStateException if the delegate is already set
      */
     public void initializeDelegate(Provider<T> delegate) {
-        if (this.delegate != null) {
-            throw new IllegalStateException("delegate already initialized");
-        }
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        checkState(this.delegate == null, "delegate already initialized");
+        this.delegate = checkNotNull(delegate, "delegate");
     }
 
     @Override

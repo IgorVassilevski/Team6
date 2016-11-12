@@ -18,12 +18,12 @@
  */
 package org.elasticsearch.action.bulk;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.PlainActionFuture;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
@@ -32,11 +32,11 @@ import org.elasticsearch.threadpool.ThreadPool;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ScheduledFuture;
-import java.util.function.Predicate;
+import java.util.concurrent.*;
 
 /**
- * Encapsulates synchronous and asynchronous retry logic.
+ * Encapsulates synchronous and asynchronous retry logic. While this was designed for use with BulkProcessor it is public so it can be used
+ * by other code. Specifically it is used by the reindex module.
  */
 public class Retry {
     private final Class<? extends Throwable> retryOnThrowable;
@@ -89,7 +89,7 @@ public class Retry {
     }
 
     static class AbstractRetryHandler implements ActionListener<BulkResponse> {
-        private final Logger logger;
+        private final ESLogger logger;
         private final Client client;
         private final ActionListener<BulkResponse> listener;
         private final Iterator<TimeValue> backoff;
@@ -116,21 +116,26 @@ public class Retry {
         public void onResponse(BulkResponse bulkItemResponses) {
             if (!bulkItemResponses.hasFailures()) {
                 // we're done here, include all responses
-                addResponses(bulkItemResponses, (r -> true));
+                addResponses(bulkItemResponses, TruePredicate.INSTANCE);
                 finishHim();
             } else {
                 if (canRetry(bulkItemResponses)) {
-                    addResponses(bulkItemResponses, (r -> !r.isFailed()));
+                    addResponses(bulkItemResponses, new BulkItemResponsePredicate() {
+                        @Override
+                        public boolean test(BulkItemResponse response) {
+                            return !response.isFailed();
+                        }
+                    });
                     retry(createBulkRequestForRetry(bulkItemResponses));
                 } else {
-                    addResponses(bulkItemResponses, (r -> true));
+                    addResponses(bulkItemResponses, TruePredicate.INSTANCE);
                     finishHim();
                 }
             }
         }
 
         @Override
-        public void onFailure(Exception e) {
+        public void onFailure(Throwable e) {
             try {
                 listener.onFailure(e);
             } finally {
@@ -138,15 +143,20 @@ public class Retry {
             }
         }
 
-        private void retry(BulkRequest bulkRequestForRetry) {
+        private void retry(final BulkRequest bulkRequestForRetry) {
             assert backoff.hasNext();
             TimeValue next = backoff.next();
             logger.trace("Retry of bulk request scheduled in {} ms.", next.millis());
-            scheduledRequestFuture = client.threadPool().schedule(next, ThreadPool.Names.SAME, (() -> this.execute(bulkRequestForRetry)));
+            scheduledRequestFuture = client.threadPool().schedule(next, ThreadPool.Names.SAME, new Runnable() {
+                @Override
+                public void run() {
+                    AbstractRetryHandler.this.execute(bulkRequestForRetry);
+                }
+            });
         }
 
         private BulkRequest createBulkRequestForRetry(BulkResponse bulkItemResponses) {
-            BulkRequest requestToReissue = new BulkRequest();
+            BulkRequest requestToReissue = new BulkRequest(currentBulkRequest);
             int index = 0;
             for (BulkItemResponse bulkItemResponse : bulkItemResponses.getItems()) {
                 if (bulkItemResponse.isFailed()) {
@@ -163,8 +173,8 @@ public class Retry {
             }
             for (BulkItemResponse bulkItemResponse : bulkItemResponses) {
                 if (bulkItemResponse.isFailed()) {
-                    final Throwable cause = bulkItemResponse.getFailure().getCause();
-                    final Throwable rootCause = ExceptionsHelper.unwrapCause(cause);
+                    Throwable cause = bulkItemResponse.getFailure().getCause();
+                    Throwable rootCause = ExceptionsHelper.unwrapCause(cause);
                     if (!rootCause.getClass().equals(retryOnThrowable)) {
                         return false;
                     }
@@ -181,7 +191,7 @@ public class Retry {
             }
         }
 
-        private void addResponses(BulkResponse response, Predicate<BulkItemResponse> filter) {
+        private void addResponses(BulkResponse response, BulkItemResponsePredicate filter) {
             for (BulkItemResponse bulkItemResponse : response) {
                 if (filter.test(bulkItemResponse)) {
                     // Use client-side lock here to avoid visibility issues. This method may be called multiple times
@@ -232,6 +242,19 @@ public class Retry {
         public ActionFuture<BulkResponse> executeBlocking(BulkRequest bulkRequest) {
             super.execute(bulkRequest);
             return actionFuture;
+        }
+    }
+
+    private interface BulkItemResponsePredicate {
+        boolean test(BulkItemResponse response);
+    }
+
+    private static class TruePredicate implements BulkItemResponsePredicate {
+        private static final TruePredicate INSTANCE = new TruePredicate();
+
+        @Override
+        public boolean test(BulkItemResponse response) {
+            return true;
         }
     }
 }

@@ -24,6 +24,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -73,9 +74,13 @@ public class SnapshotsStatusResponse extends ActionResponse implements ToXConten
         }
     }
 
+    static final class Fields {
+        static final XContentBuilderString SNAPSHOTS = new XContentBuilderString("snapshots");
+    }
+
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startArray("snapshots");
+        builder.startArray(Fields.SNAPSHOTS);
         for (SnapshotStatus snapshot : snapshots) {
             snapshot.toXContent(builder, params);
         }

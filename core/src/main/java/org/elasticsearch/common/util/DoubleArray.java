@@ -27,21 +27,21 @@ public interface DoubleArray extends BigArray {
     /**
      * Get an element given its index.
      */
-    double get(long index);
+    public abstract double get(long index);
 
     /**
      * Set a value at the given index and return the previous value.
      */
-    double set(long index, double value);
+    public abstract double set(long index, double value);
 
     /**
      * Increment value at the given index by <code>inc</code> and return the value.
      */
-    double increment(long index, double inc);
+    public abstract double increment(long index, double inc);
 
     /**
      * Fill slots between <code>fromIndex</code> inclusive to <code>toIndex</code> exclusive with <code>value</code>.
      */
-    void fill(long fromIndex, long toIndex, double value);
+    public abstract void fill(long fromIndex, long toIndex, double value);
 
 }

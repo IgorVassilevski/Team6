@@ -25,6 +25,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,6 +36,8 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 
 public class ThreadPoolStatsTests extends ESTestCase {
+
+    @Test
     public void testThreadPoolStatsSort() throws IOException {
         List<ThreadPoolStats.Stats> stats = new ArrayList<>();
         stats.add(new ThreadPoolStats.Stats("z", -1, 0, 0, 0, 0, 0L));
@@ -61,21 +64,22 @@ public class ThreadPoolStatsTests extends ESTestCase {
         assertThat(threads, contains(-1, -1, 1, 2, 3,-1,-1));
     }
 
+    @Test
     public void testThreadPoolStatsToXContent() throws IOException {
         try (BytesStreamOutput os = new BytesStreamOutput()) {
 
             List<ThreadPoolStats.Stats> stats = new ArrayList<>();
+            stats.add(new ThreadPoolStats.Stats(ThreadPool.Names.SUGGEST, -1, 0, 0, 0, 0, 0L));
             stats.add(new ThreadPoolStats.Stats(ThreadPool.Names.SEARCH, -1, 0, 0, 0, 0, 0L));
             stats.add(new ThreadPoolStats.Stats(ThreadPool.Names.WARMER, -1, 0, 0, 0, 0, 0L));
             stats.add(new ThreadPoolStats.Stats(ThreadPool.Names.GENERIC, -1, 0, 0, 0, 0, 0L));
             stats.add(new ThreadPoolStats.Stats(ThreadPool.Names.FORCE_MERGE, -1, 0, 0, 0, 0, 0L));
+            stats.add(new ThreadPoolStats.Stats(ThreadPool.Names.PERCOLATE, -1, 0, 0, 0, 0, 0L));
             stats.add(new ThreadPoolStats.Stats(ThreadPool.Names.SAME, -1, 0, 0, 0, 0, 0L));
 
-            ThreadPoolStats threadPoolStats = new ThreadPoolStats(stats);
+
             try (XContentBuilder builder = new XContentBuilder(XContentType.JSON.xContent(), os)) {
-                builder.startObject();
-                threadPoolStats.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                builder.endObject();
+                new ThreadPoolStats(stats).toXContent(builder, ToXContent.EMPTY_PARAMS);
             }
 
             try (XContentParser parser = XContentType.JSON.xContent().createParser(os.bytes())) {
@@ -83,11 +87,7 @@ public class ThreadPoolStatsTests extends ESTestCase {
                 assertNull(token);
 
                 token = parser.nextToken();
-                assertThat(token, equalTo(XContentParser.Token.START_OBJECT));
-
-                token = parser.nextToken();
-                assertThat(token, equalTo(XContentParser.Token.FIELD_NAME));
-                assertThat(parser.currentName(), equalTo(ThreadPoolStats.Fields.THREAD_POOL));
+                assertThat(token, equalTo(XContentParser.Token.VALUE_STRING));
 
                 token = parser.nextToken();
                 assertThat(token, equalTo(XContentParser.Token.START_OBJECT));
@@ -107,8 +107,10 @@ public class ThreadPoolStatsTests extends ESTestCase {
                 }
                 assertThat(names, contains(ThreadPool.Names.FORCE_MERGE,
                         ThreadPool.Names.GENERIC,
+                        ThreadPool.Names.PERCOLATE,
                         ThreadPool.Names.SAME,
                         ThreadPool.Names.SEARCH,
+                        ThreadPool.Names.SUGGEST,
                         ThreadPool.Names.WARMER));
             }
         }

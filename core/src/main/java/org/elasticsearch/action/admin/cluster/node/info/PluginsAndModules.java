@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.cluster.node.info;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
@@ -29,6 +30,7 @@ import org.elasticsearch.plugins.PluginInfo;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -48,23 +50,33 @@ public class PluginsAndModules implements Streamable, ToXContent {
      */
     public List<PluginInfo> getPluginInfos() {
         List<PluginInfo> plugins = new ArrayList<>(this.plugins);
-        Collections.sort(plugins, (p1, p2) -> p1.getName().compareTo(p2.getName()));
+        Collections.sort(plugins, new Comparator<PluginInfo>() {
+            @Override
+            public int compare(PluginInfo p1, PluginInfo p2) {
+                return p1.getName().compareTo(p2.getName());
+            }
+        });
         return plugins;
     }
-    
+
     /**
      * Returns an ordered list based on modules name
      */
     public List<PluginInfo> getModuleInfos() {
         List<PluginInfo> modules = new ArrayList<>(this.modules);
-        Collections.sort(modules, (p1, p2) -> p1.getName().compareTo(p2.getName()));
+        Collections.sort(modules, new Comparator<PluginInfo>() {
+            @Override
+            public int compare(PluginInfo p1, PluginInfo p2) {
+                return p1.getName().compareTo(p2.getName());
+            }
+        });
         return modules;
     }
 
     public void addPlugin(PluginInfo info) {
         plugins.add(info);
     }
-    
+
     public void addModule(PluginInfo info) {
         modules.add(info);
     }
@@ -78,21 +90,34 @@ public class PluginsAndModules implements Streamable, ToXContent {
         for (int i = 0; i < plugins_size; i++) {
             plugins.add(PluginInfo.readFromStream(in));
         }
-        int modules_size = in.readInt();
-        for (int i = 0; i < modules_size; i++) {
-            modules.add(PluginInfo.readFromStream(in));
+        if (in.getVersion().onOrAfter(Version.V_2_2_0)) {
+            int modules_size = in.readInt();
+            for (int i = 0; i < modules_size; i++) {
+                modules.add(PluginInfo.readFromStream(in));
+            }
         }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeInt(plugins.size());
-        for (PluginInfo plugin : getPluginInfos()) {
-            plugin.writeTo(out);
+        if (out.getVersion().before(Version.V_2_2_0)) {
+            out.writeInt(plugins.size() + modules.size());
+            for (PluginInfo plugin : getPluginInfos()) {
+                plugin.writeTo(out);
+            }
+            for (PluginInfo module : getModuleInfos()) {
+                module.writeTo(out);
+            }
         }
-        out.writeInt(modules.size());
-        for (PluginInfo module : getModuleInfos()) {
-            module.writeTo(out);
+        else {
+            out.writeInt(plugins.size());
+            for (PluginInfo plugin : getPluginInfos()) {
+                plugin.writeTo(out);
+            }
+            out.writeInt(modules.size());
+            for (PluginInfo module : getModuleInfos()) {
+                module.writeTo(out);
+            }
         }
     }
 

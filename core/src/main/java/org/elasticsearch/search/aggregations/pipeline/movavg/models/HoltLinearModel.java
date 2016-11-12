@@ -20,26 +20,23 @@
 package org.elasticsearch.search.aggregations.pipeline.movavg.models;
 
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParseFieldMatcher;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.search.aggregations.pipeline.movavg.MovAvgPipelineAggregationBuilder;
+import org.elasticsearch.search.aggregations.pipeline.movavg.MovAvgParser;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * Calculate a doubly exponential weighted moving average
  */
 public class HoltLinearModel extends MovAvgModel {
-    public static final String NAME = "holt";
 
-    public static final double DEFAULT_ALPHA = 0.3;
-    public static final double DEFAULT_BETA = 0.1;
+    protected static final ParseField NAME_FIELD = new ParseField("holt");
 
     /**
      * Controls smoothing of data.  Also known as "level" value.
@@ -57,32 +54,9 @@ public class HoltLinearModel extends MovAvgModel {
      */
     private final double beta;
 
-    public HoltLinearModel() {
-        this(DEFAULT_ALPHA, DEFAULT_BETA);
-    }
-
     public HoltLinearModel(double alpha, double beta) {
         this.alpha = alpha;
         this.beta = beta;
-    }
-
-    /**
-     * Read from a stream.
-     */
-    public HoltLinearModel(StreamInput in) throws IOException {
-        alpha = in.readDouble();
-        beta = in.readDouble();
-    }
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeDouble(alpha);
-        out.writeDouble(beta);
-    }
-
-    @Override
-    public String getWriteableName() {
-        return NAME;
     }
 
     @Override
@@ -179,51 +153,48 @@ public class HoltLinearModel extends MovAvgModel {
         return forecastValues;
     }
 
+    public static final MovAvgModelStreams.Stream STREAM = new MovAvgModelStreams.Stream() {
+        @Override
+        public MovAvgModel readResult(StreamInput in) throws IOException {
+            return new HoltLinearModel(in.readDouble(), in.readDouble());
+        }
+
+        @Override
+        public String getName() {
+            return NAME_FIELD.getPreferredName();
+        }
+    };
+
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.field(MovAvgPipelineAggregationBuilder.MODEL.getPreferredName(), NAME);
-        builder.startObject(MovAvgPipelineAggregationBuilder.SETTINGS.getPreferredName());
-        builder.field("alpha", alpha);
-        builder.field("beta", beta);
-        builder.endObject();
-        return builder;
+    public void writeTo(StreamOutput out) throws IOException {
+        out.writeString(STREAM.getName());
+        out.writeDouble(alpha);
+        out.writeDouble(beta);
     }
 
-    public static final AbstractModelParser PARSER = new AbstractModelParser() {
+    public static class DoubleExpModelParser extends AbstractModelParser {
+
+        @Override
+        public String getName() {
+            return NAME_FIELD.getPreferredName();
+        }
+
         @Override
         public MovAvgModel parse(@Nullable Map<String, Object> settings, String pipelineName, int windowSize,
                                  ParseFieldMatcher parseFieldMatcher) throws ParseException {
 
-            double alpha = parseDoubleParam(settings, "alpha", DEFAULT_ALPHA);
-            double beta = parseDoubleParam(settings, "beta", DEFAULT_BETA);
+            double alpha = parseDoubleParam(settings, "alpha", 0.3);
+            double beta = parseDoubleParam(settings, "beta", 0.1);
             checkUnrecognizedParams(settings);
             return new HoltLinearModel(alpha, beta);
         }
-    };
-
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(alpha, beta);
     }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        HoltLinearModel other = (HoltLinearModel) obj;
-        return Objects.equals(alpha, other.alpha)
-                && Objects.equals(beta, other.beta);
-    }
-
 
     public static class HoltLinearModelBuilder implements MovAvgModelBuilder {
-        private double alpha = DEFAULT_ALPHA;
-        private double beta = DEFAULT_BETA;
+
+
+        private Double alpha;
+        private Double beta;
 
         /**
          * Alpha controls the smoothing of the data.  Alpha = 1 retains no memory of past values
@@ -253,18 +224,19 @@ public class HoltLinearModel extends MovAvgModel {
 
         @Override
         public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-            builder.field(MovAvgPipelineAggregationBuilder.MODEL.getPreferredName(), NAME);
-            builder.startObject(MovAvgPipelineAggregationBuilder.SETTINGS.getPreferredName());
-            builder.field("alpha", alpha);
-            builder.field("beta", beta);
+            builder.field(MovAvgParser.MODEL.getPreferredName(), NAME_FIELD.getPreferredName());
+            builder.startObject(MovAvgParser.SETTINGS.getPreferredName());
+
+            if (alpha != null) {
+                builder.field("alpha", alpha);
+            }
+
+            if (beta != null) {
+                builder.field("beta", beta);
+            }
 
             builder.endObject();
             return builder;
-        }
-
-        @Override
-        public MovAvgModel build() {
-            return new HoltLinearModel(alpha, beta);
         }
     }
 }

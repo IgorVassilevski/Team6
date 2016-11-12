@@ -18,12 +18,14 @@
  */
 package org.elasticsearch.index.search.nested;
 
-import org.apache.lucene.document.SortedNumericDocValuesField;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.LongField;
 import org.apache.lucene.index.IndexableField;
+import org.elasticsearch.index.fielddata.FieldDataType;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource.Nested;
-import org.elasticsearch.index.fielddata.IndexNumericFieldData;
 import org.elasticsearch.index.fielddata.fieldcomparator.LongValuesComparatorSource;
+import org.elasticsearch.index.fielddata.plain.PackedArrayIndexFieldData;
 import org.elasticsearch.search.MultiValueMode;
 
 /**
@@ -31,19 +33,19 @@ import org.elasticsearch.search.MultiValueMode;
 public class LongNestedSortingTests extends AbstractNumberNestedSortingTestCase {
 
     @Override
-    protected String getFieldDataType() {
-        return "long";
+    protected FieldDataType getFieldDataType() {
+        return new FieldDataType("long");
     }
 
     @Override
     protected IndexFieldData.XFieldComparatorSource createFieldComparator(String fieldName, MultiValueMode sortMode, Object missingValue, Nested nested) {
-        IndexNumericFieldData fieldData = getForField(fieldName);
+        PackedArrayIndexFieldData fieldData = getForField(fieldName);
         return new LongValuesComparatorSource(fieldData, missingValue, sortMode, nested);
     }
 
     @Override
-    protected IndexableField createField(String name, int value) {
-        return new SortedNumericDocValuesField(name, value);
+    protected IndexableField createField(String name, int value, Field.Store store) {
+        return new LongField(name, value, store);
     }
 
 }

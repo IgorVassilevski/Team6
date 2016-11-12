@@ -23,7 +23,7 @@ import org.apache.lucene.util.BytesRef;
 
 /**
  * A list of per-document binary values, sorted
- * according to {@link BytesRef#compareTo(BytesRef)}.
+ * according to {@link BytesRef#getUTF8SortedAsUnicodeComparator()}.
  * There might be dups however.
  */
 public abstract class SortedBinaryDocValues {

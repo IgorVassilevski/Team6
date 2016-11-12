@@ -22,6 +22,7 @@ package org.elasticsearch.action.admin.cluster.repositories.get;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.master.TransportMasterNodeReadAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
@@ -29,7 +30,6 @@ import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.metadata.RepositoriesMetaData;
 import org.elasticsearch.cluster.metadata.RepositoryMetaData;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.common.settings.Settings;
@@ -51,7 +51,7 @@ public class TransportGetRepositoriesAction extends TransportMasterNodeReadActio
     @Inject
     public TransportGetRepositoriesAction(Settings settings, TransportService transportService, ClusterService clusterService,
                                           ThreadPool threadPool, ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, GetRepositoriesAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, GetRepositoriesRequest::new);
+        super(settings, GetRepositoriesAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, GetRepositoriesRequest.class);
     }
 
     @Override

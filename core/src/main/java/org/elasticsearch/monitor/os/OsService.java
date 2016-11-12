@@ -20,8 +20,7 @@
 package org.elasticsearch.monitor.os;
 
 import org.elasticsearch.common.component.AbstractComponent;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.SingleObjectCache;
@@ -38,22 +37,19 @@ public class OsService extends AbstractComponent {
 
     private SingleObjectCache<OsStats> osStatsCache;
 
-    public static final Setting<TimeValue> REFRESH_INTERVAL_SETTING =
-        Setting.timeSetting("monitor.os.refresh_interval", TimeValue.timeValueSeconds(1), TimeValue.timeValueSeconds(1),
-            Property.NodeScope);
-
-    public OsService(Settings settings) {
+    @Inject
+    public OsService(Settings settings, OsProbe probe) {
         super(settings);
-        this.probe = OsProbe.getInstance();
+        this.probe = probe;
 
-        TimeValue refreshInterval = REFRESH_INTERVAL_SETTING.get(settings);
+        TimeValue refreshInterval = settings.getAsTime("monitor.os.refresh_interval", TimeValue.timeValueSeconds(1));
 
         this.info = probe.osInfo();
         this.info.refreshInterval = refreshInterval.millis();
         this.info.allocatedProcessors = EsExecutors.boundedNumberOfProcessors(settings);
 
         osStatsCache = new OsStatsCache(refreshInterval, probe.osStats());
-        logger.debug("using refresh_interval [{}]", refreshInterval);
+        logger.debug("Using probe [{}] with refresh_interval [{}]", probe, refreshInterval);
     }
 
     public OsInfo info() {

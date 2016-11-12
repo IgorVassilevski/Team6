@@ -7,10 +7,13 @@
       "store_term_vector_offsets": false,
       "store_term_vector_positions": false,
       "store_term_vector_payloads": false,
-      "norms": true,
+      "omit_norms": false,
       "analyzer": "whitespace",
       "search_analyzer": "standard",
-      "similarity": "BM25"
+      "similarity": "bm25",
+      "fielddata": {
+          "format": "paged_bytes"
+      }
     }
   }
 }

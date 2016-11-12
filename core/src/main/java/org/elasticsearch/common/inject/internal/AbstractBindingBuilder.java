@@ -24,7 +24,8 @@ import org.elasticsearch.common.inject.spi.InstanceBinding;
 
 import java.lang.annotation.Annotation;
 import java.util.List;
-import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Bind a value or constant.
@@ -72,7 +73,7 @@ public abstract class AbstractBindingBuilder<T> {
      * Sets the binding to a copy with the specified annotation on the bound key
      */
     protected BindingImpl<T> annotatedWithInternal(Class<? extends Annotation> annotationType) {
-        Objects.requireNonNull(annotationType, "annotationType");
+        checkNotNull(annotationType, "annotationType");
         checkNotAnnotated();
         return setBinding(binding.withKey(
                 Key.get(this.binding.getKey().getTypeLiteral(), annotationType)));
@@ -82,20 +83,20 @@ public abstract class AbstractBindingBuilder<T> {
      * Sets the binding to a copy with the specified annotation on the bound key
      */
     protected BindingImpl<T> annotatedWithInternal(Annotation annotation) {
-        Objects.requireNonNull(annotation, "annotation");
+        checkNotNull(annotation, "annotation");
         checkNotAnnotated();
         return setBinding(binding.withKey(
                 Key.get(this.binding.getKey().getTypeLiteral(), annotation)));
     }
 
     public void in(final Class<? extends Annotation> scopeAnnotation) {
-        Objects.requireNonNull(scopeAnnotation, "scopeAnnotation");
+        checkNotNull(scopeAnnotation, "scopeAnnotation");
         checkNotScoped();
         setBinding(getBinding().withScoping(Scoping.forAnnotation(scopeAnnotation)));
     }
 
     public void in(final Scope scope) {
-        Objects.requireNonNull(scope, "scope");
+        checkNotNull(scope, "scope");
         checkNotScoped();
         setBinding(getBinding().withScoping(Scoping.forInstance(scope)));
     }

@@ -23,14 +23,14 @@ import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.settings.Setting;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 
 /**
  * An allocation decider that prevents multiple instances of the same shard to
  * be allocated on the same <tt>node</tt>.
  *
- * The {@link #CLUSTER_ROUTING_ALLOCATION_SAME_HOST_SETTING} setting allows to perform a check to prevent
+ * The {@value #SAME_HOST_SETTING} setting allows to perform a check to prevent
  * allocation of multiple instances of the same shard on a single <tt>host</tt>,
  * based on host name and host address. Defaults to `false`, meaning that no
  * check is performed by default.
@@ -45,24 +45,23 @@ public class SameShardAllocationDecider extends AllocationDecider {
 
     public static final String NAME = "same_shard";
 
-    public static final Setting<Boolean> CLUSTER_ROUTING_ALLOCATION_SAME_HOST_SETTING =
-        Setting.boolSetting("cluster.routing.allocation.same_shard.host", false, Setting.Property.NodeScope);
+    public static final String SAME_HOST_SETTING = "cluster.routing.allocation.same_shard.host";
 
     private final boolean sameHost;
 
+    @Inject
     public SameShardAllocationDecider(Settings settings) {
         super(settings);
 
-        this.sameHost = CLUSTER_ROUTING_ALLOCATION_SAME_HOST_SETTING.get(settings);
+        this.sameHost = settings.getAsBoolean(SAME_HOST_SETTING, false);
     }
 
     @Override
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        Iterable<ShardRouting> assignedShards = allocation.routingNodes().assignedShards(shardRouting.shardId());
+        Iterable<ShardRouting> assignedShards = allocation.routingNodes().assignedShards(shardRouting);
         for (ShardRouting assignedShard : assignedShards) {
             if (node.nodeId().equals(assignedShard.currentNodeId())) {
-                return allocation.decision(Decision.NO, NAME,
-                        "the shard cannot be allocated on the same node id [%s] on which it already exists", node.nodeId());
+                return allocation.decision(Decision.NO, NAME, "shard cannot be allocated on same node [%s] it already exists on", node.nodeId());
             }
         }
         if (sameHost) {
@@ -86,7 +85,7 @@ public class SameShardAllocationDecider extends AllocationDecider {
                         for (ShardRouting assignedShard : assignedShards) {
                             if (checkNode.nodeId().equals(assignedShard.currentNodeId())) {
                                 return allocation.decision(Decision.NO, NAME,
-                                        "shard cannot be allocated on the same host [%s] on which it already exists", node.nodeId());
+                                        "shard cannot be allocated on same host [%s] it already exists on", node.nodeId());
                             }
                         }
                     }

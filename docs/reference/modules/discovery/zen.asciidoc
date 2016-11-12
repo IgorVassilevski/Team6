@@ -56,11 +56,16 @@ serves as a protection against (partial) network failures where a node may unjus
 think that the master has failed. In this case the node will simply hear from
 other nodes about the currently active master.
 
-If `discovery.zen.master_election.ignore_non_master_pings` is `true`, pings from nodes that are not master
-eligible (nodes where `node.master` is `false`) are ignored during master election; the default value is
-`false`.
+If `discovery.zen.master_election.filter_client` is `true`, pings from client nodes (nodes where `node.client` is
+`true`, or both `node.data` and `node.master` are `false`) are ignored during master election; the default value is
+`true`. If `discovery.zen.master_election.filter_data` is `true`, pings from non-master-eligible data nodes (nodes
+where `node.data` is `true` and `node.master` is `false`) are ignored during master election; the default value is
+`false`. Pings from master-eligible nodes are always observed during master election.
 
-Nodes can be excluded from becoming a master by setting `node.master` to `false`.
+Nodes can be excluded from becoming a master by setting `node.master` to
+`false`. Note, once a node is a client node (`node.client` set to
+`true`), it will not be allowed to become a master (`node.master` is
+automatically set to `false`).
 
 The `discovery.zen.minimum_master_nodes` sets the minimum
 number of master eligible nodes that need to join a newly elected master in order for an election to
@@ -102,18 +107,12 @@ considered failed. Defaults to `3`.
 The master node is the only node in a cluster that can make changes to the
 cluster state. The master node processes one cluster state update at a time,
 applies the required changes and publishes the updated cluster state to all
-the other nodes in the cluster. Each node receives the publish message, acknowledges
-it, but does *not* yet apply it. If the master does not receive acknowledgement from
-at least `discovery.zen.minimum_master_nodes` nodes within a certain time (controlled by
-the `discovery.zen.commit_timeout` setting and defaults to 30 seconds) the cluster state
-change is rejected.
-
-Once enough nodes have responded, the cluster state is committed and a message will
-be sent to all the nodes. The nodes then proceed to apply the new cluster state to their
-internal state. The master node waits for all nodes to respond, up to a timeout, before
-going ahead processing the next updates in the queue. The `discovery.zen.publish_timeout` is
-set by default to 30 seconds and is measured from the moment the publishing started. Both
-timeout settings can be changed dynamically through the <<cluster-update-settings,cluster update settings api>>
+the other nodes in the cluster. Each node receives the publish message,
+updates its own cluster state and replies to the master node, which waits for
+all nodes to respond, up to a timeout, before going ahead processing the next
+updates in the queue. The `discovery.zen.publish_timeout` is set by default
+to 30 seconds and can be changed dynamically through the
+<<cluster-update-settings,cluster update settings api>>
 
 [float]
 [[no-master-block]]

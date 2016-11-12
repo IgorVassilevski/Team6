@@ -19,16 +19,15 @@
 
 package org.elasticsearch.index.codec;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.lucene50.Lucene50StoredFieldsFormat;
-import org.apache.lucene.codecs.lucene62.Lucene62Codec;
+import org.apache.lucene.codecs.lucene54.Lucene54Codec;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.lucene.Lucene;
-import org.elasticsearch.index.mapper.CompletionFieldMapper;
-import org.elasticsearch.index.mapper.CompletionFieldMapper2x;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
+import org.elasticsearch.index.mapper.core.CompletionFieldMapper;
 
 /**
  * {@link PerFieldMappingPostingFormatCodec This postings format} is the default
@@ -39,15 +38,15 @@ import org.elasticsearch.index.mapper.MapperService;
  * configured for a specific field the default postings format is used.
  */
 // LUCENE UPGRADE: make sure to move to a new codec depending on the lucene version
-public class PerFieldMappingPostingFormatCodec extends Lucene62Codec {
-    private final Logger logger;
+public class PerFieldMappingPostingFormatCodec extends Lucene54Codec {
+    private final ESLogger logger;
     private final MapperService mapperService;
 
     static {
         assert Codec.forName(Lucene.LATEST_CODEC).getClass().isAssignableFrom(PerFieldMappingPostingFormatCodec.class) : "PerFieldMappingPostingFormatCodec must subclass the latest lucene codec: " + Lucene.LATEST_CODEC;
     }
 
-    public PerFieldMappingPostingFormatCodec(Lucene50StoredFieldsFormat.Mode compressionMode, MapperService mapperService, Logger logger) {
+    public PerFieldMappingPostingFormatCodec(Lucene50StoredFieldsFormat.Mode compressionMode, MapperService mapperService, ESLogger logger) {
         super(compressionMode);
         this.mapperService = mapperService;
         this.logger = logger;
@@ -55,14 +54,14 @@ public class PerFieldMappingPostingFormatCodec extends Lucene62Codec {
 
     @Override
     public PostingsFormat getPostingsFormatForField(String field) {
-        final MappedFieldType fieldType = mapperService.fullName(field);
-        if (fieldType == null) {
+        final MappedFieldType indexName = mapperService.indexName(field);
+        if (indexName == null) {
             logger.warn("no index mapper found for field: [{}] returning default postings format", field);
-        } else if (fieldType instanceof CompletionFieldMapper.CompletionFieldType) {
-            return CompletionFieldMapper.CompletionFieldType.postingsFormat();
-        } else if (fieldType instanceof CompletionFieldMapper2x.CompletionFieldType) {
-            return ((CompletionFieldMapper2x.CompletionFieldType) fieldType).postingsFormat(
-                super.getPostingsFormatForField(field));
+        } else if (indexName instanceof CompletionFieldMapper.CompletionFieldType) {
+            // CompletionFieldMapper needs a special postings format
+            final CompletionFieldMapper.CompletionFieldType fieldType = (CompletionFieldMapper.CompletionFieldType) indexName;
+            final PostingsFormat defaultFormat = super.getPostingsFormatForField(field);
+            return fieldType.postingsFormat(defaultFormat);
         }
         return super.getPostingsFormatForField(field);
     }

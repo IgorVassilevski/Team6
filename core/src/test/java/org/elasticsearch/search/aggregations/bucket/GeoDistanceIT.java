@@ -18,29 +18,27 @@
  */
 package org.elasticsearch.search.aggregations.bucket;
 
+import com.google.common.collect.Sets;
+
 import org.elasticsearch.Version;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.DistanceUnit;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.search.aggregations.Aggregator.SubAggCollectionMode;
 import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
 import org.elasticsearch.search.aggregations.bucket.range.Range;
 import org.elasticsearch.search.aggregations.bucket.range.Range.Bucket;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.InternalSettingsPlugin;
 import org.elasticsearch.test.VersionUtils;
 import org.hamcrest.Matchers;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -62,13 +60,6 @@ import static org.hamcrest.core.IsNull.nullValue;
 @ESIntegTestCase.SuiteScopeTestCase
 public class GeoDistanceIT extends ESIntegTestCase {
 
-    @Override
-    protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(InternalSettingsPlugin.class); // uses index.version.created
-    }
-
-    private Version version = VersionUtils.randomVersionBetween(random(), Version.V_2_0_0, Version.CURRENT);
-
     private IndexRequestBuilder indexCity(String idx, String name, String... latLons) throws Exception {
         XContentBuilder source = jsonBuilder().startObject().field("city", name);
         source.startArray("location");
@@ -82,13 +73,14 @@ public class GeoDistanceIT extends ESIntegTestCase {
 
     @Override
     public void setupSuiteScopeCluster() throws Exception {
-        Settings settings = Settings.builder().put(IndexMetaData.SETTING_VERSION_CREATED, version).build();
+        Version version = VersionUtils.randomVersionBetween(random(), Version.V_1_0_0, Version.CURRENT);
+        Settings settings = Settings.settingsBuilder().put(IndexMetaData.SETTING_VERSION_CREATED, version).build();
         prepareCreate("idx").setSettings(settings)
-                .addMapping("type", "location", "type=geo_point", "city", "type=keyword")
+                .addMapping("type", "location", "type=geo_point", "city", "type=string,index=not_analyzed")
                 .execute().actionGet();
 
-        prepareCreate("idx-multi")
-                .addMapping("type", "location", "type=geo_point", "city", "type=keyword")
+        prepareCreate("idx-multi").setSettings(settings)
+                .addMapping("type", "location", "type=geo_point", "city", "type=string,index=not_analyzed")
                 .execute().actionGet();
 
         createIndex("idx_unmapped");
@@ -125,8 +117,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
             }
         }
         indexRandom(true, cities);
-        prepareCreate("empty_bucket_idx")
-                .addMapping("type", "value", "type=integer", "location", "type=geo_point").execute().actionGet();
+        prepareCreate("empty_bucket_idx").setSettings(settings).addMapping("type", "value", "type=integer", "location", "type=geo_point").execute().actionGet();
         List<IndexRequestBuilder> builders = new ArrayList<>();
         for (int i = 0; i < 2; i++) {
             builders.add(client().prepareIndex("empty_bucket_idx", "type", "" + i).setSource(jsonBuilder()
@@ -139,15 +130,17 @@ public class GeoDistanceIT extends ESIntegTestCase {
         ensureSearchable();
     }
 
-    public void testSimple() throws Exception {
+    @Test
+    public void simple() throws Exception {
         SearchResponse response = client().prepareSearch("idx")
-                .addAggregation(geoDistance("amsterdam_rings", new GeoPoint(52.3760, 4.894))
+                .addAggregation(geoDistance("amsterdam_rings")
                         .field("location")
                         .unit(DistanceUnit.KILOMETERS)
+                        .point("52.3760, 4.894") // coords of amsterdam
                         .addUnboundedTo(500)
                         .addRange(500, 1000)
                         .addUnboundedFrom(1000))
-                        .execute().actionGet();
+                .execute().actionGet();
 
         assertSearchResponse(response);
 
@@ -160,21 +153,21 @@ public class GeoDistanceIT extends ESIntegTestCase {
 
         Range.Bucket bucket = buckets.get(0);
         assertThat(bucket, notNullValue());
-        assertThat((String) bucket.getKey(), equalTo("*-500.0"));
+        assertThat((String) (String) bucket.getKey(), equalTo("*-500.0"));
         assertThat(((Number) bucket.getFrom()).doubleValue(), equalTo(0.0));
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(500.0));
         assertThat(bucket.getFromAsString(), equalTo("0.0"));
         assertThat(bucket.getToAsString(), equalTo("500.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
 
         bucket = buckets.get(1);
         assertThat(bucket, notNullValue());
-        assertThat((String) bucket.getKey(), equalTo("500.0-1000.0"));
+        assertThat((String) (String) bucket.getKey(), equalTo("500.0-1000.0"));
         assertThat(((Number) bucket.getFrom()).doubleValue(), equalTo(500.0));
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(1000.0));
         assertThat(bucket.getFromAsString(), equalTo("500.0"));
         assertThat(bucket.getToAsString(), equalTo("1000.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
 
         bucket = buckets.get(2);
         assertThat(bucket, notNullValue());
@@ -183,14 +176,16 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(Double.POSITIVE_INFINITY));
         assertThat(bucket.getFromAsString(), equalTo("1000.0"));
         assertThat(bucket.getToAsString(), nullValue());
-        assertThat(bucket.getDocCount(), equalTo(1L));
+        assertThat(bucket.getDocCount(), equalTo(1l));
     }
 
-    public void testSimpleWithCustomKeys() throws Exception {
+    @Test
+    public void simple_WithCustomKeys() throws Exception {
         SearchResponse response = client().prepareSearch("idx")
-                .addAggregation(geoDistance("amsterdam_rings", new GeoPoint(52.3760, 4.894))
+                .addAggregation(geoDistance("amsterdam_rings")
                         .field("location")
                         .unit(DistanceUnit.KILOMETERS)
+                        .point("52.3760, 4.894") // coords of amsterdam
                         .addUnboundedTo("ring1", 500)
                         .addRange("ring2", 500, 1000)
                         .addUnboundedFrom("ring3", 1000))
@@ -212,7 +207,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(500.0));
         assertThat(bucket.getFromAsString(), equalTo("0.0"));
         assertThat(bucket.getToAsString(), equalTo("500.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
 
         bucket = buckets.get(1);
         assertThat(bucket, notNullValue());
@@ -221,7 +216,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(1000.0));
         assertThat(bucket.getFromAsString(), equalTo("500.0"));
         assertThat(bucket.getToAsString(), equalTo("1000.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
 
         bucket = buckets.get(2);
         assertThat(bucket, notNullValue());
@@ -230,16 +225,18 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(Double.POSITIVE_INFINITY));
         assertThat(bucket.getFromAsString(), equalTo("1000.0"));
         assertThat(bucket.getToAsString(), nullValue());
-        assertThat(bucket.getDocCount(), equalTo(1L));
+        assertThat(bucket.getDocCount(), equalTo(1l));
     }
 
-    public void testUnmapped() throws Exception {
+    @Test
+    public void unmapped() throws Exception {
         client().admin().cluster().prepareHealth("idx_unmapped").setWaitForYellowStatus().execute().actionGet();
 
         SearchResponse response = client().prepareSearch("idx_unmapped")
-                .addAggregation(geoDistance("amsterdam_rings", new GeoPoint(52.3760, 4.894))
+                .addAggregation(geoDistance("amsterdam_rings")
                         .field("location")
                         .unit(DistanceUnit.KILOMETERS)
+                        .point("52.3760, 4.894") // coords of amsterdam
                         .addUnboundedTo(500)
                         .addRange(500, 1000)
                         .addUnboundedFrom(1000))
@@ -261,7 +258,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(500.0));
         assertThat(bucket.getFromAsString(), equalTo("0.0"));
         assertThat(bucket.getToAsString(), equalTo("500.0"));
-        assertThat(bucket.getDocCount(), equalTo(0L));
+        assertThat(bucket.getDocCount(), equalTo(0l));
 
         bucket = buckets.get(1);
         assertThat(bucket, notNullValue());
@@ -270,7 +267,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(1000.0));
         assertThat(bucket.getFromAsString(), equalTo("500.0"));
         assertThat(bucket.getToAsString(), equalTo("1000.0"));
-        assertThat(bucket.getDocCount(), equalTo(0L));
+        assertThat(bucket.getDocCount(), equalTo(0l));
 
         bucket = buckets.get(2);
         assertThat(bucket, notNullValue());
@@ -279,14 +276,16 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(Double.POSITIVE_INFINITY));
         assertThat(bucket.getFromAsString(), equalTo("1000.0"));
         assertThat(bucket.getToAsString(), nullValue());
-        assertThat(bucket.getDocCount(), equalTo(0L));
+        assertThat(bucket.getDocCount(), equalTo(0l));
     }
 
-    public void testPartiallyUnmapped() throws Exception {
+    @Test
+    public void partiallyUnmapped() throws Exception {
         SearchResponse response = client().prepareSearch("idx", "idx_unmapped")
-                .addAggregation(geoDistance("amsterdam_rings", new GeoPoint(52.3760, 4.894))
+                .addAggregation(geoDistance("amsterdam_rings")
                         .field("location")
                         .unit(DistanceUnit.KILOMETERS)
+                        .point("52.3760, 4.894") // coords of amsterdam
                         .addUnboundedTo(500)
                         .addRange(500, 1000)
                         .addUnboundedFrom(1000))
@@ -308,7 +307,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(500.0));
         assertThat(bucket.getFromAsString(), equalTo("0.0"));
         assertThat(bucket.getToAsString(), equalTo("500.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
 
         bucket = buckets.get(1);
         assertThat(bucket, notNullValue());
@@ -317,7 +316,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(1000.0));
         assertThat(bucket.getFromAsString(), equalTo("500.0"));
         assertThat(bucket.getToAsString(), equalTo("1000.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
 
         bucket = buckets.get(2);
         assertThat(bucket, notNullValue());
@@ -326,14 +325,17 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(Double.POSITIVE_INFINITY));
         assertThat(bucket.getFromAsString(), equalTo("1000.0"));
         assertThat(bucket.getToAsString(), nullValue());
-        assertThat(bucket.getDocCount(), equalTo(1L));
+        assertThat(bucket.getDocCount(), equalTo(1l));
     }
 
-    public void testWithSubAggregation() throws Exception {
+
+    @Test
+    public void withSubAggregation() throws Exception {
         SearchResponse response = client().prepareSearch("idx")
-                .addAggregation(geoDistance("amsterdam_rings", new GeoPoint(52.3760, 4.894))
+                .addAggregation(geoDistance("amsterdam_rings")
                         .field("location")
                         .unit(DistanceUnit.KILOMETERS)
+                        .point("52.3760, 4.894") // coords of amsterdam
                         .addUnboundedTo(500)
                         .addRange(500, 1000)
                         .addUnboundedFrom(1000)
@@ -349,7 +351,6 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(geoDist.getName(), equalTo("amsterdam_rings"));
         List<? extends Bucket> buckets = geoDist.getBuckets();
         assertThat(geoDist.getBuckets().size(), equalTo(3));
-        assertThat(geoDist.getProperty("_bucket_count"), equalTo(3));
         Object[] propertiesKeys = (Object[]) geoDist.getProperty("_key");
         Object[] propertiesDocCounts = (Object[]) geoDist.getProperty("_count");
         Object[] propertiesCities = (Object[]) geoDist.getProperty("cities");
@@ -361,17 +362,17 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(500.0));
         assertThat(bucket.getFromAsString(), equalTo("0.0"));
         assertThat(bucket.getToAsString(), equalTo("500.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
         assertThat(bucket.getAggregations().asList().isEmpty(), is(false));
         Terms cities = bucket.getAggregations().get("cities");
         assertThat(cities, Matchers.notNullValue());
-        Set<String> names = new HashSet<>();
+        Set<String> names = Sets.newHashSet();
         for (Terms.Bucket city : cities.getBuckets()) {
             names.add(city.getKeyAsString());
         }
         assertThat(names.contains("utrecht") && names.contains("haarlem"), is(true));
         assertThat((String) propertiesKeys[0], equalTo("*-500.0"));
-        assertThat((long) propertiesDocCounts[0], equalTo(2L));
+        assertThat((long) propertiesDocCounts[0], equalTo(2l));
         assertThat((Terms) propertiesCities[0], sameInstance(cities));
 
         bucket = buckets.get(1);
@@ -381,17 +382,17 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(1000.0));
         assertThat(bucket.getFromAsString(), equalTo("500.0"));
         assertThat(bucket.getToAsString(), equalTo("1000.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
         assertThat(bucket.getAggregations().asList().isEmpty(), is(false));
         cities = bucket.getAggregations().get("cities");
         assertThat(cities, Matchers.notNullValue());
-        names = new HashSet<>();
+        names = Sets.newHashSet();
         for (Terms.Bucket city : cities.getBuckets()) {
             names.add(city.getKeyAsString());
         }
         assertThat(names.contains("berlin") && names.contains("prague"), is(true));
         assertThat((String) propertiesKeys[1], equalTo("500.0-1000.0"));
-        assertThat((long) propertiesDocCounts[1], equalTo(2L));
+        assertThat((long) propertiesDocCounts[1], equalTo(2l));
         assertThat((Terms) propertiesCities[1], sameInstance(cities));
 
         bucket = buckets.get(2);
@@ -401,28 +402,29 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(Double.POSITIVE_INFINITY));
         assertThat(bucket.getFromAsString(), equalTo("1000.0"));
         assertThat(bucket.getToAsString(), nullValue());
-        assertThat(bucket.getDocCount(), equalTo(1L));
+        assertThat(bucket.getDocCount(), equalTo(1l));
         assertThat(bucket.getAggregations().asList().isEmpty(), is(false));
         cities = bucket.getAggregations().get("cities");
         assertThat(cities, Matchers.notNullValue());
-        names = new HashSet<>();
+        names = Sets.newHashSet();
         for (Terms.Bucket city : cities.getBuckets()) {
             names.add(city.getKeyAsString());
         }
         assertThat(names.contains("tel-aviv"), is(true));
         assertThat((String) propertiesKeys[2], equalTo("1000.0-*"));
-        assertThat((long) propertiesDocCounts[2], equalTo(1L));
+        assertThat((long) propertiesDocCounts[2], equalTo(1l));
         assertThat((Terms) propertiesCities[2], sameInstance(cities));
     }
 
-    public void testEmptyAggregation() throws Exception {
+    @Test
+    public void emptyAggregation() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("empty_bucket_idx")
                 .setQuery(matchAllQuery())
-                .addAggregation(histogram("histo").field("value").interval(1L).minDocCount(0)
-                        .subAggregation(geoDistance("geo_dist", new GeoPoint(52.3760, 4.894)).field("location").addRange("0-100", 0.0, 100.0)))
+                .addAggregation(histogram("histo").field("value").interval(1l).minDocCount(0)
+                        .subAggregation(geoDistance("geo_dist").field("location").point("52.3760, 4.894").addRange("0-100", 0.0, 100.0)))
                 .execute().actionGet();
 
-        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2L));
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2l));
         Histogram histo = searchResponse.getAggregations().get("histo");
         assertThat(histo, Matchers.notNullValue());
         Histogram.Bucket bucket = histo.getBuckets().get(1);
@@ -430,7 +432,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
 
         Range geoDistance = bucket.getAggregations().get("geo_dist");
         // TODO: use diamond once JI-9019884 is fixed
-        List<Range.Bucket> buckets = new ArrayList<>(geoDistance.getBuckets());
+        List<Range.Bucket> buckets = new ArrayList<Range.Bucket>(geoDistance.getBuckets());
         assertThat(geoDistance, Matchers.notNullValue());
         assertThat(geoDistance.getName(), equalTo("geo_dist"));
         assertThat(buckets.size(), is(1));
@@ -439,15 +441,17 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) buckets.get(0).getTo()).doubleValue(), equalTo(100.0));
         assertThat(buckets.get(0).getFromAsString(), equalTo("0.0"));
         assertThat(buckets.get(0).getToAsString(), equalTo("100.0"));
-        assertThat(buckets.get(0).getDocCount(), equalTo(0L));
+        assertThat(buckets.get(0).getDocCount(), equalTo(0l));
     }
 
-    public void testMultiValues() throws Exception {
+    @Test
+    public void multiValues() throws Exception {
         SearchResponse response = client().prepareSearch("idx-multi")
-                .addAggregation(geoDistance("amsterdam_rings", new GeoPoint(52.3760, 4.894))
+                .addAggregation(geoDistance("amsterdam_rings")
                         .field("location")
                         .unit(DistanceUnit.KILOMETERS)
                         .distanceType(org.elasticsearch.common.geo.GeoDistance.ARC)
+                        .point("52.3760, 4.894") // coords of amsterdam
                         .addUnboundedTo(500)
                         .addRange(500, 1000)
                         .addUnboundedFrom(1000))
@@ -468,7 +472,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(500.0));
         assertThat(bucket.getFromAsString(), equalTo("0.0"));
         assertThat(bucket.getToAsString(), equalTo("500.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
 
         bucket = buckets.get(1);
         assertThat(bucket, notNullValue());
@@ -477,7 +481,7 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(1000.0));
         assertThat(bucket.getFromAsString(), equalTo("500.0"));
         assertThat(bucket.getToAsString(), equalTo("1000.0"));
-        assertThat(bucket.getDocCount(), equalTo(2L));
+        assertThat(bucket.getDocCount(), equalTo(2l));
 
         bucket = buckets.get(2);
         assertThat(bucket, notNullValue());
@@ -486,9 +490,6 @@ public class GeoDistanceIT extends ESIntegTestCase {
         assertThat(((Number) bucket.getTo()).doubleValue(), equalTo(Double.POSITIVE_INFINITY));
         assertThat(bucket.getFromAsString(), equalTo("1000.0"));
         assertThat(bucket.getToAsString(), nullValue());
-        assertThat(bucket.getDocCount(), equalTo(1L));
+        assertThat(bucket.getDocCount(), equalTo(1l));
     }
-
-
-
 }

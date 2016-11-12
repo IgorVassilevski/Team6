@@ -20,26 +20,25 @@
 package org.elasticsearch.search.aggregations.pipeline.movavg.models;
 
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParseFieldMatcher;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.search.aggregations.pipeline.movavg.MovAvgPipelineAggregationBuilder;
+import org.elasticsearch.search.aggregations.pipeline.movavg.MovAvgParser;
 
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Calculate a exponentially weighted moving average
  */
 public class EwmaModel extends MovAvgModel {
-    public static final String NAME = "ewma";
 
-    public static final double DEFAULT_ALPHA = 0.3;
+    protected static final ParseField NAME_FIELD = new ParseField("ewma");
 
     /**
      * Controls smoothing of data.  Also known as "level" value.
@@ -49,29 +48,8 @@ public class EwmaModel extends MovAvgModel {
      */
     private final double alpha;
 
-    public EwmaModel() {
-        this(DEFAULT_ALPHA);
-    }
-
     public EwmaModel(double alpha) {
         this.alpha = alpha;
-    }
-
-    /**
-     * Read from a stream.
-     */
-    public EwmaModel(StreamInput in) throws IOException {
-        alpha = in.readDouble();
-    }
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeDouble(alpha);
-    }
-
-    @Override
-    public String getWriteableName() {
-        return NAME;
     }
 
     @Override
@@ -116,45 +94,45 @@ public class EwmaModel extends MovAvgModel {
         return avg;
     }
 
-    @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.field(MovAvgPipelineAggregationBuilder.MODEL.getPreferredName(), NAME);
-        builder.startObject(MovAvgPipelineAggregationBuilder.SETTINGS.getPreferredName());
-        builder.field("alpha", alpha);
-        builder.endObject();
-        return builder;
-    }
-
-    public static final AbstractModelParser PARSER = new AbstractModelParser() {
+    public static final MovAvgModelStreams.Stream STREAM = new MovAvgModelStreams.Stream() {
         @Override
-        public MovAvgModel parse(@Nullable Map<String, Object> settings, String pipelineName, int windowSize,
-                                 ParseFieldMatcher parseFieldMatcher) throws ParseException {
-            double alpha = parseDoubleParam(settings, "alpha", DEFAULT_ALPHA);
-            checkUnrecognizedParams(settings);
-            return new EwmaModel(alpha);
+        public MovAvgModel readResult(StreamInput in) throws IOException {
+            return new EwmaModel(in.readDouble());
+        }
+
+        @Override
+        public String getName() {
+            return NAME_FIELD.getPreferredName();
         }
     };
 
     @Override
-    public int hashCode() {
-        return Objects.hash(alpha);
+    public void writeTo(StreamOutput out) throws IOException {
+        out.writeString(STREAM.getName());
+        out.writeDouble(alpha);
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
+    public static class SingleExpModelParser extends AbstractModelParser {
+
+        @Override
+        public String getName() {
+            return NAME_FIELD.getPreferredName();
         }
-        if (getClass() != obj.getClass()) {
-            return false;
+
+        @Override
+        public MovAvgModel parse(@Nullable Map<String, Object> settings, String pipelineName, int windowSize,
+                                 ParseFieldMatcher parseFieldMatcher) throws ParseException {
+
+            double alpha = parseDoubleParam(settings, "alpha", 0.3);
+            checkUnrecognizedParams(settings);
+            return new EwmaModel(alpha);
         }
-        EwmaModel other = (EwmaModel) obj;
-        return Objects.equals(alpha, other.alpha);
+
     }
 
     public static class EWMAModelBuilder implements MovAvgModelBuilder {
 
-        private double alpha = DEFAULT_ALPHA;
+        private Double alpha;
 
         /**
          * Alpha controls the smoothing of the data.  Alpha = 1 retains no memory of past values
@@ -172,17 +150,14 @@ public class EwmaModel extends MovAvgModel {
 
         @Override
         public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-            builder.field(MovAvgPipelineAggregationBuilder.MODEL.getPreferredName(), NAME);
-            builder.startObject(MovAvgPipelineAggregationBuilder.SETTINGS.getPreferredName());
-            builder.field("alpha", alpha);
+            builder.field(MovAvgParser.MODEL.getPreferredName(), NAME_FIELD.getPreferredName());
+            builder.startObject(MovAvgParser.SETTINGS.getPreferredName());
+            if (alpha != null) {
+                builder.field("alpha", alpha);
+            }
 
             builder.endObject();
             return builder;
-        }
-
-        @Override
-        public MovAvgModel build() {
-            return new EwmaModel(alpha);
         }
     }
 }

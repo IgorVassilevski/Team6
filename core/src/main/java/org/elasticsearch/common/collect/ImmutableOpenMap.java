@@ -19,17 +19,13 @@
 
 package org.elasticsearch.common.collect;
 
-import com.carrotsearch.hppc.ObjectCollection;
-import com.carrotsearch.hppc.ObjectContainer;
-import com.carrotsearch.hppc.ObjectLookupContainer;
-import com.carrotsearch.hppc.ObjectObjectAssociativeContainer;
-import com.carrotsearch.hppc.ObjectObjectHashMap;
-import com.carrotsearch.hppc.ObjectObjectMap;
+import com.carrotsearch.hppc.*;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import com.carrotsearch.hppc.predicates.ObjectObjectPredicate;
 import com.carrotsearch.hppc.predicates.ObjectPredicate;
 import com.carrotsearch.hppc.procedures.ObjectObjectProcedure;
+import com.google.common.collect.UnmodifiableIterator;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -124,20 +120,17 @@ public final class ImmutableOpenMap<KType, VType> implements Iterable<ObjectObje
     /**
      * Returns a direct iterator over the keys.
      */
-    public Iterator<KType> keysIt() {
+    public UnmodifiableIterator<KType> keysIt() {
         final Iterator<ObjectCursor<KType>> iterator = map.keys().iterator();
-        return new Iterator<KType>() {
+        return new UnmodifiableIterator<KType>() {
             @Override
-            public boolean hasNext() { return iterator.hasNext(); }
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
 
             @Override
             public KType next() {
                 return iterator.next().value;
-            }
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException();
             }
         };
     }
@@ -152,20 +145,17 @@ public final class ImmutableOpenMap<KType, VType> implements Iterable<ObjectObje
     /**
      * Returns a direct iterator over the keys.
      */
-    public Iterator<VType> valuesIt() {
+    public UnmodifiableIterator<VType> valuesIt() {
         final Iterator<ObjectCursor<VType>> iterator = map.values().iterator();
-        return new Iterator<VType>() {
+        return new UnmodifiableIterator<VType>() {
             @Override
-            public boolean hasNext() { return iterator.hasNext(); }
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
 
             @Override
             public VType next() {
                 return iterator.next().value;
-            }
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException();
             }
         };
     }
@@ -246,8 +236,8 @@ public final class ImmutableOpenMap<KType, VType> implements Iterable<ObjectObje
             return new ImmutableOpenMap<>(map);
         }
 
-
-
+        
+        
         /**
          * Puts all the entries in the map to the builder.
          */

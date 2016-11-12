@@ -42,7 +42,7 @@ public class IllegalShardRoutingStateException extends RoutingException {
 
     public IllegalShardRoutingStateException(StreamInput in) throws IOException {
         super(in);
-        shard = new ShardRouting(in);
+        shard = ShardRouting.readShardRoutingEntry(in);
     }
 
     @Override

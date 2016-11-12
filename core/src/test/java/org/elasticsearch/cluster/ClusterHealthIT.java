@@ -23,14 +23,15 @@ import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.test.ESIntegTestCase;
-import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.Test;
 
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
 
 public class ClusterHealthIT extends ESIntegTestCase {
 
-    public void testSimpleLocalHealth() {
+
+    @Test
+    public void simpleLocalHealthTest() {
         createIndex("test");
         ensureGreen(); // master should thing it's green now.
 
@@ -42,6 +43,7 @@ public class ClusterHealthIT extends ESIntegTestCase {
         }
     }
 
+    @Test
     public void testHealth() {
         logger.info("--> running cluster health on an index that does not exists");
         ClusterHealthResponse healthResponse = client().admin().cluster().prepareHealth("test1").setWaitForYellowStatus().setTimeout("1s").execute().actionGet();
@@ -71,24 +73,4 @@ public class ClusterHealthIT extends ESIntegTestCase {
         assertThat(healthResponse.getIndices().get("test1").getStatus(), equalTo(ClusterHealthStatus.GREEN));
         assertThat(healthResponse.getIndices().size(), equalTo(1));
     }
-
-    public void testHealthOnIndexCreation() throws Exception {
-        final AtomicBoolean finished = new AtomicBoolean(false);
-        Thread clusterHealthThread = new Thread() {
-            @Override
-            public void run() {
-                while (finished.get() == false) {
-                    ClusterHealthResponse health = client().admin().cluster().prepareHealth().get();
-                    assertThat(health.getStatus(), not(equalTo(ClusterHealthStatus.RED)));
-                }
-            }
-        };
-        clusterHealthThread.start();
-        for (int i = 0; i < 10; i++) {
-            createIndex("test" + i);
-        }
-        finished.set(true);
-        clusterHealthThread.join();
-    }
-
 }

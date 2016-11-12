@@ -45,5 +45,4 @@ public interface TaskListener<Response> {
      *            the failure
      */
     void onFailure(Task task, Throwable e);
-
 }

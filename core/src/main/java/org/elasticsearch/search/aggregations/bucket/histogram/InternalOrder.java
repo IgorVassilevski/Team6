@@ -25,7 +25,6 @@ import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
 
 import java.io.IOException;
 import java.util.Comparator;
-import java.util.Objects;
 
 /**
  * An internal {@link Histogram.Order} strategy which is identified by a unique id.
@@ -35,9 +34,9 @@ class InternalOrder extends Histogram.Order {
     final byte id;
     final String key;
     final boolean asc;
-    final Comparator<Histogram.Bucket> comparator;
+    final Comparator<InternalHistogram.Bucket> comparator;
 
-    InternalOrder(byte id, String key, boolean asc, Comparator<Histogram.Bucket> comparator) {
+    InternalOrder(byte id, String key, boolean asc, Comparator<InternalHistogram.Bucket> comparator) {
         this.id = id;
         this.key = key;
         this.asc = asc;
@@ -57,7 +56,7 @@ class InternalOrder extends Histogram.Order {
     }
 
     @Override
-    Comparator<Histogram.Bucket> comparator() {
+    Comparator<InternalHistogram.Bucket> comparator() {
         return comparator;
     }
 
@@ -65,32 +64,17 @@ class InternalOrder extends Histogram.Order {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         return builder.startObject().field(key, asc ? "asc" : "desc").endObject();
     }
-    
-    @Override
-    public int hashCode() {
-        return Objects.hash(id, key, asc);
-    }
-    
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        InternalOrder other = (InternalOrder) obj;
-        return Objects.equals(id, other.id)
-                && Objects.equals(key, other.key)
-                && Objects.equals(asc, other.asc);
-    }
 
     static class Aggregation extends InternalOrder {
 
         static final byte ID = 0;
 
         Aggregation(String key, boolean asc) {
-            super(ID, key, asc, new MultiBucketsAggregation.Bucket.SubAggregationComparator<Histogram.Bucket>(key, asc));
+            super(ID, key, asc, new MultiBucketsAggregation.Bucket.SubAggregationComparator<InternalHistogram.Bucket>(key, asc));
+        }
+
+        private static String key(String aggName, String valueName) {
+            return (valueName == null) ? aggName : aggName + "." + valueName;
         }
 
     }

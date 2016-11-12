@@ -19,23 +19,10 @@
 
 package org.elasticsearch.rest;
 
-import org.elasticsearch.client.node.NodeClient;
-
 /**
  * Handler for REST requests
  */
 public interface RestHandler {
 
-    /**
-     * Handles a rest request.
-     *
-     * @param request The request to handle
-     * @param channel The channel to write the request response to
-     * @param client A client to use to make internal requests on behalf of the original request
-     */
-    void handleRequest(RestRequest request, RestChannel channel, NodeClient client) throws Exception;
-
-    default boolean canTripCircuitBreaker() {
-        return true;
-    }
+    void handleRequest(RestRequest request, RestChannel channel) throws Exception;
 }

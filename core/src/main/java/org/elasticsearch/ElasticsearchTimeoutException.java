@@ -33,10 +33,6 @@ public class ElasticsearchTimeoutException extends ElasticsearchException {
         super(in);
     }
 
-    public ElasticsearchTimeoutException(Throwable cause) {
-        super(cause);
-    }
-
     public ElasticsearchTimeoutException(String message, Object... args) {
         super(message, args);
     }

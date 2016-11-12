@@ -18,18 +18,20 @@
  */
 package org.elasticsearch.common.geo;
 
-import org.apache.lucene.geo.Rectangle;
+import org.apache.lucene.spatial.util.GeoHashUtils;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 /**
- * Tests for {@link org.elasticsearch.common.geo.GeoHashUtils}
+ * Tests for {@link org.apache.lucene.spatial.util.GeoHashUtils}
  */
 public class GeoHashTests extends ESTestCase {
+    @Test
     public void testGeohashAsLongRoutines()  {
         final GeoPoint expected = new GeoPoint();
         final GeoPoint actual = new GeoPoint();
         //Ensure that for all points at all supported levels of precision
-        // that the long encoding of a geohash is compatible with its
+        // that the long encoding of a geohash is compatible with its 
         // String based counterpart
         for (double lat=-90;lat<90;lat++)
         {
@@ -57,17 +59,5 @@ public class GeoHashTests extends ESTestCase {
                 }
             }
         }
-    }
-
-    public void testBboxFromHash() {
-        String hash = randomGeohash(1, 12);
-        int level = hash.length();
-        Rectangle bbox = GeoHashUtils.bbox(hash);
-        // check that the length is as expected
-        double expectedLonDiff = 360.0 / (Math.pow(8.0, (level + 1) / 2) * Math.pow(4.0, level / 2));
-        double expectedLatDiff = 180.0 / (Math.pow(4.0, (level + 1) / 2) * Math.pow(8.0, level / 2));
-        assertEquals(expectedLonDiff, bbox.maxLon - bbox.minLon, 0.00001);
-        assertEquals(expectedLatDiff, bbox.maxLat - bbox.minLat, 0.00001);
-        assertEquals(hash, GeoHashUtils.stringEncode(bbox.minLon, bbox.minLat, level));
     }
 }

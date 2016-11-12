@@ -10,7 +10,7 @@
                   enabled: false
                 properties:
                   field:
-                    type: text
+                    type: string
                   number:
                     type: integer
 

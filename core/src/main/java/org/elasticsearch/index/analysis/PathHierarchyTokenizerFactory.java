@@ -22,9 +22,11 @@ package org.elasticsearch.index.analysis;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.path.PathHierarchyTokenizer;
 import org.apache.lucene.analysis.path.ReversePathHierarchyTokenizer;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 public class PathHierarchyTokenizerFactory extends AbstractTokenizerFactory {
 
@@ -35,8 +37,9 @@ public class PathHierarchyTokenizerFactory extends AbstractTokenizerFactory {
     private final int skip;
     private final boolean reverse;
 
-    public PathHierarchyTokenizerFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public PathHierarchyTokenizerFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         bufferSize = settings.getAsInt("buffer_size", 1024);
         String delimiter = settings.get("delimiter");
         if (delimiter == null) {

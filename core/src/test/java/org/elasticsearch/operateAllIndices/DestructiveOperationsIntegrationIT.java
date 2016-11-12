@@ -22,6 +22,7 @@ package org.elasticsearch.operateAllIndices;
 import org.elasticsearch.action.support.DestructiveOperations;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
@@ -30,11 +31,13 @@ import static org.hamcrest.Matchers.equalTo;
  */
 @ESIntegTestCase.ClusterScope(scope = ESIntegTestCase.Scope.TEST)
 public class DestructiveOperationsIntegrationIT extends ESIntegTestCase {
+
+    @Test
     // One test for test performance, since cluster scope is test
     // The cluster scope is test b/c we can't clear cluster settings.
     public void testDestructiveOperations() throws Exception {
         Settings settings = Settings.builder()
-                .put(DestructiveOperations.REQUIRES_NAME_SETTING.getKey(), true)
+                .put(DestructiveOperations.REQUIRES_NAME, true)
                 .build();
         assertAcked(client().admin().cluster().prepareUpdateSettings().setTransientSettings(settings));
 
@@ -58,7 +61,7 @@ public class DestructiveOperationsIntegrationIT extends ESIntegTestCase {
         }
 
         settings = Settings.builder()
-                .put(DestructiveOperations.REQUIRES_NAME_SETTING.getKey(), false)
+                .put(DestructiveOperations.REQUIRES_NAME, false)
                 .build();
         assertAcked(client().admin().cluster().prepareUpdateSettings().setTransientSettings(settings));
 
@@ -68,12 +71,13 @@ public class DestructiveOperationsIntegrationIT extends ESIntegTestCase {
         // end delete index:
         // close index:
         settings = Settings.builder()
-                .put(DestructiveOperations.REQUIRES_NAME_SETTING.getKey(), true)
+                .put(DestructiveOperations.REQUIRES_NAME, true)
                 .build();
         assertAcked(client().admin().cluster().prepareUpdateSettings().setTransientSettings(settings));
 
         assertAcked(client().admin().indices().prepareCreate("index1").get());
         assertAcked(client().admin().indices().prepareCreate("1index").get());
+        ensureYellow();// wait for primaries to be allocated
         // Should succeed, since no wildcards
         assertAcked(client().admin().indices().prepareClose("1index").get());
 
@@ -99,7 +103,7 @@ public class DestructiveOperationsIntegrationIT extends ESIntegTestCase {
         }
 
         settings = Settings.builder()
-                .put(DestructiveOperations.REQUIRES_NAME_SETTING.getKey(), false)
+                .put(DestructiveOperations.REQUIRES_NAME, false)
                 .build();
         assertAcked(client().admin().cluster().prepareUpdateSettings().setTransientSettings(settings));
         assertAcked(client().admin().indices().prepareClose("_all").get());

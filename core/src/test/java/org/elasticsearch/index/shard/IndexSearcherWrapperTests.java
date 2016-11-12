@@ -22,21 +22,17 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.FieldFilterLeafReader;
-import org.apache.lucene.index.FilterDirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.Term;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.QueryCachingPolicy;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.common.lucene.index.ElasticsearchDirectoryReader;
-import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.engine.EngineException;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.engine.*;
 import org.elasticsearch.test.ESTestCase;
 
 import java.io.IOException;
@@ -47,6 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  */
 public class IndexSearcherWrapperTests extends ESTestCase {
+    private static final EngineConfig ENGINE_CONFIG = new EngineConfig(null, null, null, Settings.EMPTY, null, null, null, null, null, null, new DefaultSimilarity(), null, null, null, null, QueryCachingPolicy.ALWAYS_CACHE, null, null);
 
     public void testReaderCloseListenerIsCalled() throws IOException {
         Directory dir = newDirectory();
@@ -56,7 +53,7 @@ public class IndexSearcherWrapperTests extends ESTestCase {
         doc.add(new StringField("id", "1", random().nextBoolean() ? Field.Store.YES : Field.Store.NO));
         doc.add(new TextField("field", "doc", random().nextBoolean() ? Field.Store.YES : Field.Store.NO));
         writer.addDocument(doc);
-        DirectoryReader open = ElasticsearchDirectoryReader.wrap(DirectoryReader.open(writer), new ShardId("foo", "_na_", 1));
+        final DirectoryReader open = ElasticsearchDirectoryReader.wrap(DirectoryReader.open(writer, true), new ShardId("foo", 1));
         IndexSearcher searcher = new IndexSearcher(open);
         assertEquals(1, searcher.search(new TermQuery(new Term("field", "doc")), 1).totalHits);
         final AtomicInteger closeCalls = new AtomicInteger(0);
@@ -67,7 +64,7 @@ public class IndexSearcherWrapperTests extends ESTestCase {
             }
 
             @Override
-            public IndexSearcher wrap(IndexSearcher searcher) throws EngineException {
+            public IndexSearcher wrap(EngineConfig engineConfig, IndexSearcher searcher) throws EngineException {
                 return searcher;
             }
 
@@ -76,13 +73,16 @@ public class IndexSearcherWrapperTests extends ESTestCase {
         final AtomicInteger count = new AtomicInteger();
         final AtomicInteger outerCount = new AtomicInteger();
         try (Engine.Searcher engineSearcher = new Engine.Searcher("foo", searcher)) {
-            final Engine.Searcher wrap =  wrapper.wrap(engineSearcher);
+            final Engine.Searcher wrap =   new IndexSearcherWrappingService(Collections.singleton(wrapper)).wrap(ENGINE_CONFIG, engineSearcher);
             assertEquals(1, wrap.reader().getRefCount());
-            ElasticsearchDirectoryReader.addReaderCloseListener(wrap.getDirectoryReader(), reader -> {
-                if (reader == open) {
-                    count.incrementAndGet();
+            ElasticsearchDirectoryReader.addReaderCloseListener(wrap.getDirectoryReader(), new IndexReader.ReaderClosedListener() {
+                @Override
+                public void onClose(IndexReader reader) throws IOException {
+                    if (reader == open) {
+                        count.incrementAndGet();
+                    }
+                    outerCount.incrementAndGet();
                 }
-                outerCount.incrementAndGet();
             });
             assertEquals(0, wrap.searcher().search(new TermQuery(new Term("field", "doc")), 1).totalHits);
             wrap.close();
@@ -106,7 +106,7 @@ public class IndexSearcherWrapperTests extends ESTestCase {
         doc.add(new StringField("id", "1", random().nextBoolean() ? Field.Store.YES : Field.Store.NO));
         doc.add(new TextField("field", "doc", random().nextBoolean() ? Field.Store.YES : Field.Store.NO));
         writer.addDocument(doc);
-        DirectoryReader open = ElasticsearchDirectoryReader.wrap(DirectoryReader.open(writer), new ShardId("foo", "_na_", 1));
+        DirectoryReader open = ElasticsearchDirectoryReader.wrap(DirectoryReader.open(writer, true), new ShardId("foo", 1));
         IndexSearcher searcher = new IndexSearcher(open);
         assertEquals(1, searcher.search(new TermQuery(new Term("field", "doc")), 1).totalHits);
         searcher.setSimilarity(iwc.getSimilarity());
@@ -118,15 +118,18 @@ public class IndexSearcherWrapperTests extends ESTestCase {
             }
 
             @Override
-            public IndexSearcher wrap(IndexSearcher searcher) throws EngineException {
+            public IndexSearcher wrap(EngineConfig engineConfig, IndexSearcher searcher) throws EngineException {
                 return searcher;
             }
         };
         final ConcurrentHashMap<Object, TopDocs> cache = new ConcurrentHashMap<>();
         try (Engine.Searcher engineSearcher = new Engine.Searcher("foo", searcher)) {
-            try (final Engine.Searcher wrap = wrapper.wrap(engineSearcher)) {
-                ElasticsearchDirectoryReader.addReaderCloseListener(wrap.getDirectoryReader(), reader -> {
-                    cache.remove(reader.getCoreCacheKey());
+            try (final Engine.Searcher wrap =  new IndexSearcherWrappingService(Collections.singleton(wrapper)).wrap(ENGINE_CONFIG, engineSearcher)) {
+                ElasticsearchDirectoryReader.addReaderCloseListener(wrap.getDirectoryReader(), new IndexReader.ReaderClosedListener() {
+                    @Override
+                    public void onClose(IndexReader reader) throws IOException {
+                        cache.remove(reader.getCoreCacheKey());
+                    }
                 });
                 TopDocs search = wrap.searcher().search(new TermQuery(new Term("field", "doc")), 1);
                 cache.put(wrap.reader().getCoreCacheKey(), search);
@@ -148,13 +151,23 @@ public class IndexSearcherWrapperTests extends ESTestCase {
         doc.add(new StringField("id", "1", random().nextBoolean() ? Field.Store.YES : Field.Store.NO));
         doc.add(new TextField("field", "doc", random().nextBoolean() ? Field.Store.YES : Field.Store.NO));
         writer.addDocument(doc);
-        DirectoryReader open = ElasticsearchDirectoryReader.wrap(DirectoryReader.open(writer), new ShardId("foo", "_na_", 1));
+        DirectoryReader open = ElasticsearchDirectoryReader.wrap(DirectoryReader.open(writer, true), new ShardId("foo", 1));
         IndexSearcher searcher = new IndexSearcher(open);
         assertEquals(1, searcher.search(new TermQuery(new Term("field", "doc")), 1).totalHits);
         searcher.setSimilarity(iwc.getSimilarity());
-        IndexSearcherWrapper wrapper = new IndexSearcherWrapper();
+        IndexSearcherWrapper wrapper = new IndexSearcherWrapper() {
+            @Override
+            public DirectoryReader wrap(DirectoryReader reader) throws IOException {
+                return reader;
+            }
+
+            @Override
+            public IndexSearcher wrap(EngineConfig engineConfig, IndexSearcher searcher) throws EngineException {
+                return searcher;
+            }
+        };
         try (Engine.Searcher engineSearcher = new Engine.Searcher("foo", searcher)) {
-            final Engine.Searcher wrap = wrapper.wrap(engineSearcher);
+            final Engine.Searcher wrap = new IndexSearcherWrappingService(Collections.singleton(wrapper)).wrap(ENGINE_CONFIG, engineSearcher);
             assertSame(wrap, engineSearcher);
         }
         IOUtils.close(open, writer, dir);
@@ -168,19 +181,24 @@ public class IndexSearcherWrapperTests extends ESTestCase {
         doc.add(new StringField("id", "1", random().nextBoolean() ? Field.Store.YES : Field.Store.NO));
         doc.add(new TextField("field", "doc", random().nextBoolean() ? Field.Store.YES : Field.Store.NO));
         writer.addDocument(doc);
-        DirectoryReader open = ElasticsearchDirectoryReader.wrap(DirectoryReader.open(writer), new ShardId("foo", "_na_", 1));
+        DirectoryReader open = ElasticsearchDirectoryReader.wrap(DirectoryReader.open(writer, true), new ShardId("foo", 1));
         IndexSearcher searcher = new IndexSearcher(open);
         assertEquals(1, searcher.search(new TermQuery(new Term("field", "doc")), 1).totalHits);
         searcher.setSimilarity(iwc.getSimilarity());
         IndexSearcherWrapper wrapper = new IndexSearcherWrapper() {
             @Override
-            protected DirectoryReader wrap(DirectoryReader reader) throws IOException {
+            public DirectoryReader wrap(DirectoryReader reader) throws IOException {
                 return new BrokenWrapper(reader, false);
+            }
+
+            @Override
+            public IndexSearcher wrap(EngineConfig engineConfig, IndexSearcher searcher) throws EngineException {
+                return searcher;
             }
         };
         try (Engine.Searcher engineSearcher = new Engine.Searcher("foo", searcher)) {
             try {
-                wrapper.wrap(engineSearcher);
+                new IndexSearcherWrappingService(Collections.singleton(wrapper)).wrap(ENGINE_CONFIG, engineSearcher);
                 fail("reader must delegate cache key");
             } catch (IllegalStateException ex) {
                 // all is well
@@ -188,13 +206,17 @@ public class IndexSearcherWrapperTests extends ESTestCase {
         }
         wrapper = new IndexSearcherWrapper() {
             @Override
-            protected DirectoryReader wrap(DirectoryReader reader) throws IOException {
+            public DirectoryReader wrap(DirectoryReader reader) throws IOException {
                 return new BrokenWrapper(reader, true);
+            }
+            @Override
+            public IndexSearcher wrap(EngineConfig engineConfig, IndexSearcher searcher) throws EngineException {
+                return searcher;
             }
         };
         try (Engine.Searcher engineSearcher = new Engine.Searcher("foo", searcher)) {
             try {
-                wrapper.wrap(engineSearcher);
+                new IndexSearcherWrappingService(Collections.singleton(wrapper)).wrap(ENGINE_CONFIG, engineSearcher);
                 fail("reader must delegate cache key");
             } catch (IllegalStateException ex) {
                 // all is well
@@ -207,7 +229,7 @@ public class IndexSearcherWrapperTests extends ESTestCase {
         private final String field;
         private final AtomicInteger closeCalls;
 
-        public FieldMaskingReader(String field, DirectoryReader in, AtomicInteger closeCalls) throws IOException {
+        public FieldMaskingReader(final String field, DirectoryReader in, AtomicInteger closeCalls) throws IOException {
             super(in, new SubReaderWrapper() {
                 @Override
                 public LeafReader wrap(LeafReader reader) {
@@ -258,7 +280,7 @@ public class IndexSearcherWrapperTests extends ESTestCase {
         public DirectoryReader getDelegate() {
             if (hideDelegate) {
                 try {
-                    return ElasticsearchDirectoryReader.wrap(super.getDelegate(), new ShardId("foo", "_na_", 1));
+                    return ElasticsearchDirectoryReader.wrap(super.getDelegate(), new ShardId("foo", 1));
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }

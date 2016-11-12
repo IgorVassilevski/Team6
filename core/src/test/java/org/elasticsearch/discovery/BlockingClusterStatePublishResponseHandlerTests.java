@@ -18,10 +18,10 @@
  */
 package org.elasticsearch.discovery;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.common.transport.LocalTransportAddress;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.transport.DummyTransportAddress;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.test.ESTestCase;
@@ -31,24 +31,19 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CyclicBarrier;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
-import static org.hamcrest.Matchers.arrayWithSize;
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.*;
 
 public class BlockingClusterStatePublishResponseHandlerTests extends ESTestCase {
 
-    private static class PublishResponder extends AbstractRunnable {
+    static private class PublishResponder extends AbstractRunnable {
 
         final boolean fail;
         final DiscoveryNode node;
         final CyclicBarrier barrier;
-        final Logger logger;
+        final ESLogger logger;
         final BlockingClusterStatePublishResponseHandler handler;
 
-        public PublishResponder(boolean fail, DiscoveryNode node, CyclicBarrier barrier, Logger logger, BlockingClusterStatePublishResponseHandler handler) {
+        public PublishResponder(boolean fail, DiscoveryNode node, CyclicBarrier barrier, ESLogger logger, BlockingClusterStatePublishResponseHandler handler) {
             this.fail = fail;
 
             this.node = node;
@@ -58,8 +53,8 @@ public class BlockingClusterStatePublishResponseHandlerTests extends ESTestCase 
         }
 
         @Override
-        public void onFailure(Exception e) {
-            logger.error("unexpected error", e);
+        public void onFailure(Throwable t) {
+            logger.error("unexpected error", t);
         }
 
         @Override
@@ -77,7 +72,7 @@ public class BlockingClusterStatePublishResponseHandlerTests extends ESTestCase 
         int nodeCount = scaledRandomIntBetween(10, 20);
         DiscoveryNode[] allNodes = new DiscoveryNode[nodeCount];
         for (int i = 0; i < nodeCount; i++) {
-            DiscoveryNode node = new DiscoveryNode("node_" + i, LocalTransportAddress.buildUnique(), emptyMap(), emptySet(), Version.CURRENT);
+            DiscoveryNode node = new DiscoveryNode("node_" + i, DummyTransportAddress.INSTANCE, Version.CURRENT);
             allNodes[i] = node;
         }
 

@@ -19,6 +19,8 @@
 
 package org.elasticsearch.discovery.zen.membership;
 
+import org.elasticsearch.Version;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.component.AbstractComponent;
@@ -28,12 +30,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.discovery.zen.DiscoveryNodesProvider;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.transport.EmptyTransportResponseHandler;
-import org.elasticsearch.transport.TransportChannel;
-import org.elasticsearch.transport.TransportRequest;
-import org.elasticsearch.transport.TransportRequestHandler;
-import org.elasticsearch.transport.TransportResponse;
-import org.elasticsearch.transport.TransportService;
+import org.elasticsearch.transport.*;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -47,13 +44,13 @@ public class MembershipAction extends AbstractComponent {
     public static final String DISCOVERY_JOIN_VALIDATE_ACTION_NAME = "internal:discovery/zen/join/validate";
     public static final String DISCOVERY_LEAVE_ACTION_NAME = "internal:discovery/zen/leave";
 
-    public interface JoinCallback {
+    public static interface JoinCallback {
         void onSuccess();
 
-        void onFailure(Exception e);
+        void onFailure(Throwable t);
     }
 
-    public interface MembershipListener {
+    public static interface MembershipListener {
         void onJoin(DiscoveryNode node, JoinCallback callback);
 
         void onLeave(DiscoveryNode node);
@@ -65,15 +62,18 @@ public class MembershipAction extends AbstractComponent {
 
     private final MembershipListener listener;
 
-    public MembershipAction(Settings settings, TransportService transportService, DiscoveryNodesProvider nodesProvider, MembershipListener listener) {
+    private final ClusterService clusterService;
+
+    public MembershipAction(Settings settings, ClusterService clusterService, TransportService transportService, DiscoveryNodesProvider nodesProvider, MembershipListener listener) {
         super(settings);
         this.transportService = transportService;
         this.nodesProvider = nodesProvider;
         this.listener = listener;
+        this.clusterService = clusterService;
 
-        transportService.registerRequestHandler(DISCOVERY_JOIN_ACTION_NAME, JoinRequest::new, ThreadPool.Names.GENERIC, new JoinRequestRequestHandler());
-        transportService.registerRequestHandler(DISCOVERY_JOIN_VALIDATE_ACTION_NAME, ValidateJoinRequest::new, ThreadPool.Names.GENERIC, new ValidateJoinRequestRequestHandler());
-        transportService.registerRequestHandler(DISCOVERY_LEAVE_ACTION_NAME, LeaveRequest::new, ThreadPool.Names.GENERIC, new LeaveRequestRequestHandler());
+        transportService.registerRequestHandler(DISCOVERY_JOIN_ACTION_NAME, JoinRequest.class, ThreadPool.Names.GENERIC, new JoinRequestRequestHandler());
+        transportService.registerRequestHandler(DISCOVERY_JOIN_VALIDATE_ACTION_NAME, ValidateJoinRequest.class, ThreadPool.Names.GENERIC, new ValidateJoinRequestRequestHandler());
+        transportService.registerRequestHandler(DISCOVERY_LEAVE_ACTION_NAME, LeaveRequest.class, ThreadPool.Names.GENERIC, new LeaveRequestRequestHandler());
     }
 
     public void close() {
@@ -88,6 +88,10 @@ public class MembershipAction extends AbstractComponent {
 
     public void sendLeaveRequestBlocking(DiscoveryNode masterNode, DiscoveryNode node, TimeValue timeout) {
         transportService.submitRequest(masterNode, DISCOVERY_LEAVE_ACTION_NAME, new LeaveRequest(node), EmptyTransportResponseHandler.INSTANCE_SAME).txGet(timeout.millis(), TimeUnit.MILLISECONDS);
+    }
+
+    public void sendJoinRequest(DiscoveryNode masterNode, DiscoveryNode node) {
+        transportService.sendRequest(masterNode, DISCOVERY_JOIN_ACTION_NAME, new JoinRequest(node), EmptyTransportResponseHandler.INSTANCE_SAME);
     }
 
     public void sendJoinRequestBlocking(DiscoveryNode masterNode, DiscoveryNode node, TimeValue timeout) {
@@ -117,7 +121,7 @@ public class MembershipAction extends AbstractComponent {
         @Override
         public void readFrom(StreamInput in) throws IOException {
             super.readFrom(in);
-            node = new DiscoveryNode(in);
+            node = DiscoveryNode.readNode(in);
         }
 
         @Override
@@ -128,7 +132,7 @@ public class MembershipAction extends AbstractComponent {
     }
 
 
-    private class JoinRequestRequestHandler implements TransportRequestHandler<JoinRequest> {
+    private class JoinRequestRequestHandler extends TransportRequestHandler<JoinRequest> {
 
         @Override
         public void messageReceived(final JoinRequest request, final TransportChannel channel) throws Exception {
@@ -137,48 +141,51 @@ public class MembershipAction extends AbstractComponent {
                 public void onSuccess() {
                     try {
                         channel.sendResponse(TransportResponse.Empty.INSTANCE);
-                    } catch (Exception e) {
-                        onFailure(e);
+                    } catch (Throwable t) {
+                        onFailure(t);
                     }
                 }
 
                 @Override
-                public void onFailure(Exception e) {
+                public void onFailure(Throwable t) {
                     try {
-                        channel.sendResponse(e);
-                    } catch (Exception inner) {
-                        inner.addSuppressed(e);
-                        logger.warn("failed to send back failure on join request", inner);
+                        channel.sendResponse(t);
+                    } catch (Throwable e) {
+                        logger.warn("failed to send back failure on join request", e);
                     }
                 }
             });
         }
     }
 
-    class ValidateJoinRequest extends TransportRequest {
+    public static class ValidateJoinRequest extends TransportRequest {
         private ClusterState state;
 
-        ValidateJoinRequest() {
+        public ValidateJoinRequest() {
         }
 
-        ValidateJoinRequest(ClusterState state) {
+        public ValidateJoinRequest(ClusterState state) {
             this.state = state;
         }
 
         @Override
         public void readFrom(StreamInput in) throws IOException {
             super.readFrom(in);
-            this.state = ClusterState.Builder.readFrom(in, nodesProvider.nodes().getLocalNode());
+            if (in.getVersion().onOrAfter(Version.V_2_2_0)) {
+                this.state = ClusterState.Builder.readFrom(in, null);
+            }
         }
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
             super.writeTo(out);
-            this.state.writeTo(out);
+            if (out.getVersion().onOrAfter(Version.V_2_2_0)) {
+                this.state.writeTo(out);
+            }
         }
     }
 
-    class ValidateJoinRequestRequestHandler implements TransportRequestHandler<ValidateJoinRequest> {
+    class ValidateJoinRequestRequestHandler extends TransportRequestHandler<ValidateJoinRequest> {
 
         @Override
         public void messageReceived(ValidateJoinRequest request, TransportChannel channel) throws Exception {
@@ -201,7 +208,7 @@ public class MembershipAction extends AbstractComponent {
         @Override
         public void readFrom(StreamInput in) throws IOException {
             super.readFrom(in);
-            node = new DiscoveryNode(in);
+            node = DiscoveryNode.readNode(in);
         }
 
         @Override
@@ -211,7 +218,7 @@ public class MembershipAction extends AbstractComponent {
         }
     }
 
-    private class LeaveRequestRequestHandler implements TransportRequestHandler<LeaveRequest> {
+    private class LeaveRequestRequestHandler extends TransportRequestHandler<LeaveRequest> {
 
         @Override
         public void messageReceived(LeaveRequest request, TransportChannel channel) throws Exception {

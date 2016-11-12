@@ -31,13 +31,13 @@ public class VerificationFailure implements Streamable {
 
     private String nodeId;
 
-    private Exception cause;
+    private Throwable cause;
 
     VerificationFailure() {
 
     }
 
-    public VerificationFailure(String nodeId, Exception cause) {
+    public VerificationFailure(String nodeId, Throwable cause) {
         this.nodeId = nodeId;
         this.cause = cause;
     }
@@ -53,13 +53,13 @@ public class VerificationFailure implements Streamable {
     @Override
     public void readFrom(StreamInput in) throws IOException {
         nodeId = in.readOptionalString();
-        cause = in.readException();
+        cause = in.readThrowable();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(nodeId);
-        out.writeException(cause);
+        out.writeThrowable(cause);
     }
 
     public static VerificationFailure readNode(StreamInput in) throws IOException {

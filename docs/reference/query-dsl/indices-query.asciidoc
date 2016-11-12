@@ -1,8 +1,6 @@
 [[query-dsl-indices-query]]
 === Indices Query
 
-deprecated[5.0.0, Search on the '_index' field instead]
-
 The `indices` query is useful in cases where a search is executed across
 multiple indices. It allows to specify a list of index names and an inner
 query that is only executed for indices matching names on that list.
@@ -11,19 +9,18 @@ on the list, the alternative `no_match_query` is executed.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query": {
-        "indices" : {
-            "indices" : ["index1", "index2"],
-            "query" : { "term" : { "tag" : "wow" } },
-            "no_match_query" : { "term" : { "tag" : "kow" } }
+    "indices" : {
+        "indices" : ["index1", "index2"],
+        "query" : {
+            "term" : { "tag" : "wow" }
+        },
+        "no_match_query" : {
+            "term" : { "tag" : "kow" }
         }
     }
 }
 --------------------------------------------------
-// CONSOLE
-// TEST[warning:indices query is deprecated. Instead search on the '_index' field]
 
 You can use the `index` field to provide a single index.
 
@@ -31,3 +28,11 @@ You can use the `index` field to provide a single index.
 documents), and `all` (to match all). Defaults to `all`.
 
 `query` is mandatory, as well as `indices` (or `index`).
+
+[TIP]
+====================================================================
+The fields order is important: if the `indices` are provided before `query`
+or `no_match_query`, the related queries get parsed only against the indices
+that they are going to be executed on. This is useful to avoid parsing queries
+when it is not necessary and prevent potential mapping errors.
+====================================================================

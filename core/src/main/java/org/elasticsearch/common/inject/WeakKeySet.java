@@ -16,7 +16,8 @@
 
 package org.elasticsearch.common.inject;
 
-import java.util.HashSet;
+import com.google.common.collect.Sets;
+
 import java.util.Set;
 
 /**
@@ -33,7 +34,7 @@ final class WeakKeySet {
      * keys whose class names are equal but class loaders are different. This shouldn't be an issue
      * in practice.
      */
-    private Set<String> backingSet = new HashSet<>();
+    private Set<String> backingSet = Sets.newHashSet();
 
     public boolean add(Key<?> key) {
         return backingSet.add(key.toString());

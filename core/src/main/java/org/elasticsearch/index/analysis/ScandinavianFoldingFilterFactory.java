@@ -20,17 +20,20 @@ package org.elasticsearch.index.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.miscellaneous.ScandinavianFoldingFilter;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 /**
  * Factory for {@link ScandinavianFoldingFilter}
  */
-public class ScandinavianFoldingFilterFactory extends AbstractTokenFilterFactory implements MultiTermAwareComponent {
+public class ScandinavianFoldingFilterFactory extends AbstractTokenFilterFactory {
 
-    public ScandinavianFoldingFilterFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public ScandinavianFoldingFilterFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
     }
 
     @Override
@@ -38,8 +41,4 @@ public class ScandinavianFoldingFilterFactory extends AbstractTokenFilterFactory
         return new ScandinavianFoldingFilter(tokenStream);
     }
 
-    @Override
-    public Object getMultiTermComponent() {
-        return this;
-    }
 }

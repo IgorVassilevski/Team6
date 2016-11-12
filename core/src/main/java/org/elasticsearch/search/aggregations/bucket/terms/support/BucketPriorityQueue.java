@@ -23,17 +23,17 @@ import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 
 import java.util.Comparator;
 
-public class BucketPriorityQueue<B extends Terms.Bucket> extends PriorityQueue<B> {
+public class BucketPriorityQueue extends PriorityQueue<Terms.Bucket> {
 
-    private final Comparator<? super B> comparator;
+    private final Comparator<Terms.Bucket> comparator;
 
-    public BucketPriorityQueue(int size, Comparator<? super B> comparator) {
+    public BucketPriorityQueue(int size, Comparator<Terms.Bucket> comparator) {
         super(size);
         this.comparator = comparator;
     }
 
     @Override
-    protected boolean lessThan(B a, B b) {
+    protected boolean lessThan(Terms.Bucket a, Terms.Bucket b) {
         return comparator.compare(a, b) > 0; // reverse, since we reverse again when adding to a list
     }
 }

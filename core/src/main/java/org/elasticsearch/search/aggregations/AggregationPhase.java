@@ -18,34 +18,58 @@
  */
 package org.elasticsearch.search.aggregations;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.Query;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.lucene.search.Queries;
+import org.elasticsearch.search.SearchParseElement;
 import org.elasticsearch.search.SearchPhase;
 import org.elasticsearch.search.aggregations.bucket.global.GlobalAggregator;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 import org.elasticsearch.search.aggregations.pipeline.SiblingPipelineAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.internal.SearchContext;
-import org.elasticsearch.search.profile.query.CollectorResult;
-import org.elasticsearch.search.profile.query.InternalProfileCollector;
+import org.elasticsearch.search.profile.CollectorResult;
+import org.elasticsearch.search.profile.InternalProfileCollector;
 import org.elasticsearch.search.query.QueryPhaseExecutionException;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import static java.util.Collections.unmodifiableMap;
 
 /**
  *
  */
 public class AggregationPhase implements SearchPhase {
 
+    private final AggregationParseElement parseElement;
+
+    private final AggregationBinaryParseElement binaryParseElement;
+
     @Inject
-    public AggregationPhase() {
+    public AggregationPhase(AggregationParseElement parseElement, AggregationBinaryParseElement binaryParseElement) {
+        this.parseElement = parseElement;
+        this.binaryParseElement = binaryParseElement;
+    }
+
+    @Override
+    public Map<String, ? extends SearchParseElement> parseElements() {
+        return ImmutableMap.<String, SearchParseElement>builder()
+                .put("aggregations", parseElement)
+                .put("aggs", parseElement)
+                .put("aggregations_binary", binaryParseElement)
+                .put("aggregationsBinary", binaryParseElement)
+                .put("aggs_binary", binaryParseElement)
+                .put("aggsBinary", binaryParseElement)
+                .build();
     }
 
     @Override
@@ -58,7 +82,7 @@ public class AggregationPhase implements SearchPhase {
             Aggregator[] aggregators;
             try {
                 AggregatorFactories factories = context.aggregations().factories();
-                aggregators = factories.createTopLevelAggregators();
+                aggregators = factories.createTopLevelAggregators(aggregationContext);
                 for (int i = 0; i < aggregators.length; i++) {
                     if (aggregators[i] instanceof GlobalAggregator == false) {
                         collectors.add(aggregators[i]);
@@ -69,9 +93,9 @@ public class AggregationPhase implements SearchPhase {
                     Collector collector = BucketCollector.wrap(collectors);
                     ((BucketCollector)collector).preCollection();
                     if (context.getProfilers() != null) {
-                        collector = new InternalProfileCollector(collector, CollectorResult.REASON_AGGREGATION,
-                                // TODO: report on child aggs as well
-                                Collections.emptyList());
+                        // TODO: report on child aggs as well
+                        List<InternalProfileCollector> emptyList = Collections.emptyList();
+                        collector = new InternalProfileCollector(collector, CollectorResult.REASON_AGGREGATION, emptyList);
                     }
                     context.queryCollectors().put(AggregationPhase.class, collector);
                 }
@@ -105,7 +129,7 @@ public class AggregationPhase implements SearchPhase {
         if (!globals.isEmpty()) {
             BucketCollector globalsCollector = BucketCollector.wrap(globals);
             Query query = Queries.newMatchAllQuery();
-            Query searchFilter = context.searchFilter(context.getQueryShardContext().getTypes());
+            Query searchFilter = context.searchFilter(context.types());
 
             if (searchFilter != null) {
                 BooleanQuery filtered = new BooleanQuery.Builder()
@@ -119,13 +143,13 @@ public class AggregationPhase implements SearchPhase {
                 if (context.getProfilers() == null) {
                     collector = globalsCollector;
                 } else {
+                    // TODO: report on sub collectors
+                    List<InternalProfileCollector> emptyList = Collections.emptyList();
                     InternalProfileCollector profileCollector = new InternalProfileCollector(
-                            globalsCollector, CollectorResult.REASON_AGGREGATION_GLOBAL,
-                            // TODO: report on sub collectors
-                            Collections.emptyList());
+                            globalsCollector, CollectorResult.REASON_AGGREGATION_GLOBAL, emptyList);
                     collector = profileCollector;
                     // start a new profile with this collector
-                    context.getProfilers().addQueryProfiler().setCollector(profileCollector);
+                    context.getProfilers().addProfiler().setCollector(profileCollector);
                 }
                 globalsCollector.preCollection();
                 context.searcher().search(query, collector);
@@ -154,8 +178,8 @@ public class AggregationPhase implements SearchPhase {
                     siblingPipelineAggregators.add((SiblingPipelineAggregator) pipelineAggregator);
                 } else {
                     throw new AggregationExecutionException("Invalid pipeline aggregation named [" + pipelineAggregator.name()
-                            + "] of type [" + pipelineAggregator.getWriteableName() + "]. Only sibling pipeline aggregations are "
-                            + "allowed at the top level");
+                            + "] of type [" + pipelineAggregator.type().name()
+                            + "]. Only sibling pipeline aggregations are allowed at the top level");
                 }
             }
             context.queryResult().pipelineAggregators(siblingPipelineAggregators);

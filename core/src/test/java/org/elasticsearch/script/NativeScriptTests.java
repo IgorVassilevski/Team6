@@ -19,70 +19,80 @@
 
 package org.elasticsearch.script;
 
+import com.google.common.collect.ImmutableSet;
+import org.elasticsearch.common.ContextAndHeaderHolder;
+import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.inject.Injector;
+import org.elasticsearch.common.inject.ModulesBuilder;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.settings.SettingsModule;
+import org.elasticsearch.env.Environment;
+import org.elasticsearch.env.EnvironmentModule;
+import org.elasticsearch.script.ScriptService.ScriptType;
+import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.threadpool.ThreadPoolModule;
+import org.elasticsearch.watcher.ResourceWatcherService;
+import org.junit.Test;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.script.ScriptService.ScriptType;
-import org.elasticsearch.test.ESTestCase;
-import org.elasticsearch.test.InternalSettingsPlugin;
-import org.elasticsearch.watcher.ResourceWatcherService;
-
-import static java.util.Collections.emptyList;
-import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 public class NativeScriptTests extends ESTestCase {
-    public void testNativeScript() throws InterruptedException {
-        Settings settings = Settings.builder()
-                .put("node.name", "testNativeScript")
-                .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir())
-                .put(ScriptService.SCRIPT_AUTO_RELOAD_ENABLED_SETTING.getKey(), false)
-                .build();
-        ScriptModule scriptModule = new ScriptModule(settings, new Environment(settings), null,
-                singletonList(new NativeScriptEngineService(settings, singletonMap("my", new MyNativeScriptFactory()))), emptyList());
-        List<Setting<?>> scriptSettings = scriptModule.getSettings();
-        scriptSettings.add(InternalSettingsPlugin.VERSION_CREATED);
 
-        ExecutableScript executable = scriptModule.getScriptService().executable(
-                new Script("my", ScriptType.INLINE, NativeScriptEngineService.NAME, null), ScriptContext.Standard.SEARCH,
-                Collections.emptyMap());
+    @Test
+    public void testNativeScript() throws InterruptedException {
+        ContextAndHeaderHolder contextAndHeaders = new ContextAndHeaderHolder();
+        Settings settings = Settings.settingsBuilder()
+                .put("name", "testNativeScript")
+                .put("path.home", createTempDir())
+                .build();
+        ScriptModule scriptModule = new ScriptModule(settings);
+        scriptModule.registerScript("my", MyNativeScriptFactory.class);
+        Injector injector = new ModulesBuilder().add(
+                new EnvironmentModule(new Environment(settings)),
+                new ThreadPoolModule(new ThreadPool(settings)),
+                new SettingsModule(settings),
+                scriptModule).createInjector();
+
+        ScriptService scriptService = injector.getInstance(ScriptService.class);
+
+        ExecutableScript executable = scriptService.executable(new Script("my", ScriptType.INLINE, NativeScriptEngineService.NAME, null),
+                ScriptContext.Standard.SEARCH, contextAndHeaders, Collections.<String, String>emptyMap());
         assertThat(executable.run().toString(), equalTo("test"));
+        terminate(injector.getInstance(ThreadPool.class));
     }
 
+    @Test
     public void testFineGrainedSettingsDontAffectNativeScripts() throws IOException {
-        Settings.Builder builder = Settings.builder();
+        ContextAndHeaderHolder contextAndHeaders = new ContextAndHeaderHolder();
+        Settings.Builder builder = Settings.settingsBuilder();
         if (randomBoolean()) {
             ScriptType scriptType = randomFrom(ScriptType.values());
-            builder.put("script" + "." + scriptType.getScriptType(), randomBoolean());
+            builder.put(ScriptModes.SCRIPT_SETTINGS_PREFIX + scriptType, randomFrom(ScriptMode.values()));
         } else {
-            ScriptContext scriptContext = randomFrom(ScriptContext.Standard.values());
-            builder.put("script" + "." + scriptContext.getKey(), randomBoolean());
+            String scriptContext = randomFrom(ScriptContext.Standard.values()).getKey();
+            builder.put(ScriptModes.SCRIPT_SETTINGS_PREFIX + scriptContext, randomFrom(ScriptMode.values()));
         }
-        Settings settings = builder.put(Environment.PATH_HOME_SETTING.getKey(), createTempDir()).build();
+        Settings settings = builder.put("path.home", createTempDir()).build();
         Environment environment = new Environment(settings);
         ResourceWatcherService resourceWatcherService = new ResourceWatcherService(settings, null);
         Map<String, NativeScriptFactory> nativeScriptFactoryMap = new HashMap<>();
         nativeScriptFactoryMap.put("my", new MyNativeScriptFactory());
-        ScriptEngineRegistry scriptEngineRegistry = new ScriptEngineRegistry(Collections.singleton(new NativeScriptEngineService(settings,
-            nativeScriptFactoryMap)));
-        ScriptContextRegistry scriptContextRegistry = new ScriptContextRegistry(new ArrayList<>());
-        ScriptSettings scriptSettings = new ScriptSettings(scriptEngineRegistry, scriptContextRegistry);
-        ScriptService scriptService = new ScriptService(settings, environment, resourceWatcherService, scriptEngineRegistry,
-            scriptContextRegistry, scriptSettings);
+        Set<ScriptEngineService> scriptEngineServices = ImmutableSet.<ScriptEngineService>of(new NativeScriptEngineService(settings, nativeScriptFactoryMap));
+        ScriptContextRegistry scriptContextRegistry = new ScriptContextRegistry(new ArrayList<ScriptContext.Plugin>());
+        ScriptService scriptService = new ScriptService(settings, environment, scriptEngineServices, resourceWatcherService, scriptContextRegistry);
 
         for (ScriptContext scriptContext : scriptContextRegistry.scriptContexts()) {
             assertThat(scriptService.compile(new Script("my", ScriptType.INLINE, NativeScriptEngineService.NAME, null), scriptContext,
-                    Collections.emptyMap()), notNullValue());
+                    contextAndHeaders, Collections.<String, String>emptyMap()), notNullValue());
         }
     }
 
@@ -95,11 +105,6 @@ public class NativeScriptTests extends ESTestCase {
         @Override
         public boolean needsScores() {
             return false;
-        }
-
-        @Override
-        public String getName() {
-            return "my";
         }
     }
 

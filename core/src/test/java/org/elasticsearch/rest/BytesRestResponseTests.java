@@ -23,38 +23,29 @@ import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.ShardSearchFailure;
-import org.elasticsearch.common.ParsingException;
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.index.Index;
+import org.elasticsearch.index.query.TestQueryParsingException;
+import org.elasticsearch.rest.support.RestUtils;
 import org.elasticsearch.search.SearchShardTarget;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.test.rest.FakeRestRequest;
 import org.elasticsearch.transport.RemoteTransportException;
+import org.junit.Test;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
+/**
+ *
+ */
 public class BytesRestResponseTests extends ESTestCase {
 
-    class UnknownException extends Exception {
-
-        public UnknownException(final String message, final Throwable cause) {
-            super(message, cause);
-        }
-
-    }
-
+    @Test
     public void testWithHeaders() throws Exception {
         RestRequest request = new FakeRestRequest();
         RestChannel channel = randomBoolean() ? new DetailedExceptionRestChannel(request) : new SimpleExceptionRestChannel(request);
@@ -66,52 +57,56 @@ public class BytesRestResponseTests extends ESTestCase {
         assertThat(response.getHeaders().get("n2"), contains("v21", "v22"));
     }
 
+    @Test
     public void testSimpleExceptionMessage() throws Exception {
         RestRequest request = new FakeRestRequest();
         RestChannel channel = new SimpleExceptionRestChannel(request);
 
-        Exception t = new ElasticsearchException("an error occurred reading data", new FileNotFoundException("/foo/bar"));
+        Throwable t = new ElasticsearchException("an error occurred reading data", new FileNotFoundException("/foo/bar"));
         BytesRestResponse response = new BytesRestResponse(channel, t);
-        String text = response.content().utf8ToString();
+        String text = response.content().toUtf8();
         assertThat(text, containsString("ElasticsearchException[an error occurred reading data]"));
         assertThat(text, not(containsString("FileNotFoundException")));
         assertThat(text, not(containsString("/foo/bar")));
         assertThat(text, not(containsString("error_trace")));
     }
 
+    @Test
     public void testDetailedExceptionMessage() throws Exception {
         RestRequest request = new FakeRestRequest();
         RestChannel channel = new DetailedExceptionRestChannel(request);
 
-        Exception t = new ElasticsearchException("an error occurred reading data", new FileNotFoundException("/foo/bar"));
+        Throwable t = new ElasticsearchException("an error occurred reading data", new FileNotFoundException("/foo/bar"));
         BytesRestResponse response = new BytesRestResponse(channel, t);
-        String text = response.content().utf8ToString();
+        String text = response.content().toUtf8();
         assertThat(text, containsString("{\"type\":\"exception\",\"reason\":\"an error occurred reading data\"}"));
         assertThat(text, containsString("{\"type\":\"file_not_found_exception\",\"reason\":\"/foo/bar\"}"));
     }
 
+    @Test
     public void testNonElasticsearchExceptionIsNotShownAsSimpleMessage() throws Exception {
         RestRequest request = new FakeRestRequest();
         RestChannel channel = new SimpleExceptionRestChannel(request);
 
-        Exception t = new UnknownException("an error occurred reading data", new FileNotFoundException("/foo/bar"));
+        Throwable t = new Throwable("an error occurred reading data", new FileNotFoundException("/foo/bar"));
         BytesRestResponse response = new BytesRestResponse(channel, t);
-        String text = response.content().utf8ToString();
-        assertThat(text, not(containsString("UnknownException[an error occurred reading data]")));
+        String text = response.content().toUtf8();
+        assertThat(text, not(containsString("Throwable[an error occurred reading data]")));
         assertThat(text, not(containsString("FileNotFoundException[/foo/bar]")));
         assertThat(text, not(containsString("error_trace")));
         assertThat(text, containsString("\"error\":\"No ElasticsearchException found\""));
     }
 
+    @Test
     public void testErrorTrace() throws Exception {
         RestRequest request = new FakeRestRequest();
         request.params().put("error_trace", "true");
         RestChannel channel = new DetailedExceptionRestChannel(request);
 
-        Exception t = new UnknownException("an error occurred reading data", new FileNotFoundException("/foo/bar"));
+        Throwable t = new Throwable("an error occurred reading data", new FileNotFoundException("/foo/bar"));
         BytesRestResponse response = new BytesRestResponse(channel, t);
-        String text = response.content().utf8ToString();
-        assertThat(text, containsString("\"type\":\"unknown_exception\",\"reason\":\"an error occurred reading data\""));
+        String text = response.content().toUtf8();
+        assertThat(text, containsString("\"type\":\"throwable\",\"reason\":\"an error occurred reading data\""));
         assertThat(text, containsString("{\"type\":\"file_not_found_exception\""));
         assertThat(text, containsString("\"stack_trace\":\"[an error occurred reading data]"));
     }
@@ -120,95 +115,80 @@ public class BytesRestResponseTests extends ESTestCase {
         RestRequest request = new FakeRestRequest();
         RestChannel channel = new DetailedExceptionRestChannel(request);
         {
-            Exception e = new ElasticsearchException("an error occurred reading data", new FileNotFoundException("/foo/bar"));
-            BytesRestResponse response = new BytesRestResponse(channel, e);
-            String text = response.content().utf8ToString();
+            Throwable t = new ElasticsearchException("an error occurred reading data", new FileNotFoundException("/foo/bar"));
+            BytesRestResponse response = new BytesRestResponse(channel, t);
+            String text = response.content().toUtf8();
             assertThat(text, containsString("{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"an error occurred reading data\"}]"));
         }
         {
-            Exception e = new FileNotFoundException("/foo/bar");
-            BytesRestResponse response = new BytesRestResponse(channel, e);
-            String text = response.content().utf8ToString();
+            Throwable t = new FileNotFoundException("/foo/bar");
+            BytesRestResponse response = new BytesRestResponse(channel, t);
+            String text = response.content().toUtf8();
             assertThat(text, containsString("{\"root_cause\":[{\"type\":\"file_not_found_exception\",\"reason\":\"/foo/bar\"}]"));
         }
     }
 
+    @Test
     public void testNullThrowable() throws Exception {
         RestRequest request = new FakeRestRequest();
         RestChannel channel = new SimpleExceptionRestChannel(request);
 
         BytesRestResponse response = new BytesRestResponse(channel, null);
-        String text = response.content().utf8ToString();
+        String text = response.content().toUtf8();
         assertThat(text, containsString("\"error\":\"unknown\""));
         assertThat(text, not(containsString("error_trace")));
     }
 
+    @Test
     public void testConvert() throws IOException {
         RestRequest request = new FakeRestRequest();
         RestChannel channel = new DetailedExceptionRestChannel(request);
-        ShardSearchFailure failure = new ShardSearchFailure(new ParsingException(1, 2, "foobar", null),
-                new SearchShardTarget("node_1", new Index("foo", "_na_"), 1));
-        ShardSearchFailure failure1 = new ShardSearchFailure(new ParsingException(1, 2, "foobar", null),
-                new SearchShardTarget("node_1", new Index("foo", "_na_"), 2));
+        ShardSearchFailure failure = new ShardSearchFailure(new TestQueryParsingException(new Index("foo"), "foobar", null),
+                new SearchShardTarget("node_1", "foo", 1));
+        ShardSearchFailure failure1 = new ShardSearchFailure(new TestQueryParsingException(new Index("foo"), "foobar", null),
+                new SearchShardTarget("node_1", "foo", 2));
         SearchPhaseExecutionException ex = new SearchPhaseExecutionException("search", "all shards failed",  new ShardSearchFailure[] {failure, failure1});
         BytesRestResponse response = new BytesRestResponse(channel, new RemoteTransportException("foo", ex));
-        String text = response.content().utf8ToString();
-        String expected = "{\"error\":{\"root_cause\":[{\"type\":\"parsing_exception\",\"reason\":\"foobar\",\"line\":1,\"col\":2}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"search\",\"grouped\":true,\"failed_shards\":[{\"shard\":1,\"index\":\"foo\",\"node\":\"node_1\",\"reason\":{\"type\":\"parsing_exception\",\"reason\":\"foobar\",\"line\":1,\"col\":2}}]},\"status\":400}";
+        String text = response.content().toUtf8();
+        String expected = "{\"error\":{\"root_cause\":[{\"type\":\"test_query_parsing_exception\",\"reason\":\"foobar\",\"index\":\"foo\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"search\",\"grouped\":true,\"failed_shards\":[{\"shard\":1,\"index\":\"foo\",\"node\":\"node_1\",\"reason\":{\"type\":\"test_query_parsing_exception\",\"reason\":\"foobar\",\"index\":\"foo\"}}]},\"status\":400}";
         assertEquals(expected.trim(), text.trim());
         String stackTrace = ExceptionsHelper.stackTrace(ex);
-        assertTrue(stackTrace.contains("Caused by: ParsingException[foobar]"));
+        assertTrue(stackTrace.contains("Caused by: [foo] TestQueryParsingException[foobar]"));
     }
 
+    @Test
     public void testResponseWhenPathContainsEncodingError() throws IOException {
         final String path = "%a";
-        final RestRequest request = new RestRequest(Collections.emptyMap(), path) {
+        final RestRequest request = new FakeRestRequest() {
             @Override
-            public Method method() {
-                return null;
-            }
-
-            @Override
-            public String uri() {
-                return null;
-            }
-
-            @Override
-            public boolean hasContent() {
-                return false;
-            }
-
-            @Override
-            public BytesReference content() {
-                return null;
-            }
-
-            @Override
-            public String header(String name) {
-                return null;
-            }
-
-            @Override
-            public Iterable<Map.Entry<String, String>> headers() {
-                return null;
+            public String rawPath() {
+                return path;
             }
         };
-        final IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> RestUtils.decodeComponent(request.rawPath()));
+        IllegalArgumentException e = null;
+        try {
+            RestUtils.decodeComponent(request.rawPath());
+            fail("decoding path should have failed");
+        } catch (IllegalArgumentException caught) {
+            e = caught;
+        }
         final RestChannel channel = new DetailedExceptionRestChannel(request);
         // if we try to decode the path, this will throw an IllegalArgumentException again
         final BytesRestResponse response = new BytesRestResponse(channel, e);
         assertNotNull(response.content());
-        final String content = response.content().utf8ToString();
+        final String content = response.content().toUtf8();
         assertThat(content, containsString("\"type\":\"illegal_argument_exception\""));
         assertThat(content, containsString("\"reason\":\"partial escape sequence at end of string: %a\""));
         assertThat(content, containsString("\"status\":" + 400));
     }
 
+    @Test
     public void testResponseWhenInternalServerError() throws IOException {
         final RestRequest request = new FakeRestRequest();
         final RestChannel channel = new DetailedExceptionRestChannel(request);
         final BytesRestResponse response = new BytesRestResponse(channel, new ElasticsearchException("simulated"));
         assertNotNull(response.content());
-        final String content = response.content().utf8ToString();
+        final String content = response.content().toUtf8();
         assertThat(content, containsString("\"type\":\"exception\""));
         assertThat(content, containsString("\"reason\":\"simulated\""));
         assertThat(content, containsString("\"status\":" + 500));
@@ -223,7 +203,7 @@ public class BytesRestResponseTests extends ESTestCase {
         }
     }
 
-    private static class SimpleExceptionRestChannel extends AbstractRestChannel {
+    private static class SimpleExceptionRestChannel extends RestChannel {
 
         SimpleExceptionRestChannel(RestRequest request) {
             super(request, false);
@@ -234,7 +214,7 @@ public class BytesRestResponseTests extends ESTestCase {
         }
     }
 
-    private static class DetailedExceptionRestChannel extends AbstractRestChannel {
+    private static class DetailedExceptionRestChannel extends RestChannel {
 
         DetailedExceptionRestChannel(RestRequest request) {
             super(request, true);

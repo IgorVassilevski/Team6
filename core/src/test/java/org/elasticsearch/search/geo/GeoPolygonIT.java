@@ -22,20 +22,13 @@ package org.elasticsearch.search.geo;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.InternalSettingsPlugin;
 import org.elasticsearch.test.VersionUtils;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
+import org.junit.Test;
 
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
@@ -49,14 +42,9 @@ import static org.hamcrest.Matchers.equalTo;
 public class GeoPolygonIT extends ESIntegTestCase {
 
     @Override
-    protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(InternalSettingsPlugin.class); // uses index.version.created
-    }
-
-    @Override
     protected void setupSuiteScopeCluster() throws Exception {
-        Version version = VersionUtils.randomVersionBetween(random(), Version.V_2_0_0, Version.CURRENT);
-        Settings settings = Settings.builder().put(IndexMetaData.SETTING_VERSION_CREATED, version).build();
+        Version version = VersionUtils.randomVersionBetween(random(), Version.V_1_0_0, Version.CURRENT);
+        Settings settings = Settings.settingsBuilder().put(IndexMetaData.SETTING_VERSION_CREATED, version).build();
         XContentBuilder xContentBuilder = XContentFactory.jsonBuilder().startObject().startObject("type1")
                 .startObject("properties").startObject("location").field("type", "geo_point");
         if (version.before(Version.V_2_2_0)) {
@@ -67,51 +55,52 @@ public class GeoPolygonIT extends ESIntegTestCase {
         ensureGreen();
 
         indexRandom(true, client().prepareIndex("test", "type1", "1").setSource(jsonBuilder().startObject()
-                .field("name", "New York")
-                .startObject("location").field("lat", 40.714).field("lon", -74.006).endObject()
-                .endObject()),
-        // to NY: 5.286 km
-        client().prepareIndex("test", "type1", "2").setSource(jsonBuilder().startObject()
-                .field("name", "Times Square")
-                .startObject("location").field("lat", 40.759).field("lon", -73.984).endObject()
-                .endObject()),
-        // to NY: 0.4621 km
-        client().prepareIndex("test", "type1", "3").setSource(jsonBuilder().startObject()
-                .field("name", "Tribeca")
-                .startObject("location").field("lat", 40.718).field("lon", -74.008).endObject()
-                .endObject()),
-        // to NY: 1.055 km
-        client().prepareIndex("test", "type1", "4").setSource(jsonBuilder().startObject()
-                .field("name", "Wall Street")
-                .startObject("location").field("lat", 40.705).field("lon", -74.009).endObject()
-                .endObject()),
-        // to NY: 1.258 km
-        client().prepareIndex("test", "type1", "5").setSource(jsonBuilder().startObject()
-                .field("name", "Soho")
-                .startObject("location").field("lat", 40.725).field("lon", -74).endObject()
-                .endObject()),
-        // to NY: 2.029 km
-        client().prepareIndex("test", "type1", "6").setSource(jsonBuilder().startObject()
-                .field("name", "Greenwich Village")
-                .startObject("location").field("lat", 40.731).field("lon", -73.996).endObject()
-                .endObject()),
-        // to NY: 8.572 km
-        client().prepareIndex("test", "type1", "7").setSource(jsonBuilder().startObject()
-                .field("name", "Brooklyn")
-                .startObject("location").field("lat", 40.65).field("lon", -73.95).endObject()
-                .endObject()));
+                        .field("name", "New York")
+                        .startObject("location").field("lat", 40.714).field("lon", -74.006).endObject()
+                        .endObject()),
+                // to NY: 5.286 km
+                client().prepareIndex("test", "type1", "2").setSource(jsonBuilder().startObject()
+                        .field("name", "Times Square")
+                        .startObject("location").field("lat", 40.759).field("lon", -73.984).endObject()
+                        .endObject()),
+                // to NY: 0.4621 km
+                client().prepareIndex("test", "type1", "3").setSource(jsonBuilder().startObject()
+                        .field("name", "Tribeca")
+                        .startObject("location").field("lat", 40.718).field("lon", -74.008).endObject()
+                        .endObject()),
+                // to NY: 1.055 km
+                client().prepareIndex("test", "type1", "4").setSource(jsonBuilder().startObject()
+                        .field("name", "Wall Street")
+                        .startObject("location").field("lat", 40.705).field("lon", -74.009).endObject()
+                        .endObject()),
+                // to NY: 1.258 km
+                client().prepareIndex("test", "type1", "5").setSource(jsonBuilder().startObject()
+                        .field("name", "Soho")
+                        .startObject("location").field("lat", 40.725).field("lon", -74).endObject()
+                        .endObject()),
+                // to NY: 2.029 km
+                client().prepareIndex("test", "type1", "6").setSource(jsonBuilder().startObject()
+                        .field("name", "Greenwich Village")
+                        .startObject("location").field("lat", 40.731).field("lon", -73.996).endObject()
+                        .endObject()),
+                // to NY: 8.572 km
+                client().prepareIndex("test", "type1", "7").setSource(jsonBuilder().startObject()
+                        .field("name", "Brooklyn")
+                        .startObject("location").field("lat", 40.65).field("lon", -73.95).endObject()
+                        .endObject()));
         ensureSearchable("test");
     }
 
-    public void testSimplePolygon() throws Exception {
-        List<GeoPoint> points = new ArrayList<>();
-        points.add(new GeoPoint(40.7, -74.0));
-        points.add(new GeoPoint(40.7, -74.1));
-        points.add(new GeoPoint(40.8, -74.1));
-        points.add(new GeoPoint(40.8, -74.0));
-        points.add(new GeoPoint(40.7, -74.0));
+    @Test
+    public void simplePolygonTest() throws Exception {
+
         SearchResponse searchResponse = client().prepareSearch("test") // from NY
-                .setQuery(boolQuery().must(geoPolygonQuery("location", points)))
+                .setQuery(boolQuery().must(geoPolygonQuery("location")
+                        .addPoint(40.7, -74.0)
+                        .addPoint(40.7, -74.1)
+                        .addPoint(40.8, -74.1)
+                        .addPoint(40.8, -74.0)
+                        .addPoint(40.7, -74.0)))
                 .execute().actionGet();
         assertHitCount(searchResponse, 4);
         assertThat(searchResponse.getHits().hits().length, equalTo(4));
@@ -120,14 +109,15 @@ public class GeoPolygonIT extends ESIntegTestCase {
         }
     }
 
-    public void testSimpleUnclosedPolygon() throws Exception {
-        List<GeoPoint> points = new ArrayList<>();
-        points.add(new GeoPoint(40.7, -74.0));
-        points.add(new GeoPoint(40.7, -74.1));
-        points.add(new GeoPoint(40.8, -74.1));
-        points.add(new GeoPoint(40.8, -74.0));
+    @Test
+    public void simpleUnclosedPolygon() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("test") // from NY
-                .setQuery(boolQuery().must(geoPolygonQuery("location", points))).execute().actionGet();
+                .setQuery(boolQuery().must(geoPolygonQuery("location")
+                        .addPoint(40.7, -74.0)
+                        .addPoint(40.7, -74.1)
+                        .addPoint(40.8, -74.1)
+                        .addPoint(40.8, -74.0)))
+                .execute().actionGet();
         assertHitCount(searchResponse, 4);
         assertThat(searchResponse.getHits().hits().length, equalTo(4));
         for (SearchHit hit : searchResponse.getHits()) {

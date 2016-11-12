@@ -29,9 +29,12 @@
                       "type": "attachment"
                       "fields":
                         "content_type":
-                          "store": true
+                          "store": "yes"
                         "name":
-                          "store": true
+                          "store": "yes"
+    - do:
+        cluster.health:
+          wait_for_status: yellow
 
     - do:
         index:
@@ -51,7 +54,7 @@
         search:
             index: test
             body:
-                stored_fields: [file.content_type,file.name]
+                fields: [file.content_type,file.name]
 
     - match: { hits.total: 1 }
     - match: { hits.hits.0.fields: { file.content_type: ["text/my-dummy-content-type"],  file.name: ["my-dummy-name-txt"] }}

@@ -41,8 +41,6 @@ public class NodesStatsRequest extends BaseNodesRequest<NodesStatsRequest> {
     private boolean http;
     private boolean breaker;
     private boolean script;
-    private boolean discovery;
-    private boolean ingest;
 
     public NodesStatsRequest() {
     }
@@ -69,8 +67,6 @@ public class NodesStatsRequest extends BaseNodesRequest<NodesStatsRequest> {
         this.http = true;
         this.breaker = true;
         this.script = true;
-        this.discovery = true;
-        this.ingest = true;
         return this;
     }
 
@@ -88,8 +84,6 @@ public class NodesStatsRequest extends BaseNodesRequest<NodesStatsRequest> {
         this.http = false;
         this.breaker = false;
         this.script = false;
-        this.discovery = false;
-        this.ingest = false;
         return this;
     }
 
@@ -240,31 +234,6 @@ public class NodesStatsRequest extends BaseNodesRequest<NodesStatsRequest> {
         return this;
     }
 
-
-    public boolean discovery() {
-        return this.discovery;
-    }
-
-    /**
-     * Should the node's discovery stats be returned.
-     */
-    public NodesStatsRequest discovery(boolean discovery) {
-        this.discovery = discovery;
-        return this;
-    }
-
-    public boolean ingest() {
-        return ingest;
-    }
-
-    /**
-     * Should ingest statistics be returned.
-     */
-    public NodesStatsRequest ingest(boolean ingest) {
-        this.ingest = ingest;
-        return this;
-    }
-
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
@@ -278,8 +247,6 @@ public class NodesStatsRequest extends BaseNodesRequest<NodesStatsRequest> {
         http = in.readBoolean();
         breaker = in.readBoolean();
         script = in.readBoolean();
-        discovery = in.readBoolean();
-        ingest = in.readBoolean();
     }
 
     @Override
@@ -295,8 +262,6 @@ public class NodesStatsRequest extends BaseNodesRequest<NodesStatsRequest> {
         out.writeBoolean(http);
         out.writeBoolean(breaker);
         out.writeBoolean(script);
-        out.writeBoolean(discovery);
-        out.writeBoolean(ingest);
     }
 
 }

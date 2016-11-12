@@ -19,16 +19,19 @@
 
 package org.elasticsearch.action.admin.indices.mapping.get;
 
+import com.google.common.base.Predicate;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsResponse.FieldMappingMetaData;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.single.shard.TransportSingleShardAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.ShardsIterator;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.collect.MapBuilder;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.regex.Regex;
@@ -48,13 +51,9 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.Map;
-import java.util.stream.Collectors;
 
-import static java.util.Collections.singletonMap;
 import static org.elasticsearch.common.util.CollectionUtils.newLinkedList;
 
 /**
@@ -71,7 +70,7 @@ public class TransportGetFieldMappingsIndexAction extends TransportSingleShardAc
     public TransportGetFieldMappingsIndexAction(Settings settings, ClusterService clusterService, TransportService transportService,
                                                 IndicesService indicesService, ThreadPool threadPool, ActionFilters actionFilters,
                                                 IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, ACTION_NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, GetFieldMappingsIndexRequest::new, ThreadPool.Names.MANAGEMENT);
+        super(settings, ACTION_NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, GetFieldMappingsIndexRequest.class, ThreadPool.Names.MANAGEMENT);
         this.clusterService = clusterService;
         this.indicesService = indicesService;
     }
@@ -97,25 +96,29 @@ public class TransportGetFieldMappingsIndexAction extends TransportSingleShardAc
             typeIntersection = indexService.mapperService().types();
 
         } else {
-            typeIntersection = indexService.mapperService().types()
-                    .stream()
-                    .filter(type -> Regex.simpleMatch(request.types(), type))
-                    .collect(Collectors.toCollection(ArrayList::new));
+            typeIntersection = Collections2.filter(indexService.mapperService().types(), new Predicate<String>() {
+
+                @Override
+                public boolean apply(String type) {
+                    return Regex.simpleMatch(request.types(), type);
+                }
+
+            });
             if (typeIntersection.isEmpty()) {
-                throw new TypeMissingException(shardId.getIndex(), request.types());
+                throw new TypeMissingException(shardId.index(), request.types());
             }
         }
 
-        MapBuilder<String, Map<String, FieldMappingMetaData>> typeMappings = new MapBuilder<>();
+        MapBuilder<String, ImmutableMap<String, FieldMappingMetaData>> typeMappings = new MapBuilder<>();
         for (String type : typeIntersection) {
             DocumentMapper documentMapper = indexService.mapperService().documentMapper(type);
-            Map<String, FieldMappingMetaData> fieldMapping = findFieldMappingsByType(documentMapper, request);
+            ImmutableMap<String, FieldMappingMetaData> fieldMapping = findFieldMappingsByType(documentMapper, request);
             if (!fieldMapping.isEmpty()) {
                 typeMappings.put(type, fieldMapping);
             }
         }
 
-        return new GetFieldMappingsResponse(singletonMap(shardId.getIndexName(), typeMappings.immutableMap()));
+        return new GetFieldMappingsResponse(ImmutableMap.of(shardId.getIndex(), typeMappings.immutableMap()));
     }
 
     @Override
@@ -130,7 +133,7 @@ public class TransportGetFieldMappingsIndexAction extends TransportSingleShardAc
 
     private static final ToXContent.Params includeDefaultsParams = new ToXContent.Params() {
 
-        static final String INCLUDE_DEFAULTS = "include_defaults";
+        final static String INCLUDE_DEFAULTS = "include_defaults";
 
         @Override
         public String param(String key) {
@@ -165,13 +168,13 @@ public class TransportGetFieldMappingsIndexAction extends TransportSingleShardAc
         }
     };
 
-    private Map<String, FieldMappingMetaData> findFieldMappingsByType(DocumentMapper documentMapper, GetFieldMappingsIndexRequest request) {
+    private ImmutableMap<String, FieldMappingMetaData> findFieldMappingsByType(DocumentMapper documentMapper, GetFieldMappingsIndexRequest request) {
         MapBuilder<String, FieldMappingMetaData> fieldMappings = new MapBuilder<>();
         final DocumentFieldMappers allFieldMappers = documentMapper.mappers();
         for (String field : request.fields()) {
             if (Regex.isMatchAllPattern(field)) {
                 for (FieldMapper fieldMapper : allFieldMappers) {
-                    addFieldMapper(fieldMapper.fieldType().name(), fieldMapper, fieldMappings, request.includeDefaults());
+                    addFieldMapper(fieldMapper.fieldType().names().fullName(), fieldMapper, fieldMappings, request.includeDefaults());
                 }
             } else if (Regex.isSimpleMatchPattern(field)) {
                 // go through the field mappers 3 times, to make sure we give preference to the resolve order: full name, index name, name.
@@ -179,15 +182,15 @@ public class TransportGetFieldMappingsIndexAction extends TransportSingleShardAc
                 Collection<FieldMapper> remainingFieldMappers = newLinkedList(allFieldMappers);
                 for (Iterator<FieldMapper> it = remainingFieldMappers.iterator(); it.hasNext(); ) {
                     final FieldMapper fieldMapper = it.next();
-                    if (Regex.simpleMatch(field, fieldMapper.fieldType().name())) {
-                        addFieldMapper(fieldMapper.fieldType().name(), fieldMapper, fieldMappings, request.includeDefaults());
+                    if (Regex.simpleMatch(field, fieldMapper.fieldType().names().fullName())) {
+                        addFieldMapper(fieldMapper.fieldType().names().fullName(), fieldMapper, fieldMappings, request.includeDefaults());
                         it.remove();
                     }
                 }
                 for (Iterator<FieldMapper> it = remainingFieldMappers.iterator(); it.hasNext(); ) {
                     final FieldMapper fieldMapper = it.next();
-                    if (Regex.simpleMatch(field, fieldMapper.fieldType().name())) {
-                        addFieldMapper(fieldMapper.fieldType().name(), fieldMapper, fieldMappings, request.includeDefaults());
+                    if (Regex.simpleMatch(field, fieldMapper.fieldType().names().indexName())) {
+                        addFieldMapper(fieldMapper.fieldType().names().indexName(), fieldMapper, fieldMappings, request.includeDefaults());
                         it.remove();
                     }
                 }
@@ -214,7 +217,7 @@ public class TransportGetFieldMappingsIndexAction extends TransportSingleShardAc
             builder.startObject();
             fieldMapper.toXContent(builder, includeDefaults ? includeDefaultsParams : ToXContent.EMPTY_PARAMS);
             builder.endObject();
-            fieldMappings.put(field, new FieldMappingMetaData(fieldMapper.fieldType().name(), builder.bytes()));
+            fieldMappings.put(field, new FieldMappingMetaData(fieldMapper.fieldType().names().fullName(), builder.bytes()));
         } catch (IOException e) {
             throw new ElasticsearchException("failed to serialize XContent of field [" + field + "]", e);
         }

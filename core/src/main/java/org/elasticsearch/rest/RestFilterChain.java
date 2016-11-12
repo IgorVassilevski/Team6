@@ -19,8 +19,6 @@
 
 package org.elasticsearch.rest;
 
-import org.elasticsearch.client.node.NodeClient;
-
 /**
  * A filter chain allowing to continue and process the rest request.
  */
@@ -30,5 +28,5 @@ public interface RestFilterChain {
      * Continue processing the request. Should only be called if a response has not been sent
      * through the channel.
      */
-    void continueProcessing(RestRequest request, RestChannel channel, NodeClient client);
+    void continueProcessing(RestRequest request, RestChannel channel);
 }

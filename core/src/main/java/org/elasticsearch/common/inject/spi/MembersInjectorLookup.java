@@ -20,7 +20,8 @@ import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.MembersInjector;
 import org.elasticsearch.common.inject.TypeLiteral;
 
-import java.util.Objects;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 /**
  * A lookup of the members injector for a type. Lookups are created explicitly in a module using
@@ -39,8 +40,8 @@ public final class MembersInjectorLookup<T> implements Element {
     private MembersInjector<T> delegate;
 
     public MembersInjectorLookup(Object source, TypeLiteral<T> type) {
-        this.source = Objects.requireNonNull(source, "source");
-        this.type = Objects.requireNonNull(type, "type");
+        this.source = checkNotNull(source, "source");
+        this.type = checkNotNull(type, "type");
     }
 
     @Override
@@ -66,10 +67,8 @@ public final class MembersInjectorLookup<T> implements Element {
      * @throws IllegalStateException if the delegate is already set
      */
     public void initializeDelegate(MembersInjector<T> delegate) {
-        if (this.delegate != null) {
-            throw new IllegalStateException("delegate already initialized");
-        }
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        checkState(this.delegate == null, "delegate already initialized");
+        this.delegate = checkNotNull(delegate, "delegate");
     }
 
     @Override
@@ -95,9 +94,8 @@ public final class MembersInjectorLookup<T> implements Element {
         return new MembersInjector<T>() {
             @Override
             public void injectMembers(T instance) {
-                if (delegate == null) {
-                    throw new IllegalStateException("This MembersInjector cannot be used until the Injector has been created.");
-                }
+                checkState(delegate != null,
+                        "This MembersInjector cannot be used until the Injector has been created.");
                 delegate.injectMembers(instance);
             }
 

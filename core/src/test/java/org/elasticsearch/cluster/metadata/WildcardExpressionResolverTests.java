@@ -24,13 +24,16 @@ import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.util.Arrays;
 
-import static org.elasticsearch.common.util.set.Sets.newHashSet;
+import static com.google.common.collect.Sets.newHashSet;
 import static org.hamcrest.Matchers.equalTo;
 
 public class WildcardExpressionResolverTests extends ESTestCase {
+
+    @Test
     public void testConvertWildcardsJustIndicesTests() {
         MetaData.Builder mdBuilder = MetaData.builder()
                 .put(indexBuilder("testXXX"))
@@ -51,6 +54,7 @@ public class WildcardExpressionResolverTests extends ESTestCase {
         assertThat(newHashSet(resolver.resolve(context, Arrays.asList("*", "-kuku"))), equalTo(newHashSet("testXXX", "testXYY", "testYYY")));
     }
 
+    @Test
     public void testConvertWildcardsTests() {
         MetaData.Builder mdBuilder = MetaData.builder()
                 .put(indexBuilder("testXXX").putAlias(AliasMetaData.builder("alias1")).putAlias(AliasMetaData.builder("alias2")))
@@ -68,6 +72,7 @@ public class WildcardExpressionResolverTests extends ESTestCase {
         assertThat(newHashSet(resolver.resolve(context, Arrays.asList("+testYYY", "+testX*"))), equalTo(newHashSet("testXXX", "testXYY", "testYYY")));
     }
 
+    @Test
     public void testConvertWildcardsOpenClosedIndicesTests() {
         MetaData.Builder mdBuilder = MetaData.builder()
                 .put(indexBuilder("testXXX").state(IndexMetaData.State.OPEN))
@@ -111,9 +116,9 @@ public class WildcardExpressionResolverTests extends ESTestCase {
 
     public void testAll() {
         MetaData.Builder mdBuilder = MetaData.builder()
-            .put(indexBuilder("testXXX"))
-            .put(indexBuilder("testXYY"))
-            .put(indexBuilder("testYYY"));
+                .put(indexBuilder("testXXX"))
+                .put(indexBuilder("testXYY"))
+                .put(indexBuilder("testYYY"));
         ClusterState state = ClusterState.builder(new ClusterName("_name")).metaData(mdBuilder).build();
         IndexNameExpressionResolver.WildcardExpressionResolver resolver = new IndexNameExpressionResolver.WildcardExpressionResolver();
 

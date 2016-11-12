@@ -22,7 +22,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Utility for joining pieces of text separated by a delimiter. It can handle
@@ -96,7 +97,7 @@ public final class Join {
      */
     public static String join(
             String delimiter, @Nullable Object firstToken, Object... otherTokens) {
-        Objects.requireNonNull(otherTokens);
+        checkNotNull(otherTokens);
         return join(delimiter, CollectionUtils.asArrayList(firstToken, otherTokens));
     }
 
@@ -206,7 +207,7 @@ public final class Join {
      */
     public static <T extends Appendable> T join(T appendable, String delimiter,
                                                 @Nullable Object firstToken, Object... otherTokens) {
-        Objects.requireNonNull(otherTokens);
+        checkNotNull(otherTokens);
         return join(appendable, delimiter, CollectionUtils.asArrayList(firstToken, otherTokens));
     }
 
@@ -231,8 +232,8 @@ public final class Join {
 
         /* This method is the workhorse of the class */
 
-        Objects.requireNonNull(appendable);
-        Objects.requireNonNull(delimiter);
+        checkNotNull(appendable);
+        checkNotNull(delimiter);
         if (tokens.hasNext()) {
             try {
                 appendOneToken(appendable, tokens.next());
@@ -267,9 +268,9 @@ public final class Join {
      */
     public static <T extends Appendable> T join(T appendable,
                                                 String keyValueSeparator, String entryDelimiter, Map<?, ?> map) {
-        Objects.requireNonNull(appendable);
-        Objects.requireNonNull(keyValueSeparator);
-        Objects.requireNonNull(entryDelimiter);
+        checkNotNull(appendable);
+        checkNotNull(keyValueSeparator);
+        checkNotNull(entryDelimiter);
         Iterator<? extends Map.Entry<?, ?>> entries = map.entrySet().iterator();
         if (entries.hasNext()) {
             try {
@@ -313,5 +314,7 @@ public final class Join {
         private JoinException(IOException cause) {
             super(cause);
         }
+
+        private static final long serialVersionUID = 1L;
     }
 }

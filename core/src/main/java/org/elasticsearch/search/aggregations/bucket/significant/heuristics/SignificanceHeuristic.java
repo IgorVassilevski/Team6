@@ -19,16 +19,13 @@
 
 package org.elasticsearch.search.aggregations.bucket.significant.heuristics;
 
-import org.elasticsearch.common.io.stream.NamedWriteable;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.search.aggregations.InternalAggregation;
-import org.elasticsearch.search.aggregations.bucket.significant.SignificantTerms;
-import org.elasticsearch.search.internal.SearchContext;
 
-/**
- * Heuristic for that {@link SignificantTerms} uses to pick out significant terms.
- */
-public abstract class SignificanceHeuristic implements NamedWriteable, ToXContent {
+import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.search.aggregations.InternalAggregation;
+
+import java.io.IOException;
+
+public abstract class SignificanceHeuristic {
     /**
      * @param subsetFreq   The frequency of the term in the selected sample
      * @param subsetSize   The size of the selected sample (typically number of docs)
@@ -37,6 +34,8 @@ public abstract class SignificanceHeuristic implements NamedWriteable, ToXConten
      * @return a "significance" score
      */
     public abstract double getScore(long subsetFreq, long subsetSize, long supersetFreq, long supersetSize);
+
+    abstract public void writeTo(StreamOutput out) throws IOException;
 
     protected void checkFrequencyValidity(long subsetFreq, long subsetSize, long supersetFreq, long supersetSize, String scoreFunctionName) {
         if (subsetFreq < 0 || subsetSize < 0 || supersetFreq < 0 || supersetSize < 0) {
@@ -51,10 +50,6 @@ public abstract class SignificanceHeuristic implements NamedWriteable, ToXConten
     }
 
     public void initialize(InternalAggregation.ReduceContext reduceContext) {
-
-    }
-
-    public void initialize(SearchContext context) {
 
     }
 }

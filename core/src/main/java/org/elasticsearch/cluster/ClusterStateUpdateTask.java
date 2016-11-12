@@ -28,9 +28,9 @@ import java.util.List;
 /**
  * A task that can update the cluster state.
  */
-public abstract  class ClusterStateUpdateTask implements ClusterStateTaskConfig, ClusterStateTaskExecutor<ClusterStateUpdateTask>, ClusterStateTaskListener {
+abstract public class ClusterStateUpdateTask extends ClusterStateTaskExecutor<ClusterStateUpdateTask> implements ClusterStateTaskConfig, ClusterStateTaskListener {
 
-    private final Priority priority;
+    final private Priority priority;
 
     public ClusterStateUpdateTask() {
         this(Priority.NORMAL);
@@ -41,30 +41,35 @@ public abstract  class ClusterStateUpdateTask implements ClusterStateTaskConfig,
     }
 
     @Override
-    public final BatchResult<ClusterStateUpdateTask> execute(ClusterState currentState, List<ClusterStateUpdateTask> tasks) throws Exception {
+    final public BatchResult<ClusterStateUpdateTask> execute(ClusterState currentState, List<ClusterStateUpdateTask> tasks) throws Exception {
         ClusterState result = execute(currentState);
         return BatchResult.<ClusterStateUpdateTask>builder().successes(tasks).build(result);
-    }
-
-    @Override
-    public String describeTasks(List<ClusterStateUpdateTask> tasks) {
-        return ""; // one of task, source is enough
     }
 
     /**
      * Update the cluster state based on the current state. Return the *same instance* if no state
      * should be changed.
      */
-    public abstract ClusterState execute(ClusterState currentState) throws Exception;
+    abstract public ClusterState execute(ClusterState currentState) throws Exception;
 
     /**
      * A callback called when execute fails.
      */
-    public abstract void onFailure(String source, Exception e);
+    abstract public void onFailure(String source, Throwable t);
+
+    @Override
+    public void onNoLongerMaster(String source) {
+        onFailure(source, new NotMasterException("no longer master. source: [" + source + "]"));
+    }
+
+    @Override
+    public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
+
+    }
 
     /**
      * If the cluster state update task wasn't processed by the provided timeout, call
-     * {@link ClusterStateTaskListener#onFailure(String, Exception)}. May return null to indicate no timeout is needed (default).
+     * {@link #onFailure(String, Throwable)}. May return null to indicate no timeout is needed (default).
      */
     @Nullable
     public TimeValue timeout() {

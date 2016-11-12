@@ -8,7 +8,7 @@
                 test_type:
                   properties:
                     text:
-                      type:     text
+                      type:     string
                       analyzer: whitespace
 
   - do:

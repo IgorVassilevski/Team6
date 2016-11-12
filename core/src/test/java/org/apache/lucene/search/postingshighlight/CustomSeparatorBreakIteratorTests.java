@@ -19,8 +19,9 @@
 
 package org.apache.lucene.search.postingshighlight;
 
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightUtils;
+import org.elasticsearch.search.highlight.HighlightUtils;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.text.BreakIterator;
 import java.text.CharacterIterator;
@@ -30,6 +31,8 @@ import java.util.Locale;
 import static org.hamcrest.CoreMatchers.equalTo;
 
 public class CustomSeparatorBreakIteratorTests extends ESTestCase {
+
+    @Test
     public void testBreakOnCustomSeparator() throws Exception {
         Character separator = randomSeparator();
         BreakIterator bi = new CustomSeparatorBreakIterator(separator);
@@ -66,6 +69,7 @@ public class CustomSeparatorBreakIteratorTests extends ESTestCase {
         assertThat(source.substring(0, bi.next(3)), equalTo("this" + separator + "is" + separator + "the" + separator));
     }
 
+    @Test
     public void testSingleSentences() throws Exception {
         BreakIterator expected = BreakIterator.getSentenceInstance(Locale.ROOT);
         BreakIterator actual = new CustomSeparatorBreakIterator(randomSeparator());
@@ -75,6 +79,7 @@ public class CustomSeparatorBreakIteratorTests extends ESTestCase {
         assertSameBreaks("", expected, actual);
     }
 
+    @Test
     public void testSliceEnd() throws Exception {
         BreakIterator expected = BreakIterator.getSentenceInstance(Locale.ROOT);
         BreakIterator actual = new CustomSeparatorBreakIterator(randomSeparator());
@@ -84,6 +89,7 @@ public class CustomSeparatorBreakIteratorTests extends ESTestCase {
         assertSameBreaks("000", 0, 0, expected, actual);
     }
 
+    @Test
     public void testSliceStart() throws Exception {
         BreakIterator expected = BreakIterator.getSentenceInstance(Locale.ROOT);
         BreakIterator actual = new CustomSeparatorBreakIterator(randomSeparator());
@@ -93,6 +99,7 @@ public class CustomSeparatorBreakIteratorTests extends ESTestCase {
         assertSameBreaks("000", 3, 0, expected, actual);
     }
 
+    @Test
     public void testSliceMiddle() throws Exception {
         BreakIterator expected = BreakIterator.getSentenceInstance(Locale.ROOT);
         BreakIterator actual = new CustomSeparatorBreakIterator(randomSeparator());
@@ -103,6 +110,7 @@ public class CustomSeparatorBreakIteratorTests extends ESTestCase {
     }
 
     /** the current position must be ignored, initial position is always first() */
+    @Test
     public void testFirstPosition() throws Exception {
         BreakIterator expected = BreakIterator.getSentenceInstance(Locale.ROOT);
         BreakIterator actual = new CustomSeparatorBreakIterator(randomSeparator());

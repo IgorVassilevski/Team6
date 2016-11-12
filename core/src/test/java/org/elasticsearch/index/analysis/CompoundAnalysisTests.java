@@ -24,27 +24,29 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
+import org.elasticsearch.common.inject.Injector;
+import org.elasticsearch.common.inject.ModulesBuilder;
 import org.elasticsearch.common.lucene.all.AllEntries;
 import org.elasticsearch.common.lucene.all.AllTokenStream;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.settings.SettingsModule;
 import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.env.EnvironmentModule;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.IndexNameModule;
 import org.elasticsearch.index.analysis.compound.DictionaryCompoundWordTokenFilterFactory;
 import org.elasticsearch.index.analysis.filter1.MyFilterTokenFilterFactory;
-import org.elasticsearch.indices.analysis.AnalysisModule;
-import org.elasticsearch.indices.analysis.AnalysisModule.AnalysisProvider;
-import org.elasticsearch.plugins.AnalysisPlugin;
+import org.elasticsearch.index.settings.IndexSettingsModule;
+import org.elasticsearch.indices.analysis.IndicesAnalysisService;
 import org.elasticsearch.test.ESTestCase;
-import org.elasticsearch.test.IndexSettingsModule;
 import org.hamcrest.MatcherAssert;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
+import static org.elasticsearch.common.settings.Settings.settingsBuilder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.instanceOf;
@@ -52,47 +54,56 @@ import static org.hamcrest.Matchers.instanceOf;
 /**
  */
 public class CompoundAnalysisTests extends ESTestCase {
+
+    @Test
     public void testDefaultsCompoundAnalysis() throws Exception {
+        Index index = new Index("test");
         Settings settings = getJsonSettings();
-        IndexSettings idxSettings = IndexSettingsModule.newIndexSettings("test", settings);
-        AnalysisModule analysisModule = new AnalysisModule(new Environment(settings), singletonList(new AnalysisPlugin() {
-            @Override
-            public Map<String, AnalysisProvider<TokenFilterFactory>> getTokenFilters() {
-                return singletonMap("myfilter", MyFilterTokenFilterFactory::new);
-            }
-        }));
-        AnalysisService analysisService = analysisModule.getAnalysisRegistry().build(idxSettings);
+        Injector parentInjector = new ModulesBuilder().add(new SettingsModule(settings), new EnvironmentModule(new Environment(settings))).createInjector();
+        AnalysisModule analysisModule = new AnalysisModule(settings, parentInjector.getInstance(IndicesAnalysisService.class));
+        analysisModule.addTokenFilter("myfilter", MyFilterTokenFilterFactory.class);
+        Injector injector = new ModulesBuilder().add(
+                new IndexSettingsModule(index, settings),
+                new IndexNameModule(index),
+                analysisModule)
+                .createChildInjector(parentInjector);
+
+        AnalysisService analysisService = injector.getInstance(AnalysisService.class);
 
         TokenFilterFactory filterFactory = analysisService.tokenFilter("dict_dec");
         MatcherAssert.assertThat(filterFactory, instanceOf(DictionaryCompoundWordTokenFilterFactory.class));
     }
 
+    @Test
     public void testDictionaryDecompounder() throws Exception {
         Settings[] settingsArr = new Settings[]{getJsonSettings(), getYamlSettings()};
         for (Settings settings : settingsArr) {
             List<String> terms = analyze(settings, "decompoundingAnalyzer", "donaudampfschiff spargelcremesuppe");
             MatcherAssert.assertThat(terms.size(), equalTo(8));
-            MatcherAssert.assertThat(terms,
-                    hasItems("donau", "dampf", "schiff", "donaudampfschiff", "spargel", "creme", "suppe", "spargelcremesuppe"));
+            MatcherAssert.assertThat(terms, hasItems("donau", "dampf", "schiff", "donaudampfschiff", "spargel", "creme", "suppe", "spargelcremesuppe"));
         }
     }
 
     private List<String> analyze(Settings settings, String analyzerName, String text) throws IOException {
-        IndexSettings idxSettings = IndexSettingsModule.newIndexSettings("test", settings);
-        AnalysisModule analysisModule = new AnalysisModule(new Environment(settings), singletonList(new AnalysisPlugin() {
-            @Override
-            public Map<String, AnalysisProvider<TokenFilterFactory>> getTokenFilters() {
-                return singletonMap("myfilter", MyFilterTokenFilterFactory::new);
-            }
-        }));
-        AnalysisService analysisService = analysisModule.getAnalysisRegistry().build(idxSettings);
+        Index index = new Index("test");
+        Injector parentInjector = new ModulesBuilder().add(new SettingsModule(settings), new EnvironmentModule(new Environment(settings))).createInjector();
+        AnalysisModule analysisModule = new AnalysisModule(settings, parentInjector.getInstance(IndicesAnalysisService.class));
+        analysisModule.addTokenFilter("myfilter", MyFilterTokenFilterFactory.class);
+        Injector injector = new ModulesBuilder().add(
+                new IndexSettingsModule(index, settings),
+                new IndexNameModule(index),
+                analysisModule)
+                .createChildInjector(parentInjector);
+
+        AnalysisService analysisService = injector.getInstance(AnalysisService.class);
 
         Analyzer analyzer = analysisService.analyzer(analyzerName).analyzer();
 
         AllEntries allEntries = new AllEntries();
         allEntries.addText("field1", text, 1.0f);
+        allEntries.reset();
 
-        TokenStream stream = AllTokenStream.allTokenStream("_all", text, 1.0f, analyzer);
+        TokenStream stream = AllTokenStream.allTokenStream("_all", allEntries, analyzer);
         stream.reset();
         CharTermAttribute termAtt = stream.addAttribute(CharTermAttribute.class);
 
@@ -104,21 +115,21 @@ public class CompoundAnalysisTests extends ESTestCase {
         return terms;
     }
 
-    private Settings getJsonSettings() throws IOException {
+    private Settings getJsonSettings() {
         String json = "/org/elasticsearch/index/analysis/test1.json";
-        return Settings.builder()
+        return settingsBuilder()
                 .loadFromStream(json, getClass().getResourceAsStream(json))
                 .put(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT)
-                .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir().toString())
+                .put("path.home", createTempDir().toString())
                 .build();
     }
 
-    private Settings getYamlSettings() throws IOException {
+    private Settings getYamlSettings() {
         String yaml = "/org/elasticsearch/index/analysis/test1.yml";
-        return Settings.builder()
+        return settingsBuilder()
                 .loadFromStream(yaml, getClass().getResourceAsStream(yaml))
                 .put(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT)
-                .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir().toString())
+                .put("path.home", createTempDir().toString())
                 .build();
     }
 }

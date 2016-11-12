@@ -13,7 +13,8 @@ Here is an example on how to create the aggregation request:
 [source,java]
 --------------------------------------------------
 AggregationBuilders
-    .filter("agg", QueryBuilders.termQuery("gender", "male"));
+    .filter("agg")
+    .filter(QueryBuilders.termQuery("gender", "male"));
 --------------------------------------------------
 
 
@@ -32,3 +33,4 @@ import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 Filter agg = sr.getAggregations().get("agg");
 agg.getDocCount(); // Doc count
 --------------------------------------------------
+

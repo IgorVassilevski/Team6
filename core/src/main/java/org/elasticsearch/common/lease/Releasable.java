@@ -21,14 +21,11 @@ package org.elasticsearch.common.lease;
 
 import org.elasticsearch.ElasticsearchException;
 
-import java.io.Closeable;
-
 /**
  * Specialization of {@link AutoCloseable} that may only throw an {@link ElasticsearchException}.
  */
-public interface Releasable extends Closeable {
+public interface Releasable extends AutoCloseable {
 
     @Override
     void close();
-
 }

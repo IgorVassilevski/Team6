@@ -19,10 +19,8 @@
 
 package org.elasticsearch.action.update;
 
+import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.support.ActiveShardCount;
-import org.elasticsearch.action.support.WriteRequestBuilder;
-import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.action.support.single.instance.InstanceShardOperationRequestBuilder;
 import org.elasticsearch.client.ElasticsearchClient;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -34,8 +32,9 @@ import org.elasticsearch.script.Script;
 
 import java.util.Map;
 
-public class UpdateRequestBuilder extends InstanceShardOperationRequestBuilder<UpdateRequest, UpdateResponse, UpdateRequestBuilder>
-        implements WriteRequestBuilder<UpdateRequestBuilder> {
+/**
+ */
+public class UpdateRequestBuilder extends InstanceShardOperationRequestBuilder<UpdateRequest, UpdateResponse, UpdateRequestBuilder> {
 
     public UpdateRequestBuilder(ElasticsearchClient client, UpdateAction action) {
         super(client, action, new UpdateRequest());
@@ -122,22 +121,23 @@ public class UpdateRequestBuilder extends InstanceShardOperationRequestBuilder<U
         return this;
     }
 
+
     /**
-     * Sets the number of shard copies that must be active before proceeding with the write.
-     * See {@link ReplicationRequest#waitForActiveShards(ActiveShardCount)} for details.
+     * Should a refresh be executed post this update operation causing the operation to
+     * be searchable. Note, heavy indexing should not set this to <tt>true</tt>. Defaults
+     * to <tt>false</tt>.
      */
-    public UpdateRequestBuilder setWaitForActiveShards(ActiveShardCount waitForActiveShards) {
-        request.waitForActiveShards(waitForActiveShards);
+    public UpdateRequestBuilder setRefresh(boolean refresh) {
+        request.refresh(refresh);
         return this;
     }
 
     /**
-     * A shortcut for {@link #setWaitForActiveShards(ActiveShardCount)} where the numerical
-     * shard count is passed in, instead of having to first call {@link ActiveShardCount#from(int)}
-     * to get the ActiveShardCount.
+     * Sets the consistency level of write. Defaults to {@link org.elasticsearch.action.WriteConsistencyLevel#DEFAULT}
      */
-    public UpdateRequestBuilder setWaitForActiveShards(final int waitForActiveShards) {
-        return setWaitForActiveShards(ActiveShardCount.from(waitForActiveShards));
+    public UpdateRequestBuilder setConsistencyLevel(WriteConsistencyLevel consistencyLevel) {
+        request.consistencyLevel(consistencyLevel);
+        return this;
     }
 
     /**

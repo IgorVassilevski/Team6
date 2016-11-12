@@ -10,21 +10,15 @@ body. Here is an example:
 
 [source,js]
 --------------------------------------------------
-PUT /twitter/tweet/1?refresh
-{
-    "user": "kimchy"
-}
+$ curl -XGET 'http://localhost:9200/twitter/tweet/_count?q=user:kimchy'
 
-GET /twitter/tweet/_count?q=user:kimchy
-
-GET /twitter/tweet/_count
+$ curl -XGET 'http://localhost:9200/twitter/tweet/_count' -d '
 {
     "query" : {
         "term" : { "user" : "kimchy" }
     }
-}
+}'
 --------------------------------------------------
-//CONSOLE
 
 NOTE: The query being sent in the body must be nested in a `query` key, same as
 the <<search-search,search api>> works
@@ -43,7 +37,6 @@ tweets from the twitter index for a certain user. The result is:
     }
 }
 --------------------------------------------------
-// TESTRESPONSE
 
 The query is optional, and when not provided, it will use `match_all` to
 count all the docs.

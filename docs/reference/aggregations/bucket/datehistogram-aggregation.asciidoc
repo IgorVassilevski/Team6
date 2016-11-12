@@ -26,9 +26,8 @@ Requesting bucket intervals of a month.
 
 Available expressions for interval: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`
 
-Time values can also be specified via abbreviations supported by <<time-units,time units>> parsing.
-Note that fractional time values are not supported, but you can address this by shifting to another
-time unit (e.g., `1.5h` could instead be specified as `90m`).
+
+Fractional values are allowed for seconds, minutes, hours, days and weeks. For example 1.5 hours:
 
 [source,js]
 --------------------------------------------------
@@ -37,12 +36,14 @@ time unit (e.g., `1.5h` could instead be specified as `90m`).
         "articles_over_time" : {
             "date_histogram" : {
                 "field" : "date",
-                "interval" : "90m"
+                "interval" : "1.5h"
             }
         }
     }
 }
 --------------------------------------------------
+
+See <<time-units>> for accepted abbreviations.
 
 ==== Keys
 

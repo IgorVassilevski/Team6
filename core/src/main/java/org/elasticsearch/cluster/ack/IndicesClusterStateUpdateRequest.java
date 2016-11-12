@@ -18,19 +18,17 @@
  */
 package org.elasticsearch.cluster.ack;
 
-import org.elasticsearch.index.Index;
-
 /**
  * Base cluster state update request that allows to execute update against multiple indices
  */
 public abstract class IndicesClusterStateUpdateRequest<T extends IndicesClusterStateUpdateRequest<T>> extends ClusterStateUpdateRequest<T> {
 
-    private Index[] indices;
+    private String[] indices;
 
     /**
      * Returns the indices the operation needs to be executed on
      */
-    public Index[] indices() {
+    public String[] indices() {
         return indices;
     }
 
@@ -38,7 +36,7 @@ public abstract class IndicesClusterStateUpdateRequest<T extends IndicesClusterS
      * Sets the indices the operation needs to be executed on
      */
     @SuppressWarnings("unchecked")
-    public T indices(Index[] indices) {
+    public T indices(String[] indices) {
         this.indices = indices;
         return (T)this;
     }

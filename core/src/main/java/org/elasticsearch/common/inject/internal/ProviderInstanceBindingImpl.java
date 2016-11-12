@@ -16,26 +16,20 @@ limitations under the License.
 
 package org.elasticsearch.common.inject.internal;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.Injector;
 import org.elasticsearch.common.inject.Key;
 import org.elasticsearch.common.inject.Provider;
-import org.elasticsearch.common.inject.spi.BindingTargetVisitor;
-import org.elasticsearch.common.inject.spi.Dependency;
-import org.elasticsearch.common.inject.spi.HasDependencies;
-import org.elasticsearch.common.inject.spi.InjectionPoint;
-import org.elasticsearch.common.inject.spi.ProviderInstanceBinding;
+import org.elasticsearch.common.inject.spi.*;
 
-import java.util.HashSet;
 import java.util.Set;
-
-import static java.util.Collections.unmodifiableSet;
 
 public final class ProviderInstanceBindingImpl<T> extends BindingImpl<T>
         implements ProviderInstanceBinding<T> {
 
     final Provider<? extends T> providerInstance;
-    final Set<InjectionPoint> injectionPoints;
+    final ImmutableSet<InjectionPoint> injectionPoints;
 
     public ProviderInstanceBindingImpl(Injector injector, Key<T> key,
                                        Object source, InternalFactory<? extends T> internalFactory, Scoping scoping,
@@ -43,13 +37,13 @@ public final class ProviderInstanceBindingImpl<T> extends BindingImpl<T>
                                        Set<InjectionPoint> injectionPoints) {
         super(injector, key, source, internalFactory, scoping);
         this.providerInstance = providerInstance;
-        this.injectionPoints = injectionPoints;
+        this.injectionPoints = ImmutableSet.copyOf(injectionPoints);
     }
 
     public ProviderInstanceBindingImpl(Object source, Key<T> key, Scoping scoping,
                                        Set<InjectionPoint> injectionPoints, Provider<? extends T> providerInstance) {
         super(source, key, scoping);
-        this.injectionPoints = injectionPoints;
+        this.injectionPoints = ImmutableSet.copyOf(injectionPoints);
         this.providerInstance = providerInstance;
     }
 
@@ -71,7 +65,7 @@ public final class ProviderInstanceBindingImpl<T> extends BindingImpl<T>
     @Override
     public Set<Dependency<?>> getDependencies() {
         return providerInstance instanceof HasDependencies
-                ? unmodifiableSet(new HashSet<>((((HasDependencies) providerInstance).getDependencies())))
+                ? ImmutableSet.copyOf(((HasDependencies) providerInstance).getDependencies())
                 : Dependency.forInjectionPoints(injectionPoints);
     }
 

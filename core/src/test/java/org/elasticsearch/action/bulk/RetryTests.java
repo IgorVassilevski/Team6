@@ -25,17 +25,17 @@ import org.elasticsearch.action.support.PlainActionFuture;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.EsRejectedExecutionException;
+import org.elasticsearch.rest.NoOpClient;
 import org.elasticsearch.test.ESTestCase;
-import org.elasticsearch.test.client.NoOpClient;
 import org.junit.After;
 import org.junit.Before;
+
+import static org.apache.lucene.util.TestUtil.randomSimpleString;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.*;
 
 public class RetryTests extends ESTestCase {
     // no need to wait fof a long time in tests
@@ -65,6 +65,11 @@ public class RetryTests extends ESTestCase {
         request.add(new UpdateRequest("shop", "products", "3"));
         request.add(new UpdateRequest("shop", "products", "4"));
         request.add(new UpdateRequest("shop", "products", "5"));
+
+        // Add a dummy header and context so we can assert that we kept it
+        request.putHeader(randomSimpleString(random()), randomSimpleString(random()));
+        request.putInContext(new Object(), new Object());
+
         return request;
     }
 
@@ -149,7 +154,7 @@ public class RetryTests extends ESTestCase {
         }
 
         @Override
-        public void onFailure(Exception e) {
+        public void onFailure(Throwable e) {
             this.lastFailure = e;
             latch.countDown();
         }
@@ -179,6 +184,7 @@ public class RetryTests extends ESTestCase {
 
     private static class MockBulkClient extends NoOpClient {
         private int numberOfCallsToFail;
+        private BulkRequest firstRequest;
 
         private MockBulkClient(String testName, int numberOfCallsToFail) {
             super(testName);
@@ -194,6 +200,12 @@ public class RetryTests extends ESTestCase {
 
         @Override
         public void bulk(BulkRequest request, ActionListener<BulkResponse> listener) {
+            if (firstRequest == null) {
+                firstRequest = request;
+            } else {
+                assertEquals(firstRequest.getHeaders(), request.getHeaders());
+                assertEquals(firstRequest.getContext(), request.getContext());
+            }
             // do everything synchronously, that's fine for a test
             boolean shouldFail = numberOfCallsToFail > 0;
             numberOfCallsToFail--;

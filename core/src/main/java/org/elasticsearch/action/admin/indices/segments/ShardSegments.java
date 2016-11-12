@@ -31,6 +31,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import static org.elasticsearch.cluster.routing.ShardRouting.readShardRoutingEntry;
+
 public class ShardSegments implements Streamable, Iterable<Segment> {
 
     private ShardRouting shardRouting;
@@ -86,7 +88,7 @@ public class ShardSegments implements Streamable, Iterable<Segment> {
 
     @Override
     public void readFrom(StreamInput in) throws IOException {
-        shardRouting = new ShardRouting(in);
+        shardRouting = readShardRoutingEntry(in);
         int size = in.readVInt();
         if (size == 0) {
             segments = Collections.emptyList();

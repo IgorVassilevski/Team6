@@ -19,50 +19,42 @@
 
 package org.elasticsearch.smoketest;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.util.LuceneTestCase;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.ESLoggerFactory;
-import org.elasticsearch.common.network.NetworkModule;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.common.transport.TransportAddress;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.transport.MockTcpTransportPlugin;
-import org.elasticsearch.transport.Netty3Plugin;
-import org.elasticsearch.transport.Netty4Plugin;
-import org.elasticsearch.transport.client.PreBuiltTransportClient;
+import org.elasticsearch.node.internal.InternalSettingsPreparer;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 
-import java.io.IOException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.file.Path;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.carrotsearch.randomizedtesting.RandomizedTest.randomAsciiOfLength;
-import static com.carrotsearch.randomizedtesting.RandomizedTest.randomIntBetween;
 import static org.hamcrest.Matchers.notNullValue;
 
 /**
- * An abstract base class to run integration tests against an Elasticsearch cluster running outside of the test process.
+ * {@link ESSmokeClientTestCase} is an abstract base class to run integration
+ * tests against an external Elasticsearch Cluster.
  * <p>
- * You can define a list of transport addresses from where you can reach your cluster by setting "tests.cluster" system
- * property. It defaults to "localhost:9300". If you run this from `gradle integTest` then it will start the clsuter for
- * you and set up the property.
+ * You can define a list of transport addresses from where you can reach your cluster
+ * by setting "tests.cluster" system property. It defaults to "localhost:9300".
  * <p>
- * If you want to debug this module from your IDE, then start an external cluster by yourself, maybe with `gradle run`,
- * then run JUnit. If you changed the default port, set "-Dtests.cluster=localhost:PORT" when running your test.
+ * All tests can be run from maven using mvn install as maven will start an external cluster first.
+ * <p>
+ * If you want to debug this module from your IDE, then start an external cluster by yourself
+ * then run JUnit. If you changed the default port, set "tests.cluster=localhost:PORT" when running
+ * your test.
  */
 @LuceneTestCase.SuppressSysoutChecks(bugUrl = "we log a lot on purpose")
 public abstract class ESSmokeClientTestCase extends LuceneTestCase {
@@ -72,7 +64,12 @@ public abstract class ESSmokeClientTestCase extends LuceneTestCase {
      */
     public static final String TESTS_CLUSTER = "tests.cluster";
 
-    protected static final Logger logger = ESLoggerFactory.getLogger(ESSmokeClientTestCase.class.getName());
+    /**
+     * Defaults to localhost:9300
+     */
+    public static final String TESTS_CLUSTER_DEFAULT = "localhost:9300";
+
+    protected static final ESLogger logger = ESLoggerFactory.getLogger(ESSmokeClientTestCase.class.getName());
 
     private static final AtomicInteger counter = new AtomicInteger();
     private static Client client;
@@ -80,27 +77,15 @@ public abstract class ESSmokeClientTestCase extends LuceneTestCase {
     protected String index;
 
     private static Client startClient(Path tempDir, TransportAddress... transportAddresses) {
-        Settings.Builder builder = Settings.builder()
-            .put("node.name", "qa_smoke_client_" + counter.getAndIncrement())
-            .put("client.transport.ignore_cluster_name", true)
-            .put(Environment.PATH_HOME_SETTING.getKey(), tempDir);
-        final Collection<Class<? extends Plugin>> plugins;
-        switch (randomIntBetween(0, 2)) {
-            case 0:
-                builder.put(NetworkModule.TRANSPORT_TYPE_KEY, MockTcpTransportPlugin.MOCK_TCP_TRANSPORT_NAME);
-                plugins = Collections.singleton(MockTcpTransportPlugin.class);
-                break;
-            case 1:
-                plugins = Collections.emptyList();
-                builder.put(NetworkModule.TRANSPORT_TYPE_KEY, Netty3Plugin.NETTY_TRANSPORT_NAME);
-                break;
-            case 2:
-                plugins = Collections.emptyList();
-                break;
-            default:
-                throw new AssertionError();
-        }
-        TransportClient client = new PreBuiltTransportClient(builder.build(), plugins).addTransportAddresses(transportAddresses);
+        Settings clientSettings = Settings.settingsBuilder()
+                .put("name", "qa_smoke_client_" + counter.getAndIncrement())
+                .put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true) // prevents any settings to be replaced by system properties.
+                .put("client.transport.ignore_cluster_name", true)
+                .put("path.home", tempDir)
+                .put("node.mode", "network").build(); // we require network here!
+
+        TransportClient.Builder transportClientBuilder = TransportClient.builder().settings(clientSettings);
+        TransportClient client = transportClientBuilder.build().addTransportAddresses(transportAddresses);
 
         logger.info("--> Elasticsearch Java TransportClient started");
 
@@ -118,14 +103,20 @@ public abstract class ESSmokeClientTestCase extends LuceneTestCase {
         return client;
     }
 
-    private static Client startClient() throws IOException {
+    private static Client startClient() throws UnknownHostException {
         String[] stringAddresses = clusterAddresses.split(",");
         TransportAddress[] transportAddresses = new TransportAddress[stringAddresses.length];
         int i = 0;
         for (String stringAddress : stringAddresses) {
-            URL url = new URL("http://" + stringAddress);
-            InetAddress inetAddress = InetAddress.getByName(url.getHost());
-            transportAddresses[i++] = new InetSocketTransportAddress(new InetSocketAddress(inetAddress, url.getPort()));
+            String[] split = stringAddress.split(":");
+            if (split.length < 2) {
+                throw new IllegalArgumentException("address [" + clusterAddresses + "] not valid");
+            }
+            try {
+                transportAddresses[i++] = new InetSocketTransportAddress(InetAddress.getByName(split[0]), Integer.valueOf(split[1]));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("port is not valid, expected number but was [" + split[1] + "]");
+            }
         }
         return startClient(createTempDir(), transportAddresses);
     }
@@ -134,7 +125,7 @@ public abstract class ESSmokeClientTestCase extends LuceneTestCase {
         if (client == null) {
             try {
                 client = startClient();
-            } catch (IOException e) {
+            } catch (UnknownHostException e) {
                 logger.error("can not start the client", e);
             }
             assertThat(client, notNullValue());
@@ -143,10 +134,11 @@ public abstract class ESSmokeClientTestCase extends LuceneTestCase {
     }
 
     @BeforeClass
-    public static void initializeSettings() {
+    public static void initializeSettings() throws UnknownHostException {
         clusterAddresses = System.getProperty(TESTS_CLUSTER);
         if (clusterAddresses == null || clusterAddresses.isEmpty()) {
-            fail("Must specify " + TESTS_CLUSTER + " for smoke client test");
+            clusterAddresses = TESTS_CLUSTER_DEFAULT;
+            logger.info("[{}] not set. Falling back to [{}]", TESTS_CLUSTER, TESTS_CLUSTER_DEFAULT);
         }
     }
 

@@ -19,16 +19,11 @@
 
 package org.elasticsearch.search.aggregations.metrics.percentiles;
 
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
-
-import java.io.IOException;
 
 /**
  * An enum representing the methods for calculating percentiles
  */
-public enum PercentilesMethod implements Writeable {
+public enum PercentilesMethod {
     /**
      * The TDigest method for calculating percentiles
      */
@@ -49,19 +44,6 @@ public enum PercentilesMethod implements Writeable {
      */
     public String getName() {
         return name;
-    }
-
-    public static PercentilesMethod readFromStream(StreamInput in) throws IOException {
-        int ordinal = in.readVInt();
-        if (ordinal < 0 || ordinal >= values().length) {
-            throw new IOException("Unknown PercentilesMethod ordinal [" + ordinal + "]");
-        }
-        return values()[ordinal];
-    }
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeVInt(ordinal());
     }
 
     /**

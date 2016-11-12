@@ -21,16 +21,16 @@ package org.elasticsearch.rest.action.cat;
 
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
+import org.elasticsearch.cluster.health.ClusterIndexHealth;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.action.support.IndicesOptions;
-import org.elasticsearch.client.node.NodeClient;
+import org.elasticsearch.client.Client;
 import org.elasticsearch.client.Requests;
 import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.health.ClusterIndexHealth;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.metadata.MetaData;
@@ -38,13 +38,10 @@ import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.Table;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.Index;
-import org.elasticsearch.rest.RestChannel;
-import org.elasticsearch.rest.RestController;
-import org.elasticsearch.rest.RestRequest;
-import org.elasticsearch.rest.RestResponse;
-import org.elasticsearch.rest.action.RestActionListener;
-import org.elasticsearch.rest.action.RestResponseListener;
+import org.elasticsearch.rest.*;
+import org.elasticsearch.rest.action.support.RestActionListener;
+import org.elasticsearch.rest.action.support.RestResponseListener;
+import org.elasticsearch.rest.action.support.RestTable;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 
@@ -57,8 +54,8 @@ public class RestIndicesAction extends AbstractCatAction {
     private final IndexNameExpressionResolver indexNameExpressionResolver;
 
     @Inject
-    public RestIndicesAction(Settings settings, RestController controller, IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings);
+    public RestIndicesAction(Settings settings, RestController controller, Client client, IndexNameExpressionResolver indexNameExpressionResolver) {
+        super(settings, controller, client);
         this.indexNameExpressionResolver = indexNameExpressionResolver;
         controller.registerHandler(GET, "/_cat/indices", this);
         controller.registerHandler(GET, "/_cat/indices/{index}", this);
@@ -71,7 +68,7 @@ public class RestIndicesAction extends AbstractCatAction {
     }
 
     @Override
-    public void doRequest(final RestRequest request, final RestChannel channel, final NodeClient client) {
+    public void doRequest(final RestRequest request, final RestChannel channel, final Client client) {
         final String[] indices = Strings.splitStringByCommaToArray(request.param("index"));
         final ClusterStateRequest clusterStateRequest = new ClusterStateRequest();
         clusterStateRequest.clear().indices(indices).metaData(true);
@@ -84,7 +81,7 @@ public class RestIndicesAction extends AbstractCatAction {
             @Override
             public void processResponse(final ClusterStateResponse clusterStateResponse) {
                 final ClusterState state = clusterStateResponse.getState();
-                final Index[] concreteIndices = indexNameExpressionResolver.concreteIndices(state, strictExpandIndicesOptions, indices);
+                final String[] concreteIndices = indexNameExpressionResolver.concreteIndices(state, strictExpandIndicesOptions, indices);
                 // concreteIndices should contain exactly the indices in state.metaData() that were selected by clusterStateRequest using
                 // IndicesOptions.strictExpand(). We select the indices again here so that they can be displayed in the resulting table
                 // in the requesting order.
@@ -129,7 +126,6 @@ public class RestIndicesAction extends AbstractCatAction {
         table.addCell("health", "alias:h;desc:current health status");
         table.addCell("status", "alias:s;desc:open/close status");
         table.addCell("index", "alias:i,idx;desc:index name");
-        table.addCell("uuid", "alias:id,uuid;desc:index uuid");
         table.addCell("pri", "alias:p,shards.primary,shardsPrimary;text-align:right;desc:number of primary shards");
         table.addCell("rep", "alias:r,shards.replica,shardsReplica;text-align:right;desc:number of replica shards");
         table.addCell("docs.count", "alias:dc,docsCount;text-align:right;desc:available docs");
@@ -237,6 +233,21 @@ public class RestIndicesAction extends AbstractCatAction {
         table.addCell("merges.total_time", "sibling:pri;alias:mtt,mergesTotalTime;default:false;text-align:right;desc:time spent in merges");
         table.addCell("pri.merges.total_time", "default:false;text-align:right;desc:time spent in merges");
 
+        table.addCell("percolate.current", "sibling:pri;alias:pc,percolateCurrent;default:false;text-align:right;desc:number of current percolations");
+        table.addCell("pri.percolate.current", "default:false;text-align:right;desc:number of current percolations");
+
+        table.addCell("percolate.memory_size", "sibling:pri;alias:pm,percolateMemory;default:false;text-align:right;desc:memory used by percolations");
+        table.addCell("pri.percolate.memory_size", "default:false;text-align:right;desc:memory used by percolations");
+
+        table.addCell("percolate.queries", "sibling:pri;alias:pq,percolateQueries;default:false;text-align:right;desc:number of registered percolation queries");
+        table.addCell("pri.percolate.queries", "default:false;text-align:right;desc:number of registered percolation queries");
+
+        table.addCell("percolate.time", "sibling:pri;alias:pti,percolateTime;default:false;text-align:right;desc:time spent percolating");
+        table.addCell("pri.percolate.time", "default:false;text-align:right;desc:time spent percolating");
+
+        table.addCell("percolate.total", "sibling:pri;alias:pto,percolateTotal;default:false;text-align:right;desc:total percolations");
+        table.addCell("pri.percolate.total", "default:false;text-align:right;desc:total percolations");
+
         table.addCell("refresh.total", "sibling:pri;alias:rto,refreshTotal;default:false;text-align:right;desc:total refreshes");
         table.addCell("pri.refresh.total", "default:false;text-align:right;desc:total refreshes");
 
@@ -282,6 +293,9 @@ public class RestIndicesAction extends AbstractCatAction {
         table.addCell("segments.index_writer_memory", "sibling:pri;alias:siwm,segmentsIndexWriterMemory;default:false;text-align:right;desc:memory used by index writer");
         table.addCell("pri.segments.index_writer_memory", "default:false;text-align:right;desc:memory used by index writer");
 
+        table.addCell("segments.index_writer_max_memory", "sibling:pri;alias:siwmx,segmentsIndexWriterMaxMemory;default:false;text-align:right;desc:maximum memory index writer may use before it must write buffered documents to a new segment");
+        table.addCell("pri.segments.index_writer_max_memory", "default:false;text-align:right;desc:maximum memory index writer may use before it must write buffered documents to a new segment");
+
         table.addCell("segments.version_map_memory", "sibling:pri;alias:svmm,segmentsVersionMapMemory;default:false;text-align:right;desc:memory used by version map");
         table.addCell("pri.segments.version_map_memory", "default:false;text-align:right;desc:memory used by version map");
 
@@ -313,22 +327,19 @@ public class RestIndicesAction extends AbstractCatAction {
         return table;
     }
 
-    // package private for testing
-    Table buildTable(RestRequest request, Index[] indices, ClusterHealthResponse health, IndicesStatsResponse stats, MetaData indexMetaDatas) {
+    private Table buildTable(RestRequest request, String[] indices, ClusterHealthResponse health, IndicesStatsResponse stats, MetaData indexMetaDatas) {
         Table table = getTableWithHeader(request);
 
-        for (final Index index : indices) {
-            final String indexName = index.getName();
-            ClusterIndexHealth indexHealth = health.getIndices().get(indexName);
-            IndexStats indexStats = stats.getIndices().get(indexName);
-            IndexMetaData indexMetaData = indexMetaDatas.getIndices().get(indexName);
+        for (String index : indices) {
+            ClusterIndexHealth indexHealth = health.getIndices().get(index);
+            IndexStats indexStats = stats.getIndices().get(index);
+            IndexMetaData indexMetaData = indexMetaDatas.getIndices().get(index);
             IndexMetaData.State state = indexMetaData.getState();
 
             table.startRow();
             table.addCell(state == IndexMetaData.State.OPEN ? (indexHealth == null ? "red*" : indexHealth.getStatus().toString().toLowerCase(Locale.ROOT)) : null);
             table.addCell(state.toString().toLowerCase(Locale.ROOT));
-            table.addCell(indexName);
-            table.addCell(index.getUUID());
+            table.addCell(index);
             table.addCell(indexHealth == null ? null : indexHealth.getNumberOfShards());
             table.addCell(indexHealth == null ? null : indexHealth.getNumberOfReplicas());
             table.addCell(indexStats == null ? null : indexStats.getPrimaries().getDocs().getCount());
@@ -436,6 +447,21 @@ public class RestIndicesAction extends AbstractCatAction {
             table.addCell(indexStats == null ? null : indexStats.getTotal().getMerge().getTotalTime());
             table.addCell(indexStats == null ? null : indexStats.getPrimaries().getMerge().getTotalTime());
 
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getPercolate().getCurrent());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getPercolate().getCurrent());
+
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getPercolate().getMemorySize());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getPercolate().getMemorySize());
+
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getPercolate().getNumQueries());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getPercolate().getNumQueries());
+
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getPercolate().getTime());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getPercolate().getTime());
+
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getPercolate().getCount());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getPercolate().getCount());
+
             table.addCell(indexStats == null ? null : indexStats.getTotal().getRefresh().getTotal());
             table.addCell(indexStats == null ? null : indexStats.getPrimaries().getRefresh().getTotal());
 
@@ -481,6 +507,9 @@ public class RestIndicesAction extends AbstractCatAction {
             table.addCell(indexStats == null ? null : indexStats.getTotal().getSegments().getIndexWriterMemory());
             table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSegments().getIndexWriterMemory());
 
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getSegments().getIndexWriterMaxMemory());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSegments().getIndexWriterMaxMemory());
+
             table.addCell(indexStats == null ? null : indexStats.getTotal().getSegments().getVersionMapMemory());
             table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSegments().getVersionMapMemory());
 
@@ -496,14 +525,14 @@ public class RestIndicesAction extends AbstractCatAction {
             table.addCell(indexStats == null ? null : indexStats.getTotal().getWarmer().totalTime());
             table.addCell(indexStats == null ? null : indexStats.getPrimaries().getWarmer().totalTime());
 
-            table.addCell(indexStats == null ? null : indexStats.getTotal().getSearch().getTotal().getSuggestCurrent());
-            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSearch().getTotal().getSuggestCurrent());
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getSuggest().getCurrent());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSuggest().getCurrent());
 
-            table.addCell(indexStats == null ? null : indexStats.getTotal().getSearch().getTotal().getSuggestTime());
-            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSearch().getTotal().getSuggestTime());
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getSuggest().getTime());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSuggest().getTime());
 
-            table.addCell(indexStats == null ? null : indexStats.getTotal().getSearch().getTotal().getSuggestCount());
-            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSearch().getTotal().getSuggestCount());
+            table.addCell(indexStats == null ? null : indexStats.getTotal().getSuggest().getCount());
+            table.addCell(indexStats == null ? null : indexStats.getPrimaries().getSuggest().getCount());
 
             table.addCell(indexStats == null ? null : indexStats.getTotal().getTotalMemory());
             table.addCell(indexStats == null ? null : indexStats.getPrimaries().getTotalMemory());

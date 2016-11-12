@@ -19,45 +19,55 @@
 
 package org.elasticsearch.common.transport;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.Loggers;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.lang.reflect.Constructor;
 
-import static java.util.Collections.unmodifiableMap;
+import static org.elasticsearch.common.collect.MapBuilder.newMapBuilder;
 
 /**
- * A global registry of all supported types of {@link TransportAddress}s. This registry is not open for modification by plugins.
+ * A global registry of all different types of {@link org.elasticsearch.common.transport.TransportAddress} allowing
+ * to perform serialization of them.
+ * <p>
+ * By default, adds {@link org.elasticsearch.common.transport.InetSocketTransportAddress}.
+ *
+ *
  */
 public abstract class TransportAddressSerializers {
-    private static final Map<Short, Writeable.Reader<TransportAddress>> ADDRESS_REGISTRY;
+
+    private static final ESLogger logger = Loggers.getLogger(TransportAddressSerializers.class);
+
+    private static ImmutableMap<Short, TransportAddress> ADDRESS_REGISTRY = ImmutableMap.of();
 
     static {
-        Map<Short, Writeable.Reader<TransportAddress>> registry = new HashMap<>();
-        addAddressType(registry, InetSocketTransportAddress.TYPE_ID, InetSocketTransportAddress::new);
-        addAddressType(registry, LocalTransportAddress.TYPE_ID, LocalTransportAddress::new);
-        ADDRESS_REGISTRY = unmodifiableMap(registry);
+        try {
+            addAddressType(DummyTransportAddress.INSTANCE);
+            addAddressType(InetSocketTransportAddress.PROTO);
+            addAddressType(LocalTransportAddress.PROTO);
+        } catch (Exception e) {
+            logger.warn("Failed to add InetSocketTransportAddress", e);
+        }
     }
 
-    private static void addAddressType(Map<Short, Writeable.Reader<TransportAddress>> registry, short uniqueAddressTypeId,
-            Writeable.Reader<TransportAddress> address) {
-        if (registry.containsKey(uniqueAddressTypeId)) {
-            throw new IllegalStateException("Address [" + uniqueAddressTypeId + "] already bound");
+    public static synchronized void addAddressType(TransportAddress address) throws Exception {
+        if (ADDRESS_REGISTRY.containsKey(address.uniqueAddressTypeId())) {
+            throw new IllegalStateException("Address [" + address.uniqueAddressTypeId() + "] already bound");
         }
-        registry.put(uniqueAddressTypeId, address);
+        ADDRESS_REGISTRY = newMapBuilder(ADDRESS_REGISTRY).put(address.uniqueAddressTypeId(), address).immutableMap();
     }
 
     public static TransportAddress addressFromStream(StreamInput input) throws IOException {
-        // TODO why don't we just use named writeables here?
         short addressUniqueId = input.readShort();
-        Writeable.Reader<TransportAddress> addressType = ADDRESS_REGISTRY.get(addressUniqueId);
+        TransportAddress addressType = ADDRESS_REGISTRY.get(addressUniqueId);
         if (addressType == null) {
             throw new IOException("No transport address mapped to [" + addressUniqueId + "]");
         }
-        return addressType.read(input);
+        return addressType.readFrom(input);
     }
 
     public static void addressToStream(StreamOutput out, TransportAddress address) throws IOException {

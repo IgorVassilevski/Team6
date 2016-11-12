@@ -16,24 +16,18 @@
 
 package org.elasticsearch.common.inject.internal;
 
-import org.elasticsearch.common.inject.Binder;
-import org.elasticsearch.common.inject.ConfigurationException;
-import org.elasticsearch.common.inject.Key;
-import org.elasticsearch.common.inject.Provider;
-import org.elasticsearch.common.inject.TypeLiteral;
+import com.google.common.collect.ImmutableSet;
+import org.elasticsearch.common.inject.*;
 import org.elasticsearch.common.inject.binder.AnnotatedBindingBuilder;
 import org.elasticsearch.common.inject.spi.Element;
 import org.elasticsearch.common.inject.spi.InjectionPoint;
 import org.elasticsearch.common.inject.spi.Message;
 
 import java.lang.annotation.Annotation;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
-import static java.util.Collections.emptySet;
-import static java.util.Collections.unmodifiableSet;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Bind a non-constant key.
@@ -71,7 +65,7 @@ public class BindingBuilder<T> extends AbstractBindingBuilder<T>
 
     @Override
     public BindingBuilder<T> to(Key<? extends T> linkedKey) {
-        Objects.requireNonNull(linkedKey, "linkedKey");
+        checkNotNull(linkedKey, "linkedKey");
         checkNotTargetted();
         BindingImpl<T> base = getBinding();
         setBinding(new LinkedBindingImpl<>(
@@ -92,11 +86,11 @@ public class BindingBuilder<T> extends AbstractBindingBuilder<T>
                 for (Message message : e.getErrorMessages()) {
                     binder.addError(message);
                 }
-                injectionPoints = unmodifiableSet(new HashSet<InjectionPoint>(e.getPartialValue()));
+                injectionPoints = e.getPartialValue();
             }
         } else {
             binder.addError(BINDING_TO_NULL);
-            injectionPoints = emptySet();
+            injectionPoints = ImmutableSet.of();
         }
 
         BindingImpl<T> base = getBinding();
@@ -106,7 +100,7 @@ public class BindingBuilder<T> extends AbstractBindingBuilder<T>
 
     @Override
     public BindingBuilder<T> toProvider(Provider<? extends T> provider) {
-        Objects.requireNonNull(provider, "provider");
+        checkNotNull(provider, "provider");
         checkNotTargetted();
 
         // lookup the injection points, adding any errors to the binder's errors list
@@ -117,7 +111,7 @@ public class BindingBuilder<T> extends AbstractBindingBuilder<T>
             for (Message message : e.getErrorMessages()) {
                 binder.addError(message);
             }
-            injectionPoints = unmodifiableSet(new HashSet<InjectionPoint>(e.getPartialValue()));
+            injectionPoints = e.getPartialValue();
         }
 
         BindingImpl<T> base = getBinding();
@@ -133,7 +127,7 @@ public class BindingBuilder<T> extends AbstractBindingBuilder<T>
 
     @Override
     public BindingBuilder<T> toProvider(Key<? extends Provider<? extends T>> providerKey) {
-        Objects.requireNonNull(providerKey, "providerKey");
+        checkNotNull(providerKey, "providerKey");
         checkNotTargetted();
 
         BindingImpl<T> base = getBinding();

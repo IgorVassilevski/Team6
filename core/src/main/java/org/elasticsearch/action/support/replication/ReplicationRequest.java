@@ -22,9 +22,8 @@ package org.elasticsearch.action.support.replication;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.IndicesRequest;
-import org.elasticsearch.action.admin.indices.refresh.TransportShardRefreshAction;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.support.ActiveShardCount;
+import org.elasticsearch.action.WriteConsistencyLevel;
+import org.elasticsearch.action.support.ChildTaskActionRequest;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -40,11 +39,9 @@ import java.util.concurrent.TimeUnit;
 import static org.elasticsearch.action.ValidateActions.addValidationError;
 
 /**
- * Requests that are run on a particular replica, first on the primary and then on the replicas like {@link IndexRequest} or
- * {@link TransportShardRefreshAction}.
+ *
  */
-public abstract class ReplicationRequest<Request extends ReplicationRequest<Request>> extends ActionRequest<Request>
-        implements IndicesRequest {
+public class ReplicationRequest<T extends ReplicationRequest<T>> extends ChildTaskActionRequest<T> implements IndicesRequest {
 
     public static final TimeValue DEFAULT_TIMEOUT = new TimeValue(1, TimeUnit.MINUTES);
 
@@ -55,43 +52,74 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
      */
     protected ShardId shardId;
 
-    long primaryTerm;
-
     protected TimeValue timeout = DEFAULT_TIMEOUT;
     protected String index;
 
-    /**
-     * The number of shard copies that must be active before proceeding with the replication action.
-     */
-    protected ActiveShardCount waitForActiveShards = ActiveShardCount.DEFAULT;
-
-    private long routedBasedOnClusterVersion = 0;
+    private WriteConsistencyLevel consistencyLevel = WriteConsistencyLevel.DEFAULT;
+    private volatile boolean canHaveDuplicates = false;
 
     public ReplicationRequest() {
 
     }
 
     /**
+     * Creates a new request that inherits headers and context from the request provided as argument.
+     */
+    public ReplicationRequest(ActionRequest request) {
+        super(request);
+    }
+
+    /**
      * Creates a new request with resolved shard id
      */
-    public ReplicationRequest(ShardId shardId) {
-        this.index = shardId.getIndexName();
+    public ReplicationRequest(ActionRequest request, ShardId shardId) {
+        super(request);
+        this.index = shardId.getIndex();
         this.shardId = shardId;
+    }
+
+    /**
+     * Copy constructor that creates a new request that is a copy of the one provided as an argument.
+     */
+    protected ReplicationRequest(T request) {
+        this(request, request);
+    }
+
+    /**
+     * Copy constructor that creates a new request that is a copy of the one provided as an argument.
+     * The new request will inherit though headers and context from the original request that caused it.
+     */
+    protected ReplicationRequest(T request, ActionRequest originalRequest) {
+        super(originalRequest);
+        this.timeout = request.timeout();
+        this.index = request.index();
+        this.consistencyLevel = request.consistencyLevel();
+    }
+
+    void setCanHaveDuplicates() {
+        this.canHaveDuplicates = true;
+    }
+
+    /**
+     * Is this request can potentially be dup on a single shard.
+     */
+    public boolean canHaveDuplicates() {
+        return canHaveDuplicates;
     }
 
     /**
      * A timeout to wait if the index operation can't be performed immediately. Defaults to <tt>1m</tt>.
      */
     @SuppressWarnings("unchecked")
-    public final Request timeout(TimeValue timeout) {
+    public final T timeout(TimeValue timeout) {
         this.timeout = timeout;
-        return (Request) this;
+        return (T) this;
     }
 
     /**
      * A timeout to wait if the index operation can't be performed immediately. Defaults to <tt>1m</tt>.
      */
-    public final Request timeout(String timeout) {
+    public final T timeout(String timeout) {
         return timeout(TimeValue.parseTimeValue(timeout, null, getClass().getSimpleName() + ".timeout"));
     }
 
@@ -104,9 +132,9 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
     }
 
     @SuppressWarnings("unchecked")
-    public final Request index(String index) {
+    public final T index(String index) {
         this.index = index;
-        return (Request) this;
+        return (T) this;
     }
 
     @Override
@@ -119,65 +147,27 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
         return IndicesOptions.strictSingleIndexNoExpandForbidClosed();
     }
 
-    public ActiveShardCount waitForActiveShards() {
-        return this.waitForActiveShards;
+    public WriteConsistencyLevel consistencyLevel() {
+        return this.consistencyLevel;
     }
 
     /**
      * @return the shardId of the shard where this operation should be executed on.
      * can be null if the shardID has not yet been resolved
      */
+    public
     @Nullable
-    public ShardId shardId() {
+    ShardId shardId() {
         return shardId;
     }
 
     /**
-     * Sets the number of shard copies that must be active before proceeding with the replication
-     * operation. Defaults to {@link ActiveShardCount#DEFAULT}, which requires one shard copy
-     * (the primary) to be active. Set this value to {@link ActiveShardCount#ALL} to
-     * wait for all shards (primary and all replicas) to be active. Otherwise, use
-     * {@link ActiveShardCount#from(int)} to set this value to any non-negative integer, up to the
-     * total number of shard copies (number of replicas + 1).
+     * Sets the consistency level of write. Defaults to {@link org.elasticsearch.action.WriteConsistencyLevel#DEFAULT}
      */
     @SuppressWarnings("unchecked")
-    public final Request waitForActiveShards(ActiveShardCount waitForActiveShards) {
-        this.waitForActiveShards = waitForActiveShards;
-        return (Request) this;
-    }
-
-    /**
-     * A shortcut for {@link #waitForActiveShards(ActiveShardCount)} where the numerical
-     * shard count is passed in, instead of having to first call {@link ActiveShardCount#from(int)}
-     * to get the ActiveShardCount.
-     */
-    @SuppressWarnings("unchecked")
-    public final Request waitForActiveShards(final int waitForActiveShards) {
-        return waitForActiveShards(ActiveShardCount.from(waitForActiveShards));
-    }
-
-    /**
-     * Sets the minimum version of the cluster state that is required on the next node before we redirect to another primary.
-     * Used to prevent redirect loops, see also {@link TransportReplicationAction.ReroutePhase#doRun()}
-     */
-    @SuppressWarnings("unchecked")
-    Request routedBasedOnClusterVersion(long routedBasedOnClusterVersion) {
-        this.routedBasedOnClusterVersion = routedBasedOnClusterVersion;
-        return (Request) this;
-    }
-
-    long routedBasedOnClusterVersion() {
-        return routedBasedOnClusterVersion;
-    }
-
-    /** returns the primary term active at the time the operation was performed on the primary shard */
-    public long primaryTerm() {
-        return primaryTerm;
-    }
-
-    /** marks the primary term in which the operation was performed */
-    public void primaryTerm(long term) {
-        primaryTerm = term;
+    public final T consistencyLevel(WriteConsistencyLevel consistencyLevel) {
+        this.consistencyLevel = consistencyLevel;
+        return (T) this;
     }
 
     @Override
@@ -197,11 +187,11 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
         } else {
             shardId = null;
         }
-        waitForActiveShards = ActiveShardCount.readFrom(in);
-        timeout = new TimeValue(in);
+        consistencyLevel = WriteConsistencyLevel.fromId(in.readByte());
+        timeout = TimeValue.readTimeValue(in);
         index = in.readString();
-        routedBasedOnClusterVersion = in.readVLong();
-        primaryTerm = in.readVLong();
+        canHaveDuplicates = in.readBoolean();
+        // no need to serialize threaded* parameters, since they only matter locally
     }
 
     @Override
@@ -213,11 +203,10 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
         } else {
             out.writeBoolean(false);
         }
-        waitForActiveShards.writeTo(out);
+        out.writeByte(consistencyLevel.id());
         timeout.writeTo(out);
         out.writeString(index);
-        out.writeVLong(routedBasedOnClusterVersion);
-        out.writeVLong(primaryTerm);
+        out.writeBoolean(canHaveDuplicates);
     }
 
     @Override
@@ -229,10 +218,9 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
      * Sets the target shard id for the request. The shard id is set when a
      * index/delete request is resolved by the transport action
      */
-    @SuppressWarnings("unchecked")
-    public Request setShardId(ShardId shardId) {
+    public T setShardId(ShardId shardId) {
         this.shardId = shardId;
-        return (Request) this;
+        return (T) this;
     }
 
     @Override
@@ -247,13 +235,5 @@ public abstract class ReplicationRequest<Request extends ReplicationRequest<Requ
     @Override
     public String getDescription() {
         return toString();
-    }
-
-    /**
-     * This method is called before this replication request is retried
-     * the first time.
-     */
-    public void onRetry() {
-        // nothing by default
     }
 }

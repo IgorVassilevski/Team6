@@ -19,12 +19,12 @@
 
 package org.elasticsearch.common.metrics;
 
+import com.twitter.jsr166e.LongAdder;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.LongAdder;
 
 /**
  * A meter metric which measures mean throughput and one-, five-, and

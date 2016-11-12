@@ -2,20 +2,23 @@
     "person" :{
         "properties" :{
             "name":{
-                "type": "text",
-                "store" :true,
+                "type" :"string",
+                "index" :"analyzed",
+                "store" :"yes",
                 "fields":{
                     "name":{
-                        "type": "text",
-                        "store" :true
+                        "type" :"string",
+                        "index" :"analyzed",
+                        "store" :"yes"
                     },
                     "indexed":{
-                        "type": "text"
+                        "type" :"string",
+                        "index" :"analyzed"
                     },
                     "not_indexed":{
-                        "type": "text",
-                        "index" :false,
-                        "store" :true
+                        "type" :"string",
+                        "index" :"no",
+                        "store" :"yes"
                     }
                 }
             }

@@ -20,14 +20,10 @@
 package org.elasticsearch.index.fielddata;
 
 import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.FieldComparatorSource;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.Weight;
@@ -36,8 +32,9 @@ import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.BitSet;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.Index;
 import org.elasticsearch.index.IndexComponent;
-import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource.Nested;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
@@ -67,12 +64,29 @@ public interface IndexFieldData<FD extends AtomicFieldData> extends IndexCompone
                 return null;
             }
         }
+
+        /**
+         * Gets a memory storage hint that should be honored if possible but is not mandatory
+         */
+        public static MemoryStorageFormat getMemoryStorageHint(FieldDataType fieldDataType) {
+            // backwards compatibility
+            String s = fieldDataType.getSettings().get("ordinals");
+            if (s != null) {
+                return "always".equals(s) ? MemoryStorageFormat.ORDINALS : null;
+            }
+            return MemoryStorageFormat.fromString(fieldDataType.getSettings().get(SETTING_MEMORY_STORAGE_HINT));
+        }
     }
 
     /**
      * The field name.
      */
-    String getFieldName();
+    MappedFieldType.Names getFieldNames();
+
+    /**
+     * The field data type.
+     */
+    FieldDataType getFieldDataType();
 
     /**
      * Loads the atomic field data for the reader, possibly cached.
@@ -109,11 +123,11 @@ public interface IndexFieldData<FD extends AtomicFieldData> extends IndexCompone
         public static class Nested {
 
             private final BitSetProducer rootFilter;
-            private final Query innerQuery;
+            private final Weight innerFilter;
 
-            public Nested(BitSetProducer rootFilter, Query innerQuery) {
+            public Nested(BitSetProducer rootFilter, Weight innerFilter) {
                 this.rootFilter = rootFilter;
-                this.innerQuery = innerQuery;
+                this.innerFilter = innerFilter;
             }
 
             /**
@@ -127,10 +141,7 @@ public interface IndexFieldData<FD extends AtomicFieldData> extends IndexCompone
              * Get a {@link DocIdSet} that matches the inner documents.
              */
             public DocIdSetIterator innerDocs(LeafReaderContext ctx) throws IOException {
-                final IndexReaderContext topLevelCtx = ReaderUtil.getTopLevelContext(ctx);
-                IndexSearcher indexSearcher = new IndexSearcher(topLevelCtx);
-                Weight weight = indexSearcher.createNormalizedWeight(innerQuery, false);
-                Scorer s = weight.scorer(ctx);
+                Scorer s = innerFilter.scorer(ctx);
                 return s == null ? null : s.iterator();
             }
         }
@@ -222,7 +233,7 @@ public interface IndexFieldData<FD extends AtomicFieldData> extends IndexCompone
 
     interface Builder {
 
-        IndexFieldData<?> build(IndexSettings indexSettings, MappedFieldType fieldType, IndexFieldDataCache cache,
+        IndexFieldData<?> build(Index index, Settings indexSettings, MappedFieldType fieldType, IndexFieldDataCache cache,
                              CircuitBreakerService breakerService, MapperService mapperService);
     }
 

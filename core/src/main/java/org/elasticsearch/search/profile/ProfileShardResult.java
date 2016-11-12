@@ -22,50 +22,82 @@ package org.elasticsearch.search.profile;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Writeable;
-import org.elasticsearch.search.profile.aggregation.AggregationProfileShardResult;
-import org.elasticsearch.search.profile.query.QueryProfileShardResult;
+import org.elasticsearch.common.xcontent.ToXContent;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
-public class ProfileShardResult implements Writeable {
+/**
+ * A container class to hold the profile results for a single shard in the request.
+ * Contains a list of query profiles, a collector tree and a total rewrite tree.
+ */
+public final class ProfileShardResult implements Writeable<ProfileShardResult>, ToXContent {
 
-    private final List<QueryProfileShardResult> queryProfileResults;
+    private final List<ProfileResult> profileResults;
 
-    private final AggregationProfileShardResult aggProfileShardResult;
+    private final CollectorResult profileCollector;
 
-    public ProfileShardResult(List<QueryProfileShardResult> queryProfileResults, AggregationProfileShardResult aggProfileShardResult) {
-        this.aggProfileShardResult = aggProfileShardResult;
-        this.queryProfileResults = Collections.unmodifiableList(queryProfileResults);
+    private final long rewriteTime;
+
+    public ProfileShardResult(List<ProfileResult> profileResults, long rewriteTime,
+                              CollectorResult profileCollector) {
+        assert(profileCollector != null);
+        this.profileResults = profileResults;
+        this.profileCollector = profileCollector;
+        this.rewriteTime = rewriteTime;
     }
 
     public ProfileShardResult(StreamInput in) throws IOException {
         int profileSize = in.readVInt();
-        List<QueryProfileShardResult> queryProfileResults = new ArrayList<>(profileSize);
-        for (int i = 0; i < profileSize; i++) {
-            QueryProfileShardResult result = new QueryProfileShardResult(in);
-            queryProfileResults.add(result);
+        profileResults = new ArrayList<>(profileSize);
+        for (int j = 0; j < profileSize; j++) {
+            profileResults.add(new ProfileResult(in));
         }
-        this.queryProfileResults = Collections.unmodifiableList(queryProfileResults);
-        this.aggProfileShardResult = new AggregationProfileShardResult(in);
+
+        profileCollector = new CollectorResult(in);
+        rewriteTime = in.readLong();
+    }
+
+    public List<ProfileResult> getQueryResults() {
+        return Collections.unmodifiableList(profileResults);
+    }
+
+    public long getRewriteTime() {
+        return rewriteTime;
+    }
+
+    public CollectorResult getCollectorResult() {
+        return profileCollector;
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startArray("query");
+        for (ProfileResult p : profileResults) {
+            p.toXContent(builder, params);
+        }
+        builder.endArray();
+        builder.field("rewrite_time", rewriteTime);
+        builder.startArray("collector");
+        profileCollector.toXContent(builder, params);
+        builder.endArray();
+        return builder;
+    }
+
+    @Override
+    public ProfileShardResult readFrom(StreamInput in) throws IOException {
+        return new ProfileShardResult(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeVInt(queryProfileResults.size());
-        for (QueryProfileShardResult queryShardResult : queryProfileResults) {
-            queryShardResult.writeTo(out);
+        out.writeVInt(profileResults.size());
+        for (ProfileResult p : profileResults) {
+            p.writeTo(out);
         }
-        aggProfileShardResult.writeTo(out);
+        profileCollector.writeTo(out);
+        out.writeLong(rewriteTime);
     }
 
-    public List<QueryProfileShardResult> getQueryProfileResults() {
-        return queryProfileResults;
-    }
-
-    public AggregationProfileShardResult getAggregationProfileResults() {
-        return aggProfileShardResult;
-    }
 }

@@ -23,6 +23,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 
@@ -34,12 +35,13 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
 public class ParentIdAggIT extends ESIntegTestCase {
+
+    @Test
     public void testParentIdAggregation() throws IOException {
         XContentBuilder mapping = jsonBuilder().startObject()
                 .startObject("childtype")
                 .startObject("_parent")
                 .field("type", "parenttype")
-                .endObject()
                 .endObject()
                 .endObject();
         assertAcked(prepareCreate("testidx").addMapping("childtype", mapping));
@@ -48,11 +50,11 @@ public class ParentIdAggIT extends ESIntegTestCase {
 
         refresh();
         ensureGreen("testidx");
-        SearchResponse searchResponse = client().prepareSearch("testidx").setTypes("childtype").setQuery(matchAllQuery()).addAggregation(AggregationBuilders.terms("children").field("_parent#parenttype")).get();
-        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2L));
+        SearchResponse searchResponse = client().prepareSearch("testidx").setTypes("childtype").setQuery(matchAllQuery()).addAggregation(AggregationBuilders.terms("children").field("_parent")).get();
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2l));
         assertSearchResponse(searchResponse);
         assertThat(searchResponse.getAggregations().getAsMap().get("children"), instanceOf(Terms.class));
         Terms terms = (Terms) searchResponse.getAggregations().getAsMap().get("children");
-        assertThat(terms.getBuckets().iterator().next().getDocCount(), equalTo(2L));
+        assertThat(terms.getBuckets().iterator().next().getDocCount(), equalTo(2l));
     }
 }

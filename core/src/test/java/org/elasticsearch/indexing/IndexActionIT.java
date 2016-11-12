@@ -18,26 +18,16 @@
  */
 package org.elasticsearch.indexing;
 
-import org.elasticsearch.Version;
-import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexResponse;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaDataCreateIndexService;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.VersionType;
-import org.elasticsearch.index.mapper.MapperParsingException;
 import org.elasticsearch.indices.InvalidIndexNameException;
-import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.InternalSettingsPlugin;
-import org.elasticsearch.test.VersionUtils;
+import org.junit.Test;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
@@ -46,9 +36,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
@@ -56,14 +44,16 @@ import static org.hamcrest.Matchers.lessThanOrEqualTo;
  *
  */
 public class IndexActionIT extends ESIntegTestCase {
+
     /**
      * This test tries to simulate load while creating an index and indexing documents
      * while the index is being created.
      */
+    @Test
     public void testAutoGenerateIdNoDuplicates() throws Exception {
         int numberOfIterations = scaledRandomIntBetween(10, 50);
         for (int i = 0; i < numberOfIterations; i++) {
-            Exception firstError = null;
+            Throwable firstError = null;
             createIndex("test");
             int numOfDocs = randomIntBetween(10, 100);
             logger.info("indexing [{}] docs", numOfDocs);
@@ -72,25 +62,26 @@ public class IndexActionIT extends ESIntegTestCase {
                 builders.add(client().prepareIndex("test", "type").setSource("field", "value"));
             }
             indexRandom(true, builders);
+            ensureYellow("test");
             logger.info("verifying indexed content");
             int numOfChecks = randomIntBetween(8, 12);
             for (int j = 0; j < numOfChecks; j++) {
                 try {
                     logger.debug("running search with all types");
                     assertHitCount(client().prepareSearch("test").get(), numOfDocs);
-                } catch (Exception e) {
-                    logger.error("search for all docs types failed", e);
+                } catch (Throwable t) {
+                    logger.error("search for all docs types failed", t);
                     if (firstError == null) {
-                        firstError = e;
+                        firstError = t;
                     }
                 }
                 try {
                     logger.debug("running search with a specific type");
                     assertHitCount(client().prepareSearch("test").setTypes("type").get(), numOfDocs);
-                } catch (Exception e) {
-                    logger.error("search for all docs of a specific type failed", e);
+                } catch (Throwable t) {
+                    logger.error("search for all docs of a specific type failed", t);
                     if (firstError == null) {
-                        firstError = e;
+                        firstError = t;
                     }
                 }
             }
@@ -101,38 +92,41 @@ public class IndexActionIT extends ESIntegTestCase {
         }
     }
 
+    @Test
     public void testCreatedFlag() throws Exception {
         createIndex("test");
         ensureGreen();
 
         IndexResponse indexResponse = client().prepareIndex("test", "type", "1").setSource("field1", "value1_1").execute().actionGet();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertTrue(indexResponse.isCreated());
 
         indexResponse = client().prepareIndex("test", "type", "1").setSource("field1", "value1_2").execute().actionGet();
-        assertEquals(DocWriteResponse.Result.UPDATED, indexResponse.getResult());
+        assertFalse(indexResponse.isCreated());
 
         client().prepareDelete("test", "type", "1").execute().actionGet();
 
         indexResponse = client().prepareIndex("test", "type", "1").setSource("field1", "value1_2").execute().actionGet();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertTrue(indexResponse.isCreated());
 
     }
 
+    @Test
     public void testCreatedFlagWithFlush() throws Exception {
         createIndex("test");
         ensureGreen();
 
         IndexResponse indexResponse = client().prepareIndex("test", "type", "1").setSource("field1", "value1_1").execute().actionGet();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertTrue(indexResponse.isCreated());
 
         client().prepareDelete("test", "type", "1").execute().actionGet();
 
         flush();
 
         indexResponse = client().prepareIndex("test", "type", "1").setSource("field1", "value1_2").execute().actionGet();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertTrue(indexResponse.isCreated());
     }
 
+    @Test
     public void testCreatedFlagParallelExecution() throws Exception {
         createIndex("test");
         ensureGreen();
@@ -144,16 +138,14 @@ public class IndexActionIT extends ESIntegTestCase {
         final AtomicIntegerArray createdCounts = new AtomicIntegerArray(docCount);
         ExecutorService threadPool = Executors.newFixedThreadPool(threadCount);
         List<Callable<Void>> tasks = new ArrayList<>(taskCount);
-        final Random random = random();
+        final Random random = getRandom();
         for (int i=0;i< taskCount; i++ ) {
             tasks.add(new Callable<Void>() {
                 @Override
                 public Void call() throws Exception {
                     int docId = random.nextInt(docCount);
                     IndexResponse indexResponse = index("test", "type", Integer.toString(docId), "field1", "value");
-                    if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
-                        createdCounts.incrementAndGet(docId);
-                    }
+                    if (indexResponse.isCreated()) createdCounts.incrementAndGet(docId);
                     return null;
                 }
             });
@@ -167,15 +159,17 @@ public class IndexActionIT extends ESIntegTestCase {
         terminate(threadPool);
     }
 
+    @Test
     public void testCreatedFlagWithExternalVersioning() throws Exception {
         createIndex("test");
         ensureGreen();
 
         IndexResponse indexResponse = client().prepareIndex("test", "type", "1").setSource("field1", "value1_1").setVersion(123)
                                               .setVersionType(VersionType.EXTERNAL).execute().actionGet();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertTrue(indexResponse.isCreated());
     }
 
+    @Test
     public void testCreateFlagWithBulk() {
         createIndex("test");
         ensureGreen();
@@ -184,9 +178,10 @@ public class IndexActionIT extends ESIntegTestCase {
         assertThat(bulkResponse.hasFailures(), equalTo(false));
         assertThat(bulkResponse.getItems().length, equalTo(1));
         IndexResponse indexResponse = bulkResponse.getItems()[0].getResponse();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertTrue(indexResponse.isCreated());
     }
 
+    @Test
     public void testCreateIndexWithLongName() {
         int min = MetaDataCreateIndexService.MAX_INDEX_NAME_BYTES + 1;
         int max = MetaDataCreateIndexService.MAX_INDEX_NAME_BYTES * 2;
@@ -237,29 +232,5 @@ public class IndexActionIT extends ESIntegTestCase {
             assertThat("exception contains message about index name is dot " + e.getMessage(),
                     e.getMessage().contains("Invalid index name [..], must not be \'.\' or '..'"), equalTo(true));
         }
-    }
-
-    public void testDocumentWithBlankFieldName() {
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> {
-                client().prepareIndex("test", "type", "1").setSource("", "value1_2").execute().actionGet();
-            }
-        );
-        assertThat(e.getMessage(), containsString("failed to parse"));
-        assertThat(e.getRootCause().getMessage(), containsString("name cannot be empty string"));
-    }
-
-    @Override
-    protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Collections.singleton(InternalSettingsPlugin.class); // uses index.version.created
-    }
-
-    public void testDocumentWithBlankFieldName2x() {
-        Version version = VersionUtils.randomVersionBetween(random(), Version.V_2_0_0, Version.V_2_3_4);
-        Settings settings = Settings.builder().put(IndexMetaData.SETTING_VERSION_CREATED, version).build();
-        assertAcked(prepareCreate("test1").setSettings(settings));
-        ensureGreen();
-
-        IndexResponse indexResponse = client().prepareIndex("test1", "type", "1").setSource("", "value1_2").execute().actionGet();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
     }
 }

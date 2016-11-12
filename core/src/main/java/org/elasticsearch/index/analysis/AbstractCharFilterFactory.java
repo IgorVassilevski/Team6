@@ -19,18 +19,16 @@
 
 package org.elasticsearch.index.analysis;
 
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.AbstractIndexComponent;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
 
-/**
- *
- */
 public abstract class AbstractCharFilterFactory extends AbstractIndexComponent implements CharFilterFactory {
 
     private final String name;
 
-    public AbstractCharFilterFactory(IndexSettings indexSettings, String name) {
-        super(indexSettings);
+    public AbstractCharFilterFactory(Index index, Settings indexSettings, String name) {
+        super(index, indexSettings);
         this.name = name;
     }
 

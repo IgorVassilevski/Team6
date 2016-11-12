@@ -20,7 +20,7 @@
 # 2. Verifies it's sha1 hashes and GPG signatures against the release key
 # 3. Installs all official plugins
 # 4. Starts one node for tar.gz and zip packages and checks:
-#    -- if it runs with Java 1.8
+#    -- if it runs with Java 1.7
 #    -- if the build hash given is the one that is returned by the status response
 #    -- if the build is a release version and not a snapshot version
 #    -- if all plugins are loaded
@@ -53,7 +53,6 @@ import time
 import socket
 import json
 import base64
-from urllib.parse import urlparse
 
 from prepare_release_candidate import run
 from http.client import HTTPConnection
@@ -63,28 +62,23 @@ DEFAULT_PLUGINS = ["analysis-icu",
                    "analysis-phonetic",
                    "analysis-smartcn",
                    "analysis-stempel",
-                   "discovery-azure-classic",
-                   "discovery-ec2",
-                   "discovery-gce",
-                   "ingest-attachment",
-                   "ingest-geoip",
+                   "cloud-aws",
+                   "cloud-azure",
+                   "cloud-gce",
+                   "delete-by-query",
+                   "discovery-multicast",
                    "lang-javascript",
                    "lang-python",
                    "mapper-attachments",
                    "mapper-murmur3",
-                   "mapper-size",
-                   "repository-azure",
-                   "repository-gcs",
-                   "repository-hdfs",
-                   "repository-s3",
-                   "store-smb"]
+                   "mapper-size"]
 
 try:
   JAVA_HOME = os.environ['JAVA_HOME']
 except KeyError:
   raise RuntimeError("""
   Please set JAVA_HOME in the env before running release tool
-  On OSX use: export JAVA_HOME=`/usr/libexec/java_home -v '1.8*'`""")
+  On OSX use: export JAVA_HOME=`/usr/libexec/java_home -v '1.7*'`""")
 
 def java_exe():
   path = JAVA_HOME
@@ -105,24 +99,21 @@ def read_fully(file):
      return f.read()
 
 
-def wait_for_node_startup(es_dir, timeout=60, header={}):
+def wait_for_node_startup(host='127.0.0.1', port=9200, timeout=60, header={}):
   print('     Waiting until node becomes available for at most %s seconds' % timeout)
   for _ in range(timeout):
-    conn = None
+    conn = HTTPConnection(host=host, port=port, timeout=timeout)
     try:
       time.sleep(1)
-      host = get_host_from_ports_file(es_dir)
-      conn = HTTPConnection(host, timeout=1)
-      conn.request('GET', '/', headers=header)
+      conn.request('GET', '', headers=header)
       res = conn.getresponse()
       if res.status == 200:
         return True
-    except IOError as e:
+    except socket.error as e:
       pass
       #that is ok it might not be there yet
     finally:
-      if conn:
-        conn.close()
+      conn.close()
   return False
 
 def download_and_verify(version, hash, files, base_url, plugins=DEFAULT_PLUGINS):
@@ -160,7 +151,7 @@ def download_and_verify(version, hash, files, base_url, plugins=DEFAULT_PLUGINS)
       # way we keep the executing host unmodified since we don't have to import the key into the default keystore
       gpg_home_dir = os.path.join(current_artifact_dir, "gpg_home_dir")
       os.makedirs(gpg_home_dir, 0o700)
-      run('gpg --homedir %s --keyserver pool.sks-keyservers.net --recv-key D88E42B4' % gpg_home_dir)
+      run('gpg --homedir %s --keyserver pgp.mit.edu --recv-key D88E42B4' % gpg_home_dir)
       run('cd %s && gpg --homedir %s --verify %s' % (current_artifact_dir, gpg_home_dir, os.path.basename(gpg_file)))
       print('  ' + '*' * 80)
       print()
@@ -168,9 +159,6 @@ def download_and_verify(version, hash, files, base_url, plugins=DEFAULT_PLUGINS)
     print('  SUCCESS')
   finally:
     shutil.rmtree(tmp_dir)
-
-def get_host_from_ports_file(es_dir):
-  return read_fully(os.path.join(es_dir, 'logs/http.ports')).splitlines()[0]
 
 def smoke_test_release(release, files, expected_hash, plugins):
   for release_file in files:
@@ -184,37 +172,35 @@ def smoke_test_release(release, files, expected_hash, plugins):
     else:
       print('  Skip SmokeTest for [%s]' % release_file)
       continue # nothing to do here
-    es_dir = os.path.join(tmp_dir, 'elasticsearch-%s' % (release))
-    es_run_path = os.path.join(es_dir, 'bin/elasticsearch')
+    es_run_path = os.path.join(tmp_dir, 'elasticsearch-%s' % (release), 'bin/elasticsearch')
     print('  Smoke testing package [%s]' % release_file)
-    es_plugin_path = os.path.join(es_dir, 'bin/elasticsearch-plugin')
+    es_plugin_path = os.path.join(tmp_dir, 'elasticsearch-%s' % (release), 'bin/plugin')
     plugin_names = {}
     for plugin  in plugins:
       print('     Install plugin [%s]' % (plugin))
-      run('%s; export ES_JAVA_OPTS="-Des.plugins.staging=%s"; %s %s %s' % (java_exe(), expected_hash, es_plugin_path, 'install -b', plugin))
+      run('%s; %s -Des.plugins.staging=true %s -b %s' % (java_exe(), es_plugin_path, 'install', plugin))
       plugin_names[plugin] = True
-    if 'x-pack' in plugin_names:
+    if 'shield' in plugin_names:
       headers = { 'Authorization' : 'Basic %s' % base64.b64encode(b"es_admin:foobar").decode("UTF-8") }
-      es_shield_path = os.path.join(es_dir, 'bin/x-pack/users')
+      es_shield_path = os.path.join(tmp_dir, 'elasticsearch-%s' % (release), 'bin/shield/esusers')
       print("     Install dummy shield user")
-      run('%s; %s  useradd es_admin -r superuser -p foobar' % (java_exe(), es_shield_path))
+      run('%s; %s  useradd es_admin -r admin -p foobar' % (java_exe(), es_shield_path))
     else:
       headers = {}
-    print('  Starting elasticsearch deamon from [%s]' % es_dir)
+    print('  Starting elasticsearch deamon from [%s]' % os.path.join(tmp_dir, 'elasticsearch-%s' % release))
     try:
-      run('%s; %s -Enode.name=smoke_tester -Ecluster.name=prepare_release -Escript.inline=true -Escript.stored=true -Erepositories.url.allowed_urls=http://snapshot.test* %s -Epidfile=%s -Enode.portsfile=true'
-          % (java_exe(), es_run_path, '-d', os.path.join(es_dir, 'es-smoke.pid')))
-      if not wait_for_node_startup(es_dir, header=headers):
+      run('%s; %s -Des.node.name=smoke_tester -Des.cluster.name=prepare_release -Des.script.inline=on -Des.script.indexed=on -Des.repositories.url.allowed_urls=http://snapshot.test* %s -Des.pidfile=%s'
+          % (java_exe(), es_run_path, '-d', os.path.join(tmp_dir, 'elasticsearch-%s' % (release), 'es-smoke.pid')))
+      conn = HTTPConnection(host='127.0.0.1', port=9200, timeout=20)
+      if not wait_for_node_startup(header=headers):
         print("elasticsearch logs:")
         print('*' * 80)
-        logs = read_fully(os.path.join(es_dir, 'logs/prepare_release.log'))
+        logs = read_fully(os.path.join(tmp_dir, 'elasticsearch-%s' % (release), 'logs/prepare_release.log'))
         print(logs)
         print('*' * 80)
         raise RuntimeError('server didn\'t start up')
       try: # we now get / and /_nodes to fetch basic infos like hashes etc and the installed plugins
-        host = get_host_from_ports_file(es_dir)
-        conn = HTTPConnection(host, timeout=20)
-        conn.request('GET', '/', headers=headers)
+        conn.request('GET', '', headers=headers)
         res = conn.getresponse()
         if res.status == 200:
           version = json.loads(res.read().decode("utf-8"))['version']
@@ -222,7 +208,7 @@ def smoke_test_release(release, files, expected_hash, plugins):
             raise RuntimeError('Expected version [%s] but was [%s]' % (release, version['number']))
           if version['build_snapshot']:
             raise RuntimeError('Expected non snapshot version')
-          if expected_hash != version['build_hash'].strip():
+          if expected_hash.startswith(version['build_hash'].strip()):
             raise RuntimeError('HEAD hash does not match expected [%s] but got [%s]' % (expected_hash, version['build_hash']))
           print('  Verify if plugins are listed in _nodes')
           conn.request('GET', '/_nodes?plugin=true&pretty=true', headers=headers)
@@ -233,7 +219,7 @@ def smoke_test_release(release, files, expected_hash, plugins):
               node_plugins = node['plugins']
               for node_plugin in node_plugins:
                 if not plugin_names.get(node_plugin['name'].strip(), False):
-                  raise RuntimeError('Unexpected plugin %s' % node_plugin['name'])
+                  raise RuntimeError('Unexpeced plugin %s' % node_plugin['name'])
                 del plugin_names[node_plugin['name']]
             if plugin_names:
               raise RuntimeError('Plugins not loaded %s' % list(plugin_names.keys()))
@@ -245,7 +231,7 @@ def smoke_test_release(release, files, expected_hash, plugins):
       finally:
         conn.close()
     finally:
-      pid_path = os.path.join(es_dir, 'es-smoke.pid')
+      pid_path = os.path.join(tmp_dir, 'elasticsearch-%s' % (release), 'es-smoke.pid')
       if os.path.exists(pid_path): # try reading the pid and kill the node
         pid = int(read_fully(pid_path))
         os.kill(pid, signal.SIGKILL)
@@ -282,7 +268,7 @@ if __name__ == "__main__":
     'org/elasticsearch/distribution/deb/elasticsearch/%(version)s/elasticsearch-%(version)s.deb',
     'org/elasticsearch/distribution/rpm/elasticsearch/%(version)s/elasticsearch-%(version)s.rpm'
   ]]
-  verify_java_version('1.8')
+  verify_java_version('1.7')
   if url:
     download_url = url
   else:

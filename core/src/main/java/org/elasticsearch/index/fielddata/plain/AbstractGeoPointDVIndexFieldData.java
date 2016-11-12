@@ -19,18 +19,20 @@
 
 package org.elasticsearch.index.fielddata.plain;
 
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.DocValues;
 import org.elasticsearch.Version;
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.Index;
-import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.fielddata.AtomicGeoPointFieldData;
+import org.elasticsearch.index.fielddata.FieldDataType;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource.Nested;
 import org.elasticsearch.index.fielddata.IndexFieldDataCache;
 import org.elasticsearch.index.fielddata.IndexGeoPointFieldData;
 import org.elasticsearch.index.mapper.MappedFieldType;
+import org.elasticsearch.index.mapper.MappedFieldType.Names;
 import org.elasticsearch.index.mapper.MapperService;
 import org.elasticsearch.indices.breaker.CircuitBreakerService;
 import org.elasticsearch.search.MultiValueMode;
@@ -39,8 +41,8 @@ import java.io.IOException;
 
 public abstract class AbstractGeoPointDVIndexFieldData extends DocValuesIndexFieldData implements IndexGeoPointFieldData {
 
-    AbstractGeoPointDVIndexFieldData(Index index, String fieldName) {
-        super(index, fieldName);
+    AbstractGeoPointDVIndexFieldData(Index index, Names fieldNames, FieldDataType fieldDataType) {
+        super(index, fieldNames, fieldDataType);
     }
 
     @Override
@@ -54,8 +56,8 @@ public abstract class AbstractGeoPointDVIndexFieldData extends DocValuesIndexFie
     public static class GeoPointDVIndexFieldData extends AbstractGeoPointDVIndexFieldData {
         final boolean indexCreatedBefore2x;
 
-        public GeoPointDVIndexFieldData(Index index, String fieldName, final boolean indexCreatedBefore2x) {
-            super(index, fieldName);
+        public GeoPointDVIndexFieldData(Index index, Names fieldNames, FieldDataType fieldDataType, final boolean indexCreatedBefore2x) {
+            super(index, fieldNames, fieldDataType);
             this.indexCreatedBefore2x = indexCreatedBefore2x;
         }
 
@@ -63,9 +65,9 @@ public abstract class AbstractGeoPointDVIndexFieldData extends DocValuesIndexFie
         public AtomicGeoPointFieldData load(LeafReaderContext context) {
             try {
                 if (indexCreatedBefore2x) {
-                    return new GeoPointLegacyDVAtomicFieldData(DocValues.getBinary(context.reader(), fieldName));
+                    return new GeoPointLegacyDVAtomicFieldData(DocValues.getBinary(context.reader(), fieldNames.indexName()));
                 }
-                return new GeoPointDVAtomicFieldData(DocValues.getSortedNumeric(context.reader(), fieldName));
+                return new GeoPointDVAtomicFieldData(DocValues.getSortedNumeric(context.reader(), fieldNames.indexName()));
             } catch (IOException e) {
                 throw new IllegalStateException("Cannot load doc values", e);
             }
@@ -79,15 +81,11 @@ public abstract class AbstractGeoPointDVIndexFieldData extends DocValuesIndexFie
 
     public static class Builder implements IndexFieldData.Builder {
         @Override
-        public IndexFieldData<?> build(IndexSettings indexSettings, MappedFieldType fieldType, IndexFieldDataCache cache,
+        public IndexFieldData<?> build(Index index, Settings indexSettings, MappedFieldType fieldType, IndexFieldDataCache cache,
                                        CircuitBreakerService breakerService, MapperService mapperService) {
-            if (indexSettings.getIndexVersionCreated().before(Version.V_2_2_0)
-                    && fieldType.hasDocValues() == false) {
-                return new GeoPointArrayIndexFieldData(indexSettings, fieldType.name(), cache, breakerService);
-            }
             // Ignore breaker
-            return new GeoPointDVIndexFieldData(indexSettings.getIndex(), fieldType.name(),
-                    indexSettings.getIndexVersionCreated().before(Version.V_2_2_0));
+            return new GeoPointDVIndexFieldData(index, fieldType.names(), fieldType.fieldDataType(),
+                    Version.indexCreated(indexSettings).before(Version.V_2_2_0));
         }
     }
 }

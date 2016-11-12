@@ -19,12 +19,16 @@
 
 package org.elasticsearch.common.path;
 
-import java.util.HashMap;
+import com.google.common.collect.ImmutableMap;
+import org.elasticsearch.common.Strings;
+
 import java.util.Map;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.unmodifiableMap;
+import static org.elasticsearch.common.collect.MapBuilder.newMapBuilder;
 
+/**
+ *
+ */
 public class PathTrie<T> {
 
     public interface Decoder {
@@ -32,18 +36,21 @@ public class PathTrie<T> {
     }
 
     private final Decoder decoder;
-    private final TrieNode root;
+    private final TrieNode<T> root;
+    private final char separator;
     private T rootValue;
 
-    private static final String SEPARATOR = "/";
-    private static final String WILDCARD = "*";
-
     public PathTrie(Decoder decoder) {
-        this.decoder = decoder;
-        root = new TrieNode(SEPARATOR, null, WILDCARD);
+        this('/', "*", decoder);
     }
 
-    public class TrieNode {
+    public PathTrie(char separator, String wildcard, Decoder decoder) {
+        this.decoder = decoder;
+        this.separator = separator;
+        root = new TrieNode<>(new String(new char[]{separator}), null, null, wildcard);
+    }
+
+    public class TrieNode<T> {
         private transient String key;
         private transient T value;
         private boolean isWildcard;
@@ -51,14 +58,17 @@ public class PathTrie<T> {
 
         private transient String namedWildcard;
 
-        private Map<String, TrieNode> children;
+        private ImmutableMap<String, TrieNode<T>> children;
 
-        public TrieNode(String key, T value, String wildcard) {
+        private final TrieNode parent;
+
+        public TrieNode(String key, T value, TrieNode parent, String wildcard) {
             this.key = key;
             this.wildcard = wildcard;
             this.isWildcard = (key.equals(wildcard));
+            this.parent = parent;
             this.value = value;
-            this.children = emptyMap();
+            this.children = ImmutableMap.of();
             if (isNamedWildcard(key)) {
                 namedWildcard = key.substring(key.indexOf('{') + 1, key.indexOf('}'));
             } else {
@@ -75,14 +85,8 @@ public class PathTrie<T> {
             return isWildcard;
         }
 
-        public synchronized void addChild(TrieNode child) {
-            addInnerChild(child.key, child);
-        }
-
-        private void addInnerChild(String key, TrieNode child) {
-            Map<String, TrieNode> newChildren = new HashMap<>(children);
-            newChildren.put(key, child);
-            children = unmodifiableMap(newChildren);
+        public synchronized void addChild(TrieNode<T> child) {
+            children = newMapBuilder(children).put(child.key, child).immutableMap();
         }
 
         public TrieNode getChild(String key) {
@@ -98,11 +102,14 @@ public class PathTrie<T> {
             if (isNamedWildcard(token)) {
                 key = wildcard;
             }
-            TrieNode node = children.get(key);
+            TrieNode<T> node = children.get(key);
             if (node == null) {
-                T nodeValue = index == path.length - 1 ? value : null;
-                node = new TrieNode(token, nodeValue, wildcard);
-                addInnerChild(key, node);
+                if (index == (path.length - 1)) {
+                    node = new TrieNode<>(token, value, this, wildcard);
+                } else {
+                    node = new TrieNode<>(token, null, this, wildcard);
+                }
+                children = newMapBuilder(children).put(key, node).immutableMap();
             } else {
                 if (isNamedWildcard(token)) {
                     node.updateKeyWithNamedWildcard(token);
@@ -138,7 +145,7 @@ public class PathTrie<T> {
                 return null;
 
             String token = path[index];
-            TrieNode node = children.get(token);
+            TrieNode<T> node = children.get(token);
             boolean usedWildcard;
             if (node == null) {
                 node = children.get(wildcard);
@@ -175,20 +182,15 @@ public class PathTrie<T> {
             return res;
         }
 
-        private void put(Map<String, String> params, TrieNode node, String value) {
+        private void put(Map<String, String> params, TrieNode<T> node, String value) {
             if (params != null && node.isNamedWildcard()) {
                 params.put(node.namedWildcard(), decoder.decode(value));
             }
         }
-
-        @Override
-        public String toString() {
-            return key;
-        }
     }
 
     public void insert(String path, T value) {
-        String[] strings = path.split(SEPARATOR);
+        String[] strings = Strings.splitStringToArray(path, separator);
         if (strings.length == 0) {
             rootValue = value;
             return;
@@ -209,7 +211,7 @@ public class PathTrie<T> {
         if (path.length() == 0) {
             return rootValue;
         }
-        String[] strings = path.split(SEPARATOR);
+        String[] strings = Strings.splitStringToArray(path, separator);
         if (strings.length == 0) {
             return rootValue;
         }

@@ -20,19 +20,21 @@
 package org.elasticsearch.index.query.functionscore;
 
 import org.apache.lucene.search.Explanation;
+import org.elasticsearch.index.query.functionscore.gauss.GaussDecayFunctionParser;
 
 /**
  * Implement this interface to provide a decay function that is executed on a
  * distance. For example, this could be an exponential drop of, a triangle
  * function or something of the kind. This is used, for example, by
- * {@link GaussDecayFunctionBuilder}.
+ * {@link GaussDecayFunctionParser}.
  * 
- */
+ * */
+
 public interface DecayFunction {
 
-    double evaluate(double value, double scale);
+    public double evaluate(double value, double scale);
 
-    Explanation explainFunction(String valueString, double value, double scale);
+    public Explanation explainFunction(String valueString, double value, double scale);
 
     /**
      * The final scale parameter is computed from the scale parameter given by
@@ -47,5 +49,6 @@ public interface DecayFunction {
      *            the value which decay function should take once the distance
      *            reaches this scale
      * */
-    double processScale(double scale, double decay);
+    public double processScale(double scale, double decay);
+
 }

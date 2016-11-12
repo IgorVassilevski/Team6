@@ -19,23 +19,31 @@
 
 package org.elasticsearch.common.bytes;
 
+import com.google.common.base.Charsets;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.common.io.Channels;
 import org.elasticsearch.common.io.stream.StreamInput;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBuffers;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
+import java.nio.channels.GatheringByteChannel;
 import java.util.Arrays;
 
-public final class BytesArray extends BytesReference {
+public class BytesArray implements BytesReference {
 
     public static final BytesArray EMPTY = new BytesArray(BytesRef.EMPTY_BYTES, 0, 0);
-    private final byte[] bytes;
-    private final int offset;
-    private final int length;
+
+    private byte[] bytes;
+    private int offset;
+    private int length;
 
     public BytesArray(String bytes) {
-        this(new BytesRef(bytes));
+        BytesRef bytesRef = new BytesRef(bytes);
+        this.bytes = bytesRef.bytes;
+        this.offset = bytesRef.offset;
+        this.length = bytesRef.length;
     }
 
     public BytesArray(BytesRef bytesRef) {
@@ -44,15 +52,21 @@ public final class BytesArray extends BytesReference {
 
     public BytesArray(BytesRef bytesRef, boolean deepCopy) {
         if (deepCopy) {
-            bytesRef = BytesRef.deepCopyOf(bytesRef);
+            BytesRef copy = BytesRef.deepCopyOf(bytesRef);
+            bytes = copy.bytes;
+            offset = copy.offset;
+            length = copy.length;
+        } else {
+            bytes = bytesRef.bytes;
+            offset = bytesRef.offset;
+            length = bytesRef.length;
         }
-        bytes = bytesRef.bytes;
-        offset = bytesRef.offset;
-        length = bytesRef.length;
     }
 
     public BytesArray(byte[] bytes) {
-        this(bytes, 0, bytes.length);
+        this.bytes = bytes;
+        this.offset = 0;
+        this.length = bytes.length;
     }
 
     public BytesArray(byte[] bytes, int offset, int length) {
@@ -79,12 +93,65 @@ public final class BytesArray extends BytesReference {
         return new BytesArray(bytes, offset + from, length);
     }
 
+    @Override
+    public StreamInput streamInput() {
+        return StreamInput.wrap(bytes, offset, length);
+    }
+
+    @Override
+    public void writeTo(OutputStream os) throws IOException {
+        os.write(bytes, offset, length);
+    }
+
+    @Override
+    public void writeTo(GatheringByteChannel channel) throws IOException {
+        Channels.writeToChannel(bytes, offset, length(), channel);
+    }
+
+    @Override
+    public byte[] toBytes() {
+        if (offset == 0 && bytes.length == length) {
+            return bytes;
+        }
+        return Arrays.copyOfRange(bytes, offset, offset + length);
+    }
+
+    @Override
+    public BytesArray toBytesArray() {
+        return this;
+    }
+
+    @Override
+    public BytesArray copyBytesArray() {
+        return new BytesArray(Arrays.copyOfRange(bytes, offset, offset + length));
+    }
+
+    @Override
+    public ChannelBuffer toChannelBuffer() {
+        return ChannelBuffers.wrappedBuffer(bytes, offset, length);
+    }
+
+    @Override
+    public boolean hasArray() {
+        return true;
+    }
+
+    @Override
     public byte[] array() {
         return bytes;
     }
 
-    public int offset() {
+    @Override
+    public int arrayOffset() {
         return offset;
+    }
+
+    @Override
+    public String toUtf8() {
+        if (length == 0) {
+            return "";
+        }
+        return new String(bytes, offset, length, Charsets.UTF_8);
     }
 
     @Override
@@ -93,8 +160,17 @@ public final class BytesArray extends BytesReference {
     }
 
     @Override
-    public long ramBytesUsed() {
-        return bytes.length;
+    public BytesRef copyBytesRef() {
+        return new BytesRef(Arrays.copyOfRange(bytes, offset, offset + length));
     }
 
+    @Override
+    public int hashCode() {
+        return Helper.bytesHashCode(this);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return Helper.bytesEqual(this, (BytesReference) obj);
+    }
 }

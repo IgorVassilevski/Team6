@@ -18,11 +18,11 @@
           index:  test_1
           type:   test
           id:     1
+          script: "1"
           body:
-            script:
-              lang:   groovy
-              inline: "ctx._source.foo = bar"
-              params: { bar: 'xxx' }
+            lang:   groovy
+            script: "ctx._source.foo = bar"
+            params: { bar: 'xxx' }
 
   - match: { _index:   test_1 }
   - match: { _type:    test   }
@@ -43,10 +43,8 @@
           index:  test_1
           type:   test
           id:     1
-          body:
-            script:
-              lang:   groovy
-              inline: "ctx._source.foo = 'yyy'"
+          lang:   groovy
+          script: "ctx._source.foo = 'yyy'"
 
   - match: { _index:   test_1 }
   - match: { _type:    test   }
@@ -69,10 +67,9 @@
           type:   test
           id:     1
           body:
-            script:
-              inline: "1"
-              lang:   "doesnotexist"
-              params: { bar: 'xxx' }
+            script: "1"
+            lang:   "doesnotexist"
+            params: { bar: 'xxx' }
 
   - do:
       catch:      /script_lang not supported \[doesnotexist\]/
@@ -80,8 +77,6 @@
           index:  test_1
           type:   test
           id:     1
-          body:
-            script:
-                lang:   doesnotexist
-                inline: "1"
+          lang:   doesnotexist
+          script: "1"
 

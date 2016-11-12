@@ -9,12 +9,13 @@
                 "dynamic":false,
                 "properties":{
                     "first":{
-                        "type":"text",
-                        "store":true,
+                        "type":"string",
+                        "store":"yes",
                         "include_in_all":false
                     },
                     "last":{
-                        "type":"keyword"
+                        "type":"string",
+                        "index":"not_analyzed"
                     }
                 }
             },
@@ -25,15 +26,15 @@
                     "first":{
                         "properties":{
                             "location":{
-                                "type":"text",
-                                "store":true
+                                "type":"string",
+                                "store":"yes"
                             }
                         }
                     },
                     "last":{
                         "properties":{
                             "location":{
-                                "type":"text",
+                                "type":"string",
                                 "include_in_all":true
                             }
                         }

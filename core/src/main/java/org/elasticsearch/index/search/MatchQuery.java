@@ -22,104 +22,34 @@ package org.elasticsearch.index.search;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.ExtendedCommonTermsQuery;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.*;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.FuzzyQuery;
-import org.apache.lucene.search.MultiPhraseQuery;
-import org.apache.lucene.search.MultiTermQuery;
-import org.apache.lucene.search.PhraseQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.QueryBuilder;
-import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.lucene.search.MultiPhrasePrefixQuery;
 import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.common.unit.Fuzziness;
 import org.elasticsearch.index.mapper.MappedFieldType;
-import org.elasticsearch.index.query.QueryShardContext;
+import org.elasticsearch.index.query.QueryParseContext;
 import org.elasticsearch.index.query.support.QueryParsers;
 
 import java.io.IOException;
+import java.util.List;
 
 public class MatchQuery {
 
-    public static enum Type implements Writeable {
-        /**
-         * The text is analyzed and terms are added to a boolean query.
-         */
-        BOOLEAN(0),
-        /**
-         * The text is analyzed and used as a phrase query.
-         */
-        PHRASE(1),
-        /**
-         * The text is analyzed and used in a phrase query, with the last term acting as a prefix.
-         */
-        PHRASE_PREFIX(2);
-
-        private final int ordinal;
-
-        private Type(int ordinal) {
-            this.ordinal = ordinal;
-        }
-
-        public static Type readFromStream(StreamInput in) throws IOException {
-            int ord = in.readVInt();
-            for (Type type : Type.values()) {
-                if (type.ordinal == ord) {
-                    return type;
-                }
-            }
-            throw new ElasticsearchException("unknown serialized type [" + ord + "]");
-        }
-
-        @Override
-        public void writeTo(StreamOutput out) throws IOException {
-            out.writeVInt(this.ordinal);
-        }
+    public static enum Type {
+        BOOLEAN,
+        PHRASE,
+        PHRASE_PREFIX
     }
 
-    public static enum ZeroTermsQuery implements Writeable {
-        NONE(0),
-        ALL(1);
-
-        private final int ordinal;
-
-        private ZeroTermsQuery(int ordinal) {
-            this.ordinal = ordinal;
-        }
-
-        public static ZeroTermsQuery readFromStream(StreamInput in) throws IOException {
-            int ord = in.readVInt();
-            for (ZeroTermsQuery zeroTermsQuery : ZeroTermsQuery.values()) {
-                if (zeroTermsQuery.ordinal == ord) {
-                    return zeroTermsQuery;
-                }
-            }
-            throw new ElasticsearchException("unknown serialized type [" + ord + "]");
-        }
-
-        @Override
-        public void writeTo(StreamOutput out) throws IOException {
-            out.writeVInt(this.ordinal);
-        }
+    public static enum ZeroTermsQuery {
+        NONE,
+        ALL
     }
 
-    /** the default phrase slop */
-    public static final int DEFAULT_PHRASE_SLOP = 0;
-
-    /** the default leniency setting */
-    public static final boolean DEFAULT_LENIENCY = false;
-
-    /** the default zero terms query */
-    public static final ZeroTermsQuery DEFAULT_ZERO_TERMS_QUERY = ZeroTermsQuery.NONE;
-
-    protected final QueryShardContext context;
+    protected final QueryParseContext parseContext;
 
     protected String analyzer;
 
@@ -127,7 +57,7 @@ public class MatchQuery {
 
     protected boolean enablePositionIncrements = true;
 
-    protected int phraseSlop = DEFAULT_PHRASE_SLOP;
+    protected int phraseSlop = 0;
 
     protected Fuzziness fuzziness = null;
 
@@ -139,14 +69,14 @@ public class MatchQuery {
 
     protected MultiTermQuery.RewriteMethod fuzzyRewriteMethod;
 
-    protected boolean lenient = DEFAULT_LENIENCY;
+    protected boolean lenient;
 
-    protected ZeroTermsQuery zeroTermsQuery = DEFAULT_ZERO_TERMS_QUERY;
+    protected ZeroTermsQuery zeroTermsQuery = ZeroTermsQuery.NONE;
 
     protected Float commonTermsCutoff = null;
 
-    public MatchQuery(QueryShardContext context) {
-        this.context = context;
+    public MatchQuery(QueryParseContext parseContext) {
+        this.parseContext = parseContext;
     }
 
     public void setAnalyzer(String analyzer) {
@@ -157,8 +87,8 @@ public class MatchQuery {
         this.occur = occur;
     }
 
-    public void setCommonTermsCutoff(Float cutoff) {
-        this.commonTermsCutoff = cutoff;
+    public void setCommonTermsCutoff(float cutoff) {
+        this.commonTermsCutoff = Float.valueOf(cutoff);
     }
 
     public void setEnablePositionIncrements(boolean enablePositionIncrements) {
@@ -200,11 +130,11 @@ public class MatchQuery {
     protected Analyzer getAnalyzer(MappedFieldType fieldType) {
         if (this.analyzer == null) {
             if (fieldType != null) {
-                return context.getSearchAnalyzer(fieldType);
+                return parseContext.getSearchAnalyzer(fieldType);
             }
-            return context.getMapperService().searchAnalyzer();
+            return parseContext.mapperService().searchAnalyzer();
         } else {
-            Analyzer analyzer = context.getMapperService().analysisService().analyzer(this.analyzer);
+            Analyzer analyzer = parseContext.mapperService().analysisService().analyzer(this.analyzer);
             if (analyzer == null) {
                 throw new IllegalArgumentException("No analyzer found for [" + this.analyzer + "]");
             }
@@ -214,9 +144,9 @@ public class MatchQuery {
 
     public Query parse(Type type, String fieldName, Object value) throws IOException {
         final String field;
-        MappedFieldType fieldType = context.fieldMapper(fieldName);
+        MappedFieldType fieldType = parseContext.fieldMapper(fieldName);
         if (fieldType != null) {
-            field = fieldType.name();
+            field = fieldType.names().indexName();
         } else {
             field = fieldName;
         }
@@ -230,8 +160,8 @@ public class MatchQuery {
          * passing through QueryBuilder.
          */
         boolean noForcedAnalyzer = this.analyzer == null;
-        if (fieldType != null && fieldType.tokenized() == false && noForcedAnalyzer) {
-            return blendTermQuery(new Term(fieldName, value.toString()), fieldType);
+        if (fieldType != null && fieldType.useTermQueryWithQueryString() && noForcedAnalyzer) {
+            return termQuery(fieldType, value);
         }
 
         Analyzer analyzer = getAnalyzer(fieldType);
@@ -265,9 +195,18 @@ public class MatchQuery {
         }
     }
 
+    /**
+     * Creates a TermQuery-like-query for MappedFieldTypes that don't support
+     * QueryBuilder which is very string-ish. Just delegates to the
+     * MappedFieldType for MatchQuery but gets more complex for blended queries.
+     */
+    protected Query termQuery(MappedFieldType fieldType, Object value) {
+        return termQuery(fieldType, value, lenient);
+    }
+
     protected final Query termQuery(MappedFieldType fieldType, Object value, boolean lenient) {
         try {
-            return fieldType.termQuery(value, context);
+            return fieldType.termQuery(value, parseContext);
         } catch (RuntimeException e) {
             if (lenient) {
                 return null;
@@ -277,10 +216,7 @@ public class MatchQuery {
     }
 
     protected Query zeroTermsQuery() {
-        if (zeroTermsQuery == DEFAULT_ZERO_TERMS_QUERY) {
-            return Queries.newMatchNoDocsQuery("Matching no documents because no terms present.");
-        }
-        return Queries.newMatchAllQuery();
+        return zeroTermsQuery == ZeroTermsQuery.NONE ? Queries.newMatchNoDocsQuery() : Queries.newMatchAllQuery();
     }
 
     private class MatchQueryBuilder extends QueryBuilder {
@@ -315,10 +251,10 @@ public class MatchQuery {
                 return prefixQuery;
             } else if (query instanceof MultiPhraseQuery) {
                 MultiPhraseQuery pq = (MultiPhraseQuery)query;
-                Term[][] terms = pq.getTermArrays();
+                List<Term[]> terms = pq.getTermArrays();
                 int[] positions = pq.getPositions();
-                for (int i = 0; i < terms.length; i++) {
-                    prefixQuery.add(terms[i], positions[i]);
+                for (int i = 0; i < terms.size(); i++) {
+                    prefixQuery.add(terms.get(i), positions[i]);
                 }
                 return prefixQuery;
             } else if (query instanceof TermQuery) {
@@ -356,11 +292,8 @@ public class MatchQuery {
                     }
                     return query;
                 } catch (RuntimeException e) {
-                    if (lenient) {
-                        return new TermQuery(term);
-                    } else {
-                        throw e;
-                    }
+                    return new TermQuery(term);
+                    // See long comment below about why we're lenient here.
                 }
             }
             int edits = fuzziness.asDistance(term.text());
@@ -369,7 +302,23 @@ public class MatchQuery {
             return query;
         }
         if (fieldType != null) {
-            Query query = termQuery(fieldType, term.bytes(), lenient);
+            /*
+             * Its a bit weird to default to lenient here but its the backwards
+             * compatible. It makes some sense when you think about what we are
+             * doing here: at this point the user has forced an analyzer and
+             * passed some string to the match query. We cut it up using the
+             * analyzer and then tried to cram whatever we get into the field.
+             * lenient=true here means that we try the terms in the query and on
+             * the off chance that they are actually valid terms then we
+             * actually try them. lenient=false would mean that we blow up the
+             * query if they aren't valid terms. "valid" in this context means
+             * "parses properly to something of the type being queried." So "1"
+             * is a valid number, etc.
+             *
+             * We use the text form here because we we've received the term from
+             * an analyzer that cut some string into text.
+             */
+            Query query = termQuery(fieldType, term.bytes(), true);
             if (query != null) {
                 return query;
             }

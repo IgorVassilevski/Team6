@@ -19,48 +19,48 @@
 
 package org.elasticsearch.action.admin.cluster.snapshots.status;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.cluster.SnapshotsInProgress.State;
-import org.elasticsearch.snapshots.Snapshot;
+import org.elasticsearch.cluster.metadata.SnapshotId;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.common.xcontent.XContentFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
-import static java.util.Collections.unmodifiableMap;
+import static com.google.common.collect.Sets.newHashSet;
 
 /**
  * Status of a snapshot
  */
 public class SnapshotStatus implements ToXContent, Streamable {
 
-    private Snapshot snapshot;
+    private SnapshotId snapshotId;
 
     private State state;
 
     private List<SnapshotIndexShardStatus> shards;
 
-    private Map<String, SnapshotIndexStatus> indicesStatus;
+    private ImmutableMap<String, SnapshotIndexStatus> indicesStatus;
 
     private SnapshotShardsStats shardsStats;
 
     private SnapshotStats stats;
 
-    SnapshotStatus(final Snapshot snapshot, final State state, final List<SnapshotIndexShardStatus> shards) {
-        this.snapshot = Objects.requireNonNull(snapshot);
-        this.state = Objects.requireNonNull(state);
-        this.shards = Objects.requireNonNull(shards);
+
+    SnapshotStatus(SnapshotId snapshotId, State state, List<SnapshotIndexShardStatus> shards) {
+        this.snapshotId = snapshotId;
+        this.state = state;
+        this.shards = shards;
         shardsStats = new SnapshotShardsStats(shards);
         updateShardStats();
     }
@@ -69,10 +69,10 @@ public class SnapshotStatus implements ToXContent, Streamable {
     }
 
     /**
-     * Returns snapshot
+     * Returns snapshot id
      */
-    public Snapshot getSnapshot() {
-        return snapshot;
+    public SnapshotId getSnapshotId() {
+        return snapshotId;
     }
 
     /**
@@ -101,9 +101,9 @@ public class SnapshotStatus implements ToXContent, Streamable {
             return this.indicesStatus;
         }
 
-        Map<String, SnapshotIndexStatus> indicesStatus = new HashMap<>();
+        ImmutableMap.Builder<String, SnapshotIndexStatus> indicesStatus = ImmutableMap.builder();
 
-        Set<String> indices = new HashSet<>();
+        Set<String> indices = newHashSet();
         for (SnapshotIndexShardStatus shard : shards) {
             indices.add(shard.getIndex());
         }
@@ -117,14 +117,14 @@ public class SnapshotStatus implements ToXContent, Streamable {
             }
             indicesStatus.put(index, new SnapshotIndexStatus(index, shards));
         }
-        this.indicesStatus = unmodifiableMap(indicesStatus);
+        this.indicesStatus = indicesStatus.build();
         return this.indicesStatus;
 
     }
 
     @Override
     public void readFrom(StreamInput in) throws IOException {
-        snapshot = new Snapshot(in);
+        snapshotId = SnapshotId.readSnapshotId(in);
         state = State.fromValue(in.readByte());
         int size = in.readVInt();
         List<SnapshotIndexShardStatus> builder = new ArrayList<>();
@@ -137,7 +137,7 @@ public class SnapshotStatus implements ToXContent, Streamable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        snapshot.writeTo(out);
+        snapshotId.writeTo(out);
         out.writeByte(state.value());
         out.writeVInt(shards.size());
         for (SnapshotIndexShardStatus shard : shards) {
@@ -170,6 +170,7 @@ public class SnapshotStatus implements ToXContent, Streamable {
         }
     }
 
+
     /**
      * Returns number of files in the snapshot
      */
@@ -177,22 +178,22 @@ public class SnapshotStatus implements ToXContent, Streamable {
         return stats;
     }
 
-    private static final String SNAPSHOT = "snapshot";
-    private static final String REPOSITORY = "repository";
-    private static final String UUID = "uuid";
-    private static final String STATE = "state";
-    private static final String INDICES = "indices";
+    static final class Fields {
+        static final XContentBuilderString SNAPSHOT = new XContentBuilderString("snapshot");
+        static final XContentBuilderString REPOSITORY = new XContentBuilderString("repository");
+        static final XContentBuilderString STATE = new XContentBuilderString("state");
+        static final XContentBuilderString INDICES = new XContentBuilderString("indices");
+    }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(SNAPSHOT, snapshot.getSnapshotId().getName());
-        builder.field(REPOSITORY, snapshot.getRepository());
-        builder.field(UUID, snapshot.getSnapshotId().getUUID());
-        builder.field(STATE, state.name());
+        builder.field(Fields.SNAPSHOT, snapshotId.getSnapshot());
+        builder.field(Fields.REPOSITORY, snapshotId.getRepository());
+        builder.field(Fields.STATE, state.name());
         shardsStats.toXContent(builder, params);
         stats.toXContent(builder, params);
-        builder.startObject(INDICES);
+        builder.startObject(Fields.INDICES);
         for (SnapshotIndexStatus indexStatus : getIndices().values()) {
             indexStatus.toXContent(builder, params);
         }

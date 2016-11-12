@@ -24,6 +24,7 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 
 import java.io.IOException;
 
@@ -74,8 +75,8 @@ public class ScriptStats implements Streamable, ToXContent {
     }
 
     static final class Fields {
-        static final String SCRIPT_STATS = "script";
-        static final String COMPILATIONS = "compilations";
-        static final String CACHE_EVICTIONS = "cache_evictions";
+        static final XContentBuilderString SCRIPT_STATS = new XContentBuilderString("script");
+        static final XContentBuilderString COMPILATIONS = new XContentBuilderString("compilations");
+        static final XContentBuilderString CACHE_EVICTIONS = new XContentBuilderString("cache_evictions");
     }
 }

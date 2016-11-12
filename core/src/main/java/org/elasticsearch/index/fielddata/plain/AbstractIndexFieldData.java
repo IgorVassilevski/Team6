@@ -24,39 +24,47 @@ import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.AbstractIndexComponent;
-import org.elasticsearch.index.IndexSettings;
-import org.elasticsearch.index.fielddata.AtomicFieldData;
-import org.elasticsearch.index.fielddata.IndexFieldData;
-import org.elasticsearch.index.fielddata.IndexFieldDataCache;
-import org.elasticsearch.index.fielddata.RamAccountingTermsEnum;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.fielddata.*;
+import org.elasticsearch.index.mapper.MappedFieldType;
 
 import java.io.IOException;
 
+/**
+ */
 public abstract class AbstractIndexFieldData<FD extends AtomicFieldData> extends AbstractIndexComponent implements IndexFieldData<FD> {
 
-    private final String fieldName;
+    private final MappedFieldType.Names fieldNames;
+    protected final FieldDataType fieldDataType;
     protected final IndexFieldDataCache cache;
 
-    public AbstractIndexFieldData(IndexSettings indexSettings, String fieldName, IndexFieldDataCache cache) {
-        super(indexSettings);
-        this.fieldName = fieldName;
+    public AbstractIndexFieldData(Index index, Settings indexSettings, MappedFieldType.Names fieldNames, FieldDataType fieldDataType, IndexFieldDataCache cache) {
+        super(index, indexSettings);
+        this.fieldNames = fieldNames;
+        this.fieldDataType = fieldDataType;
         this.cache = cache;
     }
 
     @Override
-    public String getFieldName() {
-        return this.fieldName;
+    public MappedFieldType.Names getFieldNames() {
+        return this.fieldNames;
+    }
+
+    @Override
+    public FieldDataType getFieldDataType() {
+        return fieldDataType;
     }
 
     @Override
     public void clear() {
-        cache.clear(fieldName);
+        cache.clear(fieldNames.indexName());
     }
 
     @Override
     public FD load(LeafReaderContext context) {
-        if (context.reader().getFieldInfos().fieldInfo(fieldName) == null) {
+        if (context.reader().getFieldInfos().fieldInfo(fieldNames.indexName()) == null) {
             // Some leaf readers may be wrapped and report different set of fields and use the same cache key.
             // If a field can't be found then it doesn't mean it isn't there,
             // so if a field doesn't exist then we don't cache it and just return an empty field data instance.
@@ -67,11 +75,11 @@ public abstract class AbstractIndexFieldData<FD extends AtomicFieldData> extends
         try {
             FD fd = cache.load(context, this);
             return fd;
-        } catch (Exception e) {
+        } catch (Throwable e) {
             if (e instanceof ElasticsearchException) {
                 throw (ElasticsearchException) e;
             } else {
-                throw new ElasticsearchException(e);
+                throw new ElasticsearchException(e.getMessage(), e);
             }
         }
     }
@@ -96,7 +104,7 @@ public abstract class AbstractIndexFieldData<FD extends AtomicFieldData> extends
         /**
          * @return the number of bytes for the given term
          */
-        long bytesPerValue(BytesRef term);
+        public long bytesPerValue(BytesRef term);
 
         /**
          * Execute any pre-loading estimations for the terms. May also
@@ -107,7 +115,7 @@ public abstract class AbstractIndexFieldData<FD extends AtomicFieldData> extends
          * @param terms terms to be estimated
          * @return A TermsEnum for the given terms
          */
-        TermsEnum beforeLoad(Terms terms) throws IOException;
+        public TermsEnum beforeLoad(Terms terms) throws IOException;
 
         /**
          * Possibly adjust a circuit breaker after field data has been loaded,
@@ -116,6 +124,6 @@ public abstract class AbstractIndexFieldData<FD extends AtomicFieldData> extends
          * @param termsEnum  terms that were loaded
          * @param actualUsed actual field data memory usage
          */
-        void afterLoad(TermsEnum termsEnum, long actualUsed);
+        public void afterLoad(TermsEnum termsEnum, long actualUsed);
     }
 }

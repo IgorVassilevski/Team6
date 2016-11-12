@@ -22,19 +22,18 @@ package org.elasticsearch.client.transport;
 import org.elasticsearch.Version;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.common.network.NetworkModule;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
-import org.elasticsearch.env.Environment;
 import org.elasticsearch.node.Node;
+import org.elasticsearch.node.internal.InternalSettingsPreparer;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
-import org.elasticsearch.test.ESIntegTestCase.Scope;
-import org.elasticsearch.transport.MockTransportClient;
 import org.elasticsearch.transport.TransportService;
+import org.junit.Test;
 
-import java.io.IOException;
-
+import static org.elasticsearch.common.settings.Settings.settingsBuilder;
+import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
+import static org.elasticsearch.test.ESIntegTestCase.Scope;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
@@ -43,59 +42,62 @@ import static org.hamcrest.Matchers.startsWith;
 @ClusterScope(scope = Scope.TEST, numDataNodes = 0, transportClientRatio = 1.0)
 public class TransportClientIT extends ESIntegTestCase {
 
+    @Test
     public void testPickingUpChangesInDiscoveryNode() {
-        String nodeName = internalCluster().startNode(Settings.builder().put(Node.NODE_DATA_SETTING.getKey(), false));
+        String nodeName = internalCluster().startNode(Settings.builder().put("node.data", false));
 
         TransportClient client = (TransportClient) internalCluster().client(nodeName);
-        assertThat(client.connectedNodes().get(0).isDataNode(), equalTo(false));
+        assertThat(client.connectedNodes().get(0).dataNode(), equalTo(false));
 
     }
 
-    public void testNodeVersionIsUpdated() throws IOException {
+    @Test
+    public void testNodeVersionIsUpdated() {
         TransportClient client = (TransportClient)  internalCluster().client();
-        try (Node node = new Node(Settings.builder()
+        TransportClientNodesService nodeService = client.nodeService();
+        Node node = nodeBuilder().data(false).settings(Settings.builder()
                 .put(internalCluster().getDefaultSettings())
-                .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir())
+                .put("path.home", createTempDir())
                 .put("node.name", "testNodeVersionIsUpdated")
-                .put("transport.type", "local")
-                .put(NetworkModule.HTTP_ENABLED.getKey(), false)
-                .put(Node.NODE_DATA_SETTING.getKey(), false)
-                .put("cluster.name", "foobar")
-                .build()).start()) {
+                .put("http.enabled", false)
+                .put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true) // make sure we get what we set :)
+                .build()).clusterName("foobar").build();
+        node.start();
+        try {
             TransportAddress transportAddress = node.injector().getInstance(TransportService.class).boundAddress().publishAddress();
             client.addTransportAddress(transportAddress);
-            // since we force transport clients there has to be one node started that we connect to.
-            assertThat(client.connectedNodes().size(), greaterThanOrEqualTo(1));
-            // connected nodes have updated version
-            for (DiscoveryNode discoveryNode : client.connectedNodes()) {
+            assertThat(nodeService.connectedNodes().size(), greaterThanOrEqualTo(1)); // since we force transport clients there has to be one node started that we connect to.
+            for (DiscoveryNode discoveryNode : nodeService.connectedNodes()) {  // connected nodes have updated version
                 assertThat(discoveryNode.getVersion(), equalTo(Version.CURRENT));
             }
 
-            for (DiscoveryNode discoveryNode : client.listedNodes()) {
-                assertThat(discoveryNode.getId(), startsWith("#transport#-"));
+            for (DiscoveryNode discoveryNode : nodeService.listedNodes()) {
+                assertThat(discoveryNode.id(), startsWith("#transport#-"));
                 assertThat(discoveryNode.getVersion(), equalTo(Version.CURRENT.minimumCompatibilityVersion()));
             }
 
-            assertThat(client.filteredNodes().size(), equalTo(1));
-            for (DiscoveryNode discoveryNode : client.filteredNodes()) {
+            assertThat(nodeService.filteredNodes().size(), equalTo(1));
+            for (DiscoveryNode discoveryNode : nodeService.filteredNodes()) {
                 assertThat(discoveryNode.getVersion(), equalTo(Version.CURRENT.minimumCompatibilityVersion()));
             }
+        } finally {
+            node.close();
         }
     }
 
+    @Test
     public void testThatTransportClientSettingIsSet() {
         TransportClient client = (TransportClient)  internalCluster().client();
         Settings settings = client.injector.getInstance(Settings.class);
-        assertThat(Client.CLIENT_TYPE_SETTING_S.get(settings), is("transport"));
+        assertThat(settings.get(Client.CLIENT_TYPE_SETTING), is("transport"));
     }
 
+    @Test
     public void testThatTransportClientSettingCannotBeChanged() {
-        Settings baseSettings = Settings.builder()
-            .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir())
-            .build();
-        try (TransportClient client = new MockTransportClient(baseSettings)) {
+        Settings baseSettings = settingsBuilder().put(Client.CLIENT_TYPE_SETTING, "anything").put("path.home", createTempDir()).build();
+        try (TransportClient client = TransportClient.builder().settings(baseSettings).build()) {
             Settings settings = client.injector.getInstance(Settings.class);
-            assertThat(Client.CLIENT_TYPE_SETTING_S.get(settings), is("transport"));
+            assertThat(settings.get(Client.CLIENT_TYPE_SETTING), is("transport"));
         }
     }
 }

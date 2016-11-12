@@ -8,6 +8,10 @@
           body:   { foo: bar }
 
   - do:
+      cluster.health:
+          wait_for_status: yellow
+
+  - do:
       mget:
         body:
           docs:

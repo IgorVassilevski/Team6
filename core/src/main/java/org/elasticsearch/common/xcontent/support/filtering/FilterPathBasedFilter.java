@@ -24,7 +24,6 @@ import org.elasticsearch.common.util.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 public class FilterPathBasedFilter extends TokenFilter {
 
@@ -32,30 +31,25 @@ public class FilterPathBasedFilter extends TokenFilter {
      * Marker value that should be used to indicate that a property name
      * or value matches one of the filter paths.
      */
-    private static final TokenFilter MATCHING = new TokenFilter() {
-    };
+    private static final TokenFilter MATCHING = new TokenFilter(){};
 
     /**
      * Marker value that should be used to indicate that none of the
      * property names/values matches one of the filter paths.
      */
-    private static final TokenFilter NO_MATCHING = new TokenFilter() {
-    };
+    private static final TokenFilter NO_MATCHING = new TokenFilter(){};
 
     private final FilterPath[] filters;
 
-    private final boolean inclusive;
-
-    public FilterPathBasedFilter(FilterPath[] filters, boolean inclusive) {
+    public FilterPathBasedFilter(FilterPath[] filters) {
         if (CollectionUtils.isEmpty(filters)) {
             throw new IllegalArgumentException("filters cannot be null or empty");
         }
-        this.inclusive = inclusive;
         this.filters = filters;
     }
 
-    public FilterPathBasedFilter(Set<String> filters, boolean inclusive) {
-        this(FilterPath.compile(filters), inclusive);
+    public FilterPathBasedFilter(String[] filters) {
+        this(FilterPath.compile(filters));
     }
 
     /**
@@ -83,27 +77,31 @@ public class FilterPathBasedFilter extends TokenFilter {
             }
 
             if ((nextFilters != null) && (nextFilters.isEmpty() == false)) {
-                return new FilterPathBasedFilter(nextFilters.toArray(new FilterPath[nextFilters.size()]), inclusive);
+                return new FilterPathBasedFilter(nextFilters.toArray(new FilterPath[nextFilters.size()]));
             }
         }
         return NO_MATCHING;
     }
 
-
     @Override
     public TokenFilter includeProperty(String name) {
-        TokenFilter filter = evaluate(name, filters);
-        if (filter == MATCHING) {
-            return inclusive ? TokenFilter.INCLUDE_ALL : null;
+        TokenFilter include = evaluate(name, filters);
+        if (include == MATCHING) {
+            return TokenFilter.INCLUDE_ALL;
         }
-        if (filter == NO_MATCHING) {
-            return inclusive ? null : TokenFilter.INCLUDE_ALL;
+        if (include == NO_MATCHING) {
+            return null;
         }
-        return filter;
+        return include;
     }
 
     @Override
     protected boolean _includeScalar() {
-        return !inclusive;
+        for (FilterPath filter : filters) {
+            if (filter.matches()) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -19,7 +19,8 @@
 
 package org.elasticsearch.common.io;
 
-import org.apache.lucene.util.IOUtils;
+import com.google.common.base.Charsets;
+import com.google.common.base.Preconditions;
 import org.elasticsearch.common.util.Callback;
 
 import java.io.BufferedReader;
@@ -30,10 +31,8 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Simple utility methods for file and stream copying.
@@ -67,9 +66,8 @@ public abstract class Streams {
      * @throws IOException in case of I/O errors
      */
     public static long copy(InputStream in, OutputStream out, byte[] buffer) throws IOException {
-        Objects.requireNonNull(in, "No InputStream specified");
-        Objects.requireNonNull(out, "No OutputStream specified");
-        boolean success = false;
+        Preconditions.checkNotNull(in, "No InputStream specified");
+        Preconditions.checkNotNull(out, "No OutputStream specified");
         try {
             long byteCount = 0;
             int bytesRead;
@@ -78,13 +76,17 @@ public abstract class Streams {
                 byteCount += bytesRead;
             }
             out.flush();
-            success = true;
             return byteCount;
         } finally {
-            if (success) {
-                IOUtils.close(in, out);
-            } else {
-                IOUtils.closeWhileHandlingException(in, out);
+            try {
+                in.close();
+            } catch (IOException ex) {
+                // do nothing
+            }
+            try {
+                out.close();
+            } catch (IOException ex) {
+                // do nothing
             }
         }
     }
@@ -98,8 +100,8 @@ public abstract class Streams {
      * @throws IOException in case of I/O errors
      */
     public static void copy(byte[] in, OutputStream out) throws IOException {
-        Objects.requireNonNull(in, "No input byte array specified");
-        Objects.requireNonNull(out, "No OutputStream specified");
+        Preconditions.checkNotNull(in, "No input byte array specified");
+        Preconditions.checkNotNull(out, "No OutputStream specified");
         try {
             out.write(in);
         } finally {
@@ -126,9 +128,8 @@ public abstract class Streams {
      * @throws IOException in case of I/O errors
      */
     public static int copy(Reader in, Writer out) throws IOException {
-        Objects.requireNonNull(in, "No Reader specified");
-        Objects.requireNonNull(out, "No Writer specified");
-        boolean success = false;
+        Preconditions.checkNotNull(in, "No Reader specified");
+        Preconditions.checkNotNull(out, "No Writer specified");
         try {
             int byteCount = 0;
             char[] buffer = new char[BUFFER_SIZE];
@@ -138,13 +139,17 @@ public abstract class Streams {
                 byteCount += bytesRead;
             }
             out.flush();
-            success = true;
             return byteCount;
         } finally {
-            if (success) {
-                IOUtils.close(in, out);
-            } else {
-                IOUtils.closeWhileHandlingException(in, out);
+            try {
+                in.close();
+            } catch (IOException ex) {
+                // do nothing
+            }
+            try {
+                out.close();
+            } catch (IOException ex) {
+                // do nothing
             }
         }
     }
@@ -158,8 +163,8 @@ public abstract class Streams {
      * @throws IOException in case of I/O errors
      */
     public static void copy(String in, Writer out) throws IOException {
-        Objects.requireNonNull(in, "No input String specified");
-        Objects.requireNonNull(out, "No Writer specified");
+        Preconditions.checkNotNull(in, "No input String specified");
+        Preconditions.checkNotNull(out, "No Writer specified");
         try {
             out.write(in);
         } finally {
@@ -229,7 +234,7 @@ public abstract class Streams {
     }
 
     public static void readAllLines(InputStream input, Callback<String> callback) throws IOException {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, Charsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 callback.handle(line);

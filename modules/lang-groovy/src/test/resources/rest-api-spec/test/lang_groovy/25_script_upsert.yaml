@@ -10,10 +10,8 @@
           type:     test
           id:       1
           body:
-            script:
-              inline: "ctx._source.foo = bar"
-              params: { bar: 'xxx' }
-              lang: "groovy"
+            script: "ctx._source.foo = bar"
+            params: { bar: 'xxx' }
             upsert: { foo: baz }
 
   - do:
@@ -31,10 +29,8 @@
           type:     test
           id:       1
           body:
-            script:
-              inline: "ctx._source.foo = bar"
-              params: { bar: 'xxx' }
-              lang: "groovy"
+            script: "ctx._source.foo = bar"
+            params: { bar: 'xxx' }
             upsert: { foo: baz }
 
   - do:
@@ -51,10 +47,8 @@
           type:     test
           id:       2
           body:
-            script:
-              inline: "ctx._source.foo = bar"
-              params: { bar: 'xxx' }
-              lang: "groovy"
+            script: "ctx._source.foo = bar"
+            params: { bar: 'xxx' }
             upsert: { foo: baz }
             scripted_upsert: true
 

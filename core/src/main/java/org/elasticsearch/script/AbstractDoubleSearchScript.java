@@ -37,4 +37,9 @@ public abstract class AbstractDoubleSearchScript extends AbstractSearchScript {
     public long runAsLong() {
         return (long) runAsDouble();
     }
+
+    @Override
+    public float runAsFloat() {
+        return (float) runAsDouble();
+    }
 }

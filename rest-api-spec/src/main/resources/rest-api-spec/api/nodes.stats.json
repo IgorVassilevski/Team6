@@ -1,6 +1,6 @@
 {
   "nodes.stats": {
-    "documentation": "http://www.elastic.co/guide/en/elasticsearch/reference/master/cluster-nodes-stats.html",
+    "documentation": "http://www.elastic.co/guide/en/elasticsearch/reference/2.3/cluster-nodes-stats.html",
     "methods": ["GET"],
     "url": {
       "path": "/_nodes/stats",
@@ -15,7 +15,7 @@
       "parts": {
         "metric" : {
           "type" : "list",
-          "options" : ["_all", "breaker", "fs", "http", "indices", "jvm", "os", "process", "thread_pool", "transport", "discovery"],
+          "options" : ["_all", "breaker", "fs", "http", "indices", "jvm", "os", "process", "thread_pool", "transport"],
           "description" : "Limit the information returned to the specified metrics"
         },
         "index_metric" : {

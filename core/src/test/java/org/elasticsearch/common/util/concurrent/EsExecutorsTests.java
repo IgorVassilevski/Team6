@@ -20,7 +20,6 @@
 package org.elasticsearch.common.util.concurrent;
 
 import org.elasticsearch.ExceptionsHelper;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESTestCase;
 import org.hamcrest.Matcher;
 
@@ -39,13 +38,12 @@ import static org.hamcrest.Matchers.lessThan;
  */
 public class EsExecutorsTests extends ESTestCase {
 
-    private final ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
     private TimeUnit randomTimeUnit() {
         return TimeUnit.values()[between(0, TimeUnit.values().length - 1)];
     }
 
     public void testFixedForcedExecution() throws Exception {
-        EsThreadPoolExecutor executor = EsExecutors.newFixed(getTestName(), 1, 1, EsExecutors.daemonThreadFactory("test"), threadContext);
+        EsThreadPoolExecutor executor = EsExecutors.newFixed(getTestName(), 1, 1, EsExecutors.daemonThreadFactory("test"));
         final CountDownLatch wait = new CountDownLatch(1);
 
         final CountDownLatch exec1Wait = new CountDownLatch(1);
@@ -88,8 +86,8 @@ public class EsExecutorsTests extends ESTestCase {
             }
 
             @Override
-            public void onFailure(Exception e) {
-                throw new AssertionError(e);
+            public void onFailure(Throwable t) {
+                throw new AssertionError(t);
             }
         });
 
@@ -107,7 +105,7 @@ public class EsExecutorsTests extends ESTestCase {
     }
 
     public void testFixedRejected() throws Exception {
-        EsThreadPoolExecutor executor = EsExecutors.newFixed(getTestName(), 1, 1, EsExecutors.daemonThreadFactory("test"), threadContext);
+        EsThreadPoolExecutor executor = EsExecutors.newFixed(getTestName(), 1, 1, EsExecutors.daemonThreadFactory("test"));
         final CountDownLatch wait = new CountDownLatch(1);
 
         final CountDownLatch exec1Wait = new CountDownLatch(1);
@@ -165,7 +163,7 @@ public class EsExecutorsTests extends ESTestCase {
         final int max = between(min + 1, 6);
         final ThreadBarrier barrier = new ThreadBarrier(max + 1);
 
-        ThreadPoolExecutor pool = EsExecutors.newScaling(getTestName(), min, max, between(1, 100), randomTimeUnit(), EsExecutors.daemonThreadFactory("test"), threadContext);
+        ThreadPoolExecutor pool = EsExecutors.newScaling(getTestName(), min, max, between(1, 100), randomTimeUnit(), EsExecutors.daemonThreadFactory("test"));
         assertThat("Min property", pool.getCorePoolSize(), equalTo(min));
         assertThat("Max property", pool.getMaximumPoolSize(), equalTo(max));
 
@@ -178,7 +176,7 @@ public class EsExecutorsTests extends ESTestCase {
                     try {
                         barrier.await();
                         barrier.await();
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         barrier.reset(e);
                     }
                 }
@@ -201,7 +199,7 @@ public class EsExecutorsTests extends ESTestCase {
         final int max = between(min + 1, 6);
         final ThreadBarrier barrier = new ThreadBarrier(max + 1);
 
-        final ThreadPoolExecutor pool = EsExecutors.newScaling(getTestName(), min, max, between(1, 100), TimeUnit.MILLISECONDS, EsExecutors.daemonThreadFactory("test"), threadContext);
+        final ThreadPoolExecutor pool = EsExecutors.newScaling(getTestName(), min, max, between(1, 100), TimeUnit.MILLISECONDS, EsExecutors.daemonThreadFactory("test"));
         assertThat("Min property", pool.getCorePoolSize(), equalTo(min));
         assertThat("Max property", pool.getMaximumPoolSize(), equalTo(max));
 
@@ -214,7 +212,7 @@ public class EsExecutorsTests extends ESTestCase {
                     try {
                         barrier.await();
                         barrier.await();
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         barrier.reset(e);
                     }
                 }
@@ -244,7 +242,7 @@ public class EsExecutorsTests extends ESTestCase {
         int queue = between(0, 100);
         int actions = queue + pool;
         final CountDownLatch latch = new CountDownLatch(1);
-        EsThreadPoolExecutor executor = EsExecutors.newFixed(getTestName(), pool, queue, EsExecutors.daemonThreadFactory("dummy"), threadContext);
+        EsThreadPoolExecutor executor = EsExecutors.newFixed(getTestName(), pool, queue, EsExecutors.daemonThreadFactory("dummy"));
         try {
             for (int i = 0; i < actions; i++) {
                 executor.execute(new Runnable() {
@@ -322,66 +320,5 @@ public class EsExecutorsTests extends ESTestCase {
             assertThat(message, containsString("queued tasks = 0"));
             assertThat(message, containsString("completed tasks = " + actions));
         }
-    }
-
-    public void testInheritContext() throws InterruptedException {
-        int pool = between(1, 10);
-        int queue = between(0, 100);
-        final CountDownLatch latch = new CountDownLatch(1);
-        final CountDownLatch executed = new CountDownLatch(1);
-
-        threadContext.putHeader("foo", "bar");
-        final Integer one = new Integer(1);
-        threadContext.putTransient("foo", one);
-        EsThreadPoolExecutor executor = EsExecutors.newFixed(getTestName(), pool, queue, EsExecutors.daemonThreadFactory("dummy"), threadContext);
-        try {
-            executor.execute(() -> {
-                try {
-                    latch.await();
-                } catch (InterruptedException e) {
-                    fail();
-                }
-                assertEquals(threadContext.getHeader("foo"), "bar");
-                assertSame(threadContext.getTransient("foo"), one);
-                assertNull(threadContext.getHeader("bar"));
-                assertNull(threadContext.getTransient("bar"));
-                executed.countDown();
-            });
-            threadContext.putTransient("bar", "boom");
-            threadContext.putHeader("bar", "boom");
-            latch.countDown();
-            executed.await();
-
-        } finally {
-            latch.countDown();
-            terminate(executor);
-        }
-    }
-
-    public void testGetTasks() throws InterruptedException {
-        int pool = between(1, 10);
-        int queue = between(0, 100);
-        final CountDownLatch latch = new CountDownLatch(1);
-        final CountDownLatch executed = new CountDownLatch(1);
-        EsThreadPoolExecutor executor = EsExecutors.newFixed(getTestName(), pool, queue, EsExecutors.daemonThreadFactory("dummy"), threadContext);
-        try {
-            Runnable r = () -> {
-                latch.countDown();
-                try {
-                    executed.await();
-                } catch (InterruptedException e) {
-                    fail();
-                }
-            };
-            executor.execute(r);
-            latch.await();
-            executor.getTasks().forEach((runnable) -> assertSame(runnable, r));
-            executed.countDown();
-
-        } finally {
-            latch.countDown();
-            terminate(executor);
-        }
-
     }
 }

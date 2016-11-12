@@ -16,6 +16,7 @@
 
 package org.elasticsearch.common.inject.multibindings;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.Binding;
 import org.elasticsearch.common.inject.ConfigurationException;
@@ -36,15 +37,9 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
-
-import static java.util.Collections.emptyList;
-import static java.util.Collections.singleton;
-import static java.util.Collections.unmodifiableSet;
 
 /**
  * An API to bind multiple values separately, only to later inject them as a
@@ -213,10 +208,10 @@ public abstract class Multibinder<T> {
 
         private RealMultibinder(Binder binder, TypeLiteral<T> elementType,
                                 String setName, Key<Set<T>> setKey) {
-            this.binder = Objects.requireNonNull(binder, "binder");
-            this.elementType = Objects.requireNonNull(elementType, "elementType");
-            this.setName = Objects.requireNonNull(setName, "setName");
-            this.setKey = Objects.requireNonNull(setKey, "setKey");
+            this.binder = checkNotNull(binder, "binder");
+            this.elementType = checkNotNull(elementType, "elementType");
+            this.setName = checkNotNull(setName, "setName");
+            this.setKey = checkNotNull(setKey, "setKey");
         }
 
         @Override
@@ -242,8 +237,9 @@ public abstract class Multibinder<T> {
         @Inject
         public void initialize(Injector injector) {
             providers = new ArrayList<>();
-            Set<Dependency<?>> dependencies = new HashSet<>();
+            List<Dependency<?>> dependencies = new ArrayList<>();
             for (Binding<?> entry : injector.findBindingsByType(elementType)) {
+
                 if (keyMatches(entry.getKey())) {
                     @SuppressWarnings("unchecked") // protected by findBindingsByType()
                             Binding<T> binding = (Binding<T>) entry;
@@ -252,7 +248,7 @@ public abstract class Multibinder<T> {
                 }
             }
 
-            this.dependencies = unmodifiableSet(dependencies);
+            this.dependencies = ImmutableSet.copyOf(dependencies);
             this.binder = null;
         }
 
@@ -321,7 +317,7 @@ public abstract class Multibinder<T> {
             return;
         }
 
-        throw new ConfigurationException(singleton(new Message(Errors.format(format, args))));
+        throw new ConfigurationException(ImmutableSet.of(new Message(Errors.format(format, args))));
     }
 
     static <T> T checkNotNull(T reference, String name) {
@@ -330,7 +326,7 @@ public abstract class Multibinder<T> {
         }
 
         NullPointerException npe = new NullPointerException(name);
-        throw new ConfigurationException(singleton(
-                new Message(emptyList(), npe)));
+        throw new ConfigurationException(ImmutableSet.of(
+                new Message(Collections.emptyList(), npe.toString(), npe)));
     }
 }

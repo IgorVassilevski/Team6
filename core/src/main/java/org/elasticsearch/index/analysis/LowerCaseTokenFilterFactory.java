@@ -19,14 +19,16 @@
 
 package org.elasticsearch.index.analysis;
 
-import org.apache.lucene.analysis.LowerCaseFilter;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.core.LowerCaseFilter;
 import org.apache.lucene.analysis.el.GreekLowerCaseFilter;
 import org.apache.lucene.analysis.ga.IrishLowerCaseFilter;
 import org.apache.lucene.analysis.tr.TurkishLowerCaseFilter;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 /**
  * Factory for {@link LowerCaseFilter} and some language-specific variants
@@ -37,12 +39,13 @@ import org.elasticsearch.index.IndexSettings;
  *   <li>turkish: {@link TurkishLowerCaseFilter}
  * </ul>
  */
-public class LowerCaseTokenFilterFactory extends AbstractTokenFilterFactory implements MultiTermAwareComponent {
+public class LowerCaseTokenFilterFactory extends AbstractTokenFilterFactory {
 
     private final String lang;
 
-    public LowerCaseTokenFilterFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public LowerCaseTokenFilterFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         this.lang = settings.get("language", null);
     }
 
@@ -59,11 +62,6 @@ public class LowerCaseTokenFilterFactory extends AbstractTokenFilterFactory impl
         } else {
             throw new IllegalArgumentException("language [" + lang + "] not support for lower case");
         }
-    }
-
-    @Override
-    public Object getMultiTermComponent() {
-        return this;
     }
 }
 

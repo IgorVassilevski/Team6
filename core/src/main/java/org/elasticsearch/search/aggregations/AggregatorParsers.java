@@ -18,15 +18,20 @@
  */
 package org.elasticsearch.search.aggregations;
 
-import org.elasticsearch.common.ParseFieldMatcher;
-import org.elasticsearch.common.ParsingException;
-import org.elasticsearch.common.xcontent.ParseFieldRegistry;
+import com.google.common.collect.ImmutableMap;
+
+import org.elasticsearch.common.collect.MapBuilder;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.query.QueryParseContext;
+import org.elasticsearch.search.SearchParseException;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
+import org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorFactory;
+import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,92 +39,130 @@ import java.util.regex.Pattern;
  * A registry for all the aggregator parser, also servers as the main parser for the aggregations module
  */
 public class AggregatorParsers {
+
     public static final Pattern VALID_AGG_NAME = Pattern.compile("[^\\[\\]>]+");
+    private final ImmutableMap<String, Aggregator.Parser> aggParsers;
+    private final ImmutableMap<String, PipelineAggregator.Parser> pipelineAggregatorParsers;
 
-    private final ParseFieldRegistry<Aggregator.Parser> aggregationParserRegistry;
-    private final ParseFieldRegistry<PipelineAggregator.Parser> pipelineAggregationParserRegistry;
 
-    public AggregatorParsers(ParseFieldRegistry<Aggregator.Parser> aggregationParserRegistry,
-            ParseFieldRegistry<PipelineAggregator.Parser> pipelineAggregationParserRegistry) {
-        this.aggregationParserRegistry = aggregationParserRegistry;
-        this.pipelineAggregationParserRegistry = pipelineAggregationParserRegistry;
+    /**
+     * Constructs the AggregatorParsers out of all the given parsers
+     *
+     * @param aggParsers
+     *            The available aggregator parsers (dynamically injected by the
+     *            {@link org.elasticsearch.search.SearchModule}
+     *            ).
+     */
+    @Inject
+    public AggregatorParsers(Set<Aggregator.Parser> aggParsers, Set<PipelineAggregator.Parser> pipelineAggregatorParsers) {
+        MapBuilder<String, Aggregator.Parser> aggParsersBuilder = MapBuilder.newMapBuilder();
+        for (Aggregator.Parser parser : aggParsers) {
+            aggParsersBuilder.put(parser.type(), parser);
+        }
+        this.aggParsers = aggParsersBuilder.immutableMap();
+        MapBuilder<String, PipelineAggregator.Parser> pipelineAggregatorParsersBuilder = MapBuilder.newMapBuilder();
+        for (PipelineAggregator.Parser parser : pipelineAggregatorParsers) {
+            pipelineAggregatorParsersBuilder.put(parser.type(), parser);
+        }
+        this.pipelineAggregatorParsers = pipelineAggregatorParsersBuilder.immutableMap();
     }
 
     /**
      * Returns the parser that is registered under the given aggregation type.
      *
-     * @param type The aggregation type
-     * @param parseFieldMatcher used for making error messages.
-     * @return The parser associated with the given aggregation type or null if it wasn't found.
+     * @param type  The aggregation type
+     * @return      The parser associated with the given aggregation type.
      */
-    public Aggregator.Parser parser(String type, ParseFieldMatcher parseFieldMatcher) {
-        return aggregationParserRegistry.lookupReturningNullIfNotFound(type, parseFieldMatcher);
+    public Aggregator.Parser parser(String type) {
+        return aggParsers.get(type);
     }
 
     /**
-     * Returns the parser that is registered under the given pipeline aggregator type.
+     * Returns the parser that is registered under the given pipeline aggregator
+     * type.
      *
-     * @param type The pipeline aggregator type
-     * @param parseFieldMatcher used for making error messages.
-     * @return The parser associated with the given pipeline aggregator type or null if it wasn't found.
+     * @param type
+     *            The pipeline aggregator type
+     * @return The parser associated with the given pipeline aggregator type.
      */
-    public PipelineAggregator.Parser pipelineParser(String type, ParseFieldMatcher parseFieldMatcher) {
-        return pipelineAggregationParserRegistry.lookupReturningNullIfNotFound(type, parseFieldMatcher);
+    public PipelineAggregator.Parser pipelineAggregator(String type) {
+        return pipelineAggregatorParsers.get(type);
     }
 
     /**
      * Parses the aggregation request recursively generating aggregator factories in turn.
      *
-     * @param parseContext   The parse context.
+     * @param parser    The input xcontent that will be parsed.
+     * @param context   The search context.
      *
      * @return          The parsed aggregator factories.
      *
      * @throws IOException When parsing fails for unknown reasons.
      */
-    public AggregatorFactories.Builder parseAggregators(QueryParseContext parseContext) throws IOException {
-        return parseAggregators(parseContext, 0);
+    public AggregatorFactories parseAggregators(XContentParser parser, SearchContext context) throws IOException {
+        return parseAggregators(parser, context, 0);
     }
 
-    private AggregatorFactories.Builder parseAggregators(QueryParseContext parseContext, int level) throws IOException {
+
+    private AggregatorFactories parseAggregators(XContentParser parser, SearchContext context, int level) throws IOException {
         Matcher validAggMatcher = VALID_AGG_NAME.matcher("");
         AggregatorFactories.Builder factories = new AggregatorFactories.Builder();
 
         XContentParser.Token token = null;
-        XContentParser parser = parseContext.parser();
         while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
             if (token != XContentParser.Token.FIELD_NAME) {
-                throw new ParsingException(parser.getTokenLocation(),
-                        "Unexpected token " + token + " in [aggs]: aggregations definitions must start with the name of the aggregation.");
+                throw new SearchParseException(context, "Unexpected token " + token
+                        + " in [aggs]: aggregations definitions must start with the name of the aggregation.", parser.getTokenLocation());
             }
             final String aggregationName = parser.currentName();
             if (!validAggMatcher.reset(aggregationName).matches()) {
-                throw new ParsingException(parser.getTokenLocation(), "Invalid aggregation name [" + aggregationName
-                        + "]. Aggregation names must be alpha-numeric and can only contain '_' and '-'");
+                throw new SearchParseException(context, "Invalid aggregation name [" + aggregationName
+                        + "]. Aggregation names must be alpha-numeric and can only contain '_' and '-'", parser.getTokenLocation());
             }
 
             token = parser.nextToken();
             if (token != XContentParser.Token.START_OBJECT) {
-                throw new ParsingException(parser.getTokenLocation(), "Aggregation definition for [" + aggregationName + " starts with a ["
-                        + token + "], expected a [" + XContentParser.Token.START_OBJECT + "].");
+                throw new SearchParseException(context, "Aggregation definition for [" + aggregationName + " starts with a [" + token
+                        + "], expected a [" + XContentParser.Token.START_OBJECT + "].", parser.getTokenLocation());
             }
 
-            AggregationBuilder aggFactory = null;
-            PipelineAggregationBuilder pipelineAggregatorFactory = null;
-            AggregatorFactories.Builder subFactories = null;
+            AggregatorFactory aggFactory = null;
+            PipelineAggregatorFactory pipelineAggregatorFactory = null;
+            AggregatorFactories subFactories = null;
 
             Map<String, Object> metaData = null;
 
             while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
                 if (token != XContentParser.Token.FIELD_NAME) {
-                    throw new ParsingException(
-                            parser.getTokenLocation(), "Expected [" + XContentParser.Token.FIELD_NAME + "] under a ["
+                    throw new SearchParseException(context, "Expected [" + XContentParser.Token.FIELD_NAME + "] under a ["
                             + XContentParser.Token.START_OBJECT + "], but got a [" + token + "] in [" + aggregationName + "]",
                             parser.getTokenLocation());
                 }
                 final String fieldName = parser.currentName();
 
                 token = parser.nextToken();
-                if (token == XContentParser.Token.START_OBJECT) {
+                if ("aggregations_binary".equals(fieldName)) {
+                    if (subFactories != null) {
+                        throw new SearchParseException(context, "Found two sub aggregation definitions under [" + aggregationName + "]",
+                                parser.getTokenLocation());
+                    }
+                    XContentParser binaryParser = null;
+                    if (token == XContentParser.Token.VALUE_STRING || token == XContentParser.Token.VALUE_EMBEDDED_OBJECT) {
+                        byte[] source = parser.binaryValue();
+                        binaryParser = XContentFactory.xContent(source).createParser(source);
+                    } else {
+                        throw new SearchParseException(context, "Expected [" + XContentParser.Token.VALUE_STRING + " or "
+                                + XContentParser.Token.VALUE_EMBEDDED_OBJECT + "] for [" + fieldName + "], but got a [" + token + "] in ["
+                                + aggregationName + "]", parser.getTokenLocation());
+                    }
+                    XContentParser.Token binaryToken = binaryParser.nextToken();
+                    if (binaryToken != XContentParser.Token.START_OBJECT) {
+                        throw new SearchParseException(context, "Expected [" + XContentParser.Token.START_OBJECT
+                                + "] as first token when parsing [" + fieldName + "], but got a [" + binaryToken + "] in ["
+                                + aggregationName + "]", parser.getTokenLocation());
+                    }
+                    subFactories = parseAggregators(binaryParser, context, level + 1);
+                } else if (token == XContentParser.Token.START_OBJECT) {
                     switch (fieldName) {
                     case "meta":
                         metaData = parser.map();
@@ -127,43 +170,42 @@ public class AggregatorParsers {
                     case "aggregations":
                     case "aggs":
                         if (subFactories != null) {
-                            throw new ParsingException(parser.getTokenLocation(),
-                                    "Found two sub aggregation definitions under [" + aggregationName + "]");
+                            throw new SearchParseException(context,
+                                    "Found two sub aggregation definitions under [" + aggregationName + "]", parser.getTokenLocation());
                         }
-                        subFactories = parseAggregators(parseContext, level + 1);
+                        subFactories = parseAggregators(parser, context, level + 1);
                         break;
                     default:
                         if (aggFactory != null) {
-                            throw new ParsingException(parser.getTokenLocation(), "Found two aggregation type definitions in ["
-                                    + aggregationName + "]: [" + aggFactory.type + "] and [" + fieldName + "]");
+                            throw new SearchParseException(context, "Found two aggregation type definitions in [" + aggregationName
+                                    + "]: [" + aggFactory.type + "] and [" + fieldName + "]", parser.getTokenLocation());
                         }
                         if (pipelineAggregatorFactory != null) {
-                            throw new ParsingException(parser.getTokenLocation(), "Found two aggregation type definitions in ["
-                                    + aggregationName + "]: [" + pipelineAggregatorFactory + "] and [" + fieldName + "]");
+                            throw new SearchParseException(context, "Found two aggregation type definitions in [" + aggregationName
+                                    + "]: [" + pipelineAggregatorFactory + "] and [" + fieldName + "]", parser.getTokenLocation());
                         }
 
-                        Aggregator.Parser aggregatorParser = parser(fieldName, parseContext.getParseFieldMatcher());
+                        Aggregator.Parser aggregatorParser = parser(fieldName);
                         if (aggregatorParser == null) {
-                            PipelineAggregator.Parser pipelineAggregatorParser = pipelineParser(fieldName,
-                                    parseContext.getParseFieldMatcher());
+                            PipelineAggregator.Parser pipelineAggregatorParser = pipelineAggregator(fieldName);
                             if (pipelineAggregatorParser == null) {
-                                throw new ParsingException(parser.getTokenLocation(),
-                                        "Could not find aggregator type [" + fieldName + "] in [" + aggregationName + "]");
+                                throw new SearchParseException(context, "Could not find aggregator type [" + fieldName + "] in ["
+                                        + aggregationName + "]", parser.getTokenLocation());
                             } else {
-                                pipelineAggregatorFactory = pipelineAggregatorParser.parse(aggregationName, parseContext);
+                                pipelineAggregatorFactory = pipelineAggregatorParser.parse(aggregationName, parser, context);
                             }
                         } else {
-                            aggFactory = aggregatorParser.parse(aggregationName, parseContext);
+                            aggFactory = aggregatorParser.parse(aggregationName, parser, context);
                         }
                     }
                 } else {
-                    throw new ParsingException(parser.getTokenLocation(), "Expected [" + XContentParser.Token.START_OBJECT + "] under ["
-                            + fieldName + "], but got a [" + token + "] in [" + aggregationName + "]");
+                    throw new SearchParseException(context, "Expected [" + XContentParser.Token.START_OBJECT + "] under [" + fieldName
+                            + "], but got a [" + token + "] in [" + aggregationName + "]", parser.getTokenLocation());
                 }
             }
 
             if (aggFactory == null && pipelineAggregatorFactory == null) {
-                throw new ParsingException(parser.getTokenLocation(), "Missing definition for aggregation [" + aggregationName + "]",
+                throw new SearchParseException(context, "Missing definition for aggregation [" + aggregationName + "]",
                         parser.getTokenLocation());
             } else if (aggFactory != null) {
                 assert pipelineAggregatorFactory == null;
@@ -172,16 +214,23 @@ public class AggregatorParsers {
             }
 
             if (subFactories != null) {
-                    aggFactory.subAggregations(subFactories);
+                    aggFactory.subFactories(subFactories);
+            }
+
+            if (level == 0) {
+                    aggFactory.validate();
             }
 
                 factories.addAggregator(aggFactory);
             } else {
                 assert pipelineAggregatorFactory != null;
                 if (subFactories != null) {
-                    throw new ParsingException(parser.getTokenLocation(),
-                            "Aggregation [" + aggregationName + "] cannot define sub-aggregations",
+                    throw new SearchParseException(context, "Aggregation [" + aggregationName + "] cannot define sub-aggregations",
                             parser.getTokenLocation());
+                }
+                if (level == 0) {
+                    pipelineAggregatorFactory
+                            .validate(null, factories.getAggregatorFactories(), factories.getPipelineAggregatorFactories());
                 }
                 if (metaData != null) {
                     pipelineAggregatorFactory.setMetaData(metaData);
@@ -190,7 +239,7 @@ public class AggregatorParsers {
             }
         }
 
-        return factories;
+        return factories.build();
     }
 
 }

@@ -23,7 +23,9 @@ import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
@@ -31,7 +33,10 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  */
 public class ListenerActionIT extends ESIntegTestCase {
-    public void testThreadedListeners() throws Throwable {
+
+    @Test
+    public void verifyThreadedListeners() throws Throwable {
+
         final CountDownLatch latch = new CountDownLatch(1);
         final AtomicReference<Throwable> failure = new AtomicReference<>();
         final AtomicReference<String> threadName = new AtomicReference<>();
@@ -51,7 +56,7 @@ public class ListenerActionIT extends ESIntegTestCase {
             }
 
             @Override
-            public void onFailure(Exception e) {
+            public void onFailure(Throwable e) {
                 threadName.set(Thread.currentThread().getName());
                 failure.set(e);
                 latch.countDown();
@@ -60,7 +65,7 @@ public class ListenerActionIT extends ESIntegTestCase {
 
         latch.await();
 
-        boolean shouldBeThreaded = TransportClient.CLIENT_TYPE.equals(Client.CLIENT_TYPE_SETTING_S.get(client.settings()));
+        boolean shouldBeThreaded = DiscoveryNode.clientNode(client.settings()) || TransportClient.CLIENT_TYPE.equals(client.settings().get(Client.CLIENT_TYPE_SETTING));
         if (shouldBeThreaded) {
             assertTrue(threadName.get().contains("listener"));
         } else {

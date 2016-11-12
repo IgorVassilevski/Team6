@@ -22,13 +22,13 @@ package org.elasticsearch.action.admin.indices.segments;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.broadcast.node.TransportBroadcastByNodeAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardsIterator;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.settings.Settings;
@@ -52,7 +52,7 @@ public class TransportIndicesSegmentsAction extends TransportBroadcastByNodeActi
     public TransportIndicesSegmentsAction(Settings settings, ThreadPool threadPool, ClusterService clusterService, TransportService transportService,
                                           IndicesService indicesService, ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
         super(settings, IndicesSegmentsAction.NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver,
-                IndicesSegmentsRequest::new, ThreadPool.Names.MANAGEMENT);
+                IndicesSegmentsRequest.class, ThreadPool.Names.MANAGEMENT);
         this.indicesService = indicesService;
     }
 
@@ -93,8 +93,8 @@ public class TransportIndicesSegmentsAction extends TransportBroadcastByNodeActi
 
     @Override
     protected ShardSegments shardOperation(IndicesSegmentsRequest request, ShardRouting shardRouting) {
-        IndexService indexService = indicesService.indexServiceSafe(shardRouting.index());
-        IndexShard indexShard = indexService.getShard(shardRouting.id());
-        return new ShardSegments(indexShard.routingEntry(), indexShard.segments(request.verbose()));
+        IndexService indexService = indicesService.indexServiceSafe(shardRouting.getIndex());
+        IndexShard indexShard = indexService.shardSafe(shardRouting.id());
+        return new ShardSegments(indexShard.routingEntry(), indexShard.engine().segments(request.verbose()));
     }
 }

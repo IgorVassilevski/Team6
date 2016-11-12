@@ -16,12 +16,15 @@
 
 package org.elasticsearch.common.inject.matcher;
 
+import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
-import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Matcher implementations. Supports matching classes and methods.
@@ -41,7 +44,7 @@ public class Matchers {
 
     private static final Matcher<Object> ANY = new Any();
 
-    private static class Any extends AbstractMatcher<Object> {
+    private static class Any extends AbstractMatcher<Object> implements Serializable {
         @Override
         public boolean matches(Object o) {
             return true;
@@ -55,6 +58,8 @@ public class Matchers {
         public Object readResolve() {
             return any();
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -64,11 +69,11 @@ public class Matchers {
         return new Not<>(p);
     }
 
-    private static class Not<T> extends AbstractMatcher<T> {
+    private static class Not<T> extends AbstractMatcher<T> implements Serializable {
         final Matcher<? super T> delegate;
 
         private Not(Matcher<? super T> delegate) {
-            this.delegate = Objects.requireNonNull(delegate, "delegate");
+            this.delegate = checkNotNull(delegate, "delegate");
         }
 
         @Override
@@ -91,14 +96,15 @@ public class Matchers {
         public String toString() {
             return "not(" + delegate + ")";
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     private static void checkForRuntimeRetention(
             Class<? extends Annotation> annotationType) {
         Retention retention = annotationType.getAnnotation(Retention.class);
-        if (retention == null || retention.value() != RetentionPolicy.RUNTIME) {
-            throw new IllegalArgumentException("Annotation " + annotationType.getSimpleName() + " is missing RUNTIME retention");
-        }
+        checkArgument(retention != null && retention.value() == RetentionPolicy.RUNTIME,
+                "Annotation " + annotationType.getSimpleName() + " is missing RUNTIME retention");
     }
 
     /**
@@ -110,11 +116,12 @@ public class Matchers {
         return new AnnotatedWithType(annotationType);
     }
 
-    private static class AnnotatedWithType extends AbstractMatcher<AnnotatedElement> {
+    private static class AnnotatedWithType extends AbstractMatcher<AnnotatedElement>
+            implements Serializable {
         private final Class<? extends Annotation> annotationType;
 
         public AnnotatedWithType(Class<? extends Annotation> annotationType) {
-            this.annotationType = Objects.requireNonNull(annotationType, "annotation type");
+            this.annotationType = checkNotNull(annotationType, "annotation type");
             checkForRuntimeRetention(annotationType);
         }
 
@@ -138,6 +145,8 @@ public class Matchers {
         public String toString() {
             return "annotatedWith(" + annotationType.getSimpleName() + ".class)";
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -149,11 +158,12 @@ public class Matchers {
         return new AnnotatedWith(annotation);
     }
 
-    private static class AnnotatedWith extends AbstractMatcher<AnnotatedElement> {
+    private static class AnnotatedWith extends AbstractMatcher<AnnotatedElement>
+            implements Serializable {
         private final Annotation annotation;
 
         public AnnotatedWith(Annotation annotation) {
-            this.annotation = Objects.requireNonNull(annotation, "annotation");
+            this.annotation = checkNotNull(annotation, "annotation");
             checkForRuntimeRetention(annotation.annotationType());
         }
 
@@ -178,6 +188,8 @@ public class Matchers {
         public String toString() {
             return "annotatedWith(" + annotation + ")";
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -188,11 +200,12 @@ public class Matchers {
         return new SubclassesOf(superclass);
     }
 
-    private static class SubclassesOf extends AbstractMatcher<Class> {
+    private static class SubclassesOf extends AbstractMatcher<Class>
+            implements Serializable {
         private final Class<?> superclass;
 
         public SubclassesOf(Class<?> superclass) {
-            this.superclass = Objects.requireNonNull(superclass, "superclass");
+            this.superclass = checkNotNull(superclass, "superclass");
         }
 
         @Override
@@ -215,6 +228,8 @@ public class Matchers {
         public String toString() {
             return "subclassesOf(" + superclass.getSimpleName() + ".class)";
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -224,11 +239,12 @@ public class Matchers {
         return new Only(value);
     }
 
-    private static class Only extends AbstractMatcher<Object> {
+    private static class Only extends AbstractMatcher<Object>
+            implements Serializable {
         private final Object value;
 
         public Only(Object value) {
-            this.value = Objects.requireNonNull(value, "value");
+            this.value = checkNotNull(value, "value");
         }
 
         @Override
@@ -251,6 +267,8 @@ public class Matchers {
         public String toString() {
             return "only(" + value + ")";
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -260,11 +278,12 @@ public class Matchers {
         return new IdenticalTo(value);
     }
 
-    private static class IdenticalTo extends AbstractMatcher<Object> {
+    private static class IdenticalTo extends AbstractMatcher<Object>
+            implements Serializable {
         private final Object value;
 
         public IdenticalTo(Object value) {
-            this.value = Objects.requireNonNull(value, "value");
+            this.value = checkNotNull(value, "value");
         }
 
         @Override
@@ -287,6 +306,8 @@ public class Matchers {
         public String toString() {
             return "identicalTo(" + value + ")";
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -297,12 +318,12 @@ public class Matchers {
         return new InPackage(targetPackage);
     }
 
-    private static class InPackage extends AbstractMatcher<Class> {
+    private static class InPackage extends AbstractMatcher<Class> implements Serializable {
         private final transient Package targetPackage;
         private final String packageName;
 
         public InPackage(Package targetPackage) {
-            this.targetPackage = Objects.requireNonNull(targetPackage, "package");
+            this.targetPackage = checkNotNull(targetPackage, "package");
             this.packageName = targetPackage.getName();
         }
 
@@ -330,6 +351,8 @@ public class Matchers {
         public Object readResolve() {
             return inPackage(Package.getPackage(packageName));
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -342,7 +365,7 @@ public class Matchers {
         return new InSubpackage(targetPackageName);
     }
 
-    private static class InSubpackage extends AbstractMatcher<Class>  {
+    private static class InSubpackage extends AbstractMatcher<Class> implements Serializable {
         private final String targetPackageName;
 
         public InSubpackage(String targetPackageName) {
@@ -371,6 +394,8 @@ public class Matchers {
         public String toString() {
             return "inSubpackage(" + targetPackageName + ")";
         }
+
+        private static final long serialVersionUID = 0;
     }
 
     /**
@@ -381,11 +406,11 @@ public class Matchers {
         return new Returns(returnType);
     }
 
-    private static class Returns extends AbstractMatcher<Method> {
+    private static class Returns extends AbstractMatcher<Method> implements Serializable {
         private final Matcher<? super Class<?>> returnType;
 
         public Returns(Matcher<? super Class<?>> returnType) {
-            this.returnType = Objects.requireNonNull(returnType, "return type matcher");
+            this.returnType = checkNotNull(returnType, "return type matcher");
         }
 
         @Override
@@ -408,5 +433,7 @@ public class Matchers {
         public String toString() {
             return "returns(" + returnType + ")";
         }
+
+        private static final long serialVersionUID = 0;
     }
 }

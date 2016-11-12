@@ -30,16 +30,16 @@ import java.io.IOException;
  */
 public class EngineException extends ElasticsearchException {
 
-    public EngineException(ShardId shardId, String msg, Object... params) {
-        this(shardId, msg, null, params);
+    public EngineException(ShardId shardId, String msg) {
+        this(shardId, msg, null);
     }
 
-    public EngineException(ShardId shardId, String msg, Throwable cause, Object... params) {
-        super(msg, cause, params);
+    public EngineException(ShardId shardId, String msg, Throwable cause) {
+        super(msg, cause);
         setShard(shardId);
     }
 
-    public EngineException(StreamInput in) throws IOException {
+    public EngineException(StreamInput in) throws IOException{
         super(in);
     }
 }

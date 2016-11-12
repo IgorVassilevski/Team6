@@ -39,19 +39,12 @@ Computing the max price value across all document, this time using a script:
 --------------------------------------------------
 {
     "aggs" : {
-        "max_price" : { 
-            "max" : { 
-                "script" : {
-                    "inline" : "doc['price'].value",
-                    "lang" : "painless"
-                }
-            }
-        }
+        "max_price" : { "max" : { "script" : "doc['price'].value" } }
     }
 }
 --------------------------------------------------
 
-This will interpret the `script` parameter as an `inline` script with the `painless` script language and no script parameters. To use a file script use the following syntax:
+This will interpret the `script` parameter as an `inline` script with the default script language and no script parameters. To use a file script use the following syntax:
 
 [source,js]
 --------------------------------------------------
@@ -85,8 +78,7 @@ Let's say that the prices of the documents in our index are in USD, but we would
             "max" : {
                 "field" : "price",
                 "script" : {
-                    "lang": "painless",
-                    "inline": "_value * params.conversion_rate",
+                    "inline": "_value * conversion_rate",
                     "params" : {
                         "conversion_rate" : 1.2
                     }

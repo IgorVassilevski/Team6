@@ -25,9 +25,11 @@ import org.elasticsearch.common.xcontent.XContentGenerator;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.nullValue;
 
@@ -35,7 +37,18 @@ import static org.hamcrest.Matchers.nullValue;
  *
  */
 public class JsonVsSmileTests extends ESTestCase {
-    public void testCompareParsingTokens() throws IOException {
+
+//    @Test public void testBinarySmileField() throws Exception {
+//        JsonGenerator gen = new SmileFactory().createJsonGenerator(new ByteArrayOutputStream());
+////        JsonGenerator gen = new JsonFactory().createJsonGenerator(new ByteArrayOutputStream(), JsonEncoding.UTF8);
+//        gen.writeStartObject();
+//        gen.writeFieldName("field1");
+//        gen.writeBinary(new byte[]{1, 2, 3});
+//        gen.writeEndObject();
+//    }
+
+    @Test
+    public void compareParsingTokens() throws IOException {
         BytesStreamOutput xsonOs = new BytesStreamOutput();
         XContentGenerator xsonGen = XContentFactory.xContent(XContentType.SMILE).createGenerator(xsonOs);
 
@@ -63,8 +76,7 @@ public class JsonVsSmileTests extends ESTestCase {
         xsonGen.close();
         jsonGen.close();
 
-        verifySameTokens(XContentFactory.xContent(XContentType.JSON).createParser(jsonOs.bytes()),
-            XContentFactory.xContent(XContentType.SMILE).createParser(xsonOs.bytes()));
+        verifySameTokens(XContentFactory.xContent(XContentType.JSON).createParser(jsonOs.bytes().toBytes()), XContentFactory.xContent(XContentType.SMILE).createParser(xsonOs.bytes().toBytes()));
     }
 
     private void verifySameTokens(XContentParser parser1, XContentParser parser2) throws IOException {

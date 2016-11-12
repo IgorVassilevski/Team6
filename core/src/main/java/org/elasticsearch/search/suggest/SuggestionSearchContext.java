@@ -20,7 +20,6 @@ package org.elasticsearch.search.suggest;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.index.query.QueryShardContext;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -38,22 +37,16 @@ public class SuggestionSearchContext {
         return suggestions;
     }
 
-    public abstract static class SuggestionContext {
+    public static class SuggestionContext {
 
         private BytesRef text;
-        private BytesRef prefix;
-        private BytesRef regex;
+        private final Suggester suggester;
         private String field;
         private Analyzer analyzer;
         private int size = 5;
         private int shardSize = -1;
-        private QueryShardContext shardContext;
-        private Suggester<?> suggester;
-
-        protected SuggestionContext(Suggester<?> suggester, QueryShardContext shardContext) {
-            this.suggester = suggester;
-            this.shardContext = shardContext;
-        }
+        private int shardId;
+        private String index;
 
         public BytesRef getText() {
             return text;
@@ -63,24 +56,12 @@ public class SuggestionSearchContext {
             this.text = text;
         }
 
-        public BytesRef getPrefix() {
-            return prefix;
-        }
-
-        public void setPrefix(BytesRef prefix) {
-            this.prefix = prefix;
-        }
-
-        public BytesRef getRegex() {
-            return regex;
-        }
-
-        public void setRegex(BytesRef regex) {
-            this.regex = regex;
+        public SuggestionContext(Suggester suggester) {
+            this.suggester = suggester;
         }
 
         public Suggester<SuggestionContext> getSuggester() {
-            return ((Suggester<SuggestionContext>) suggester);
+            return this.suggester;
         }
 
         public Analyzer getAnalyzer() {
@@ -121,23 +102,20 @@ public class SuggestionSearchContext {
             this.shardSize = shardSize;
         }
 
-        public QueryShardContext getShardContext() {
-            return this.shardContext;
+        public void setShard(int shardId) {
+            this.shardId = shardId;
         }
 
-        @Override
-        public String toString() {
-            return "[" +
-                       "text=" + text +
-                       ",field=" + field +
-                       ",prefix=" + prefix +
-                       ",regex=" + regex +
-                       ",size=" + size +
-                       ",shardSize=" + shardSize +
-                       ",suggester=" + suggester +
-                       ",analyzer=" + analyzer +
-                       ",shardContext=" + shardContext +
-                   "]";
+        public void setIndex(String index) {
+            this.index = index;
+        }
+
+        public String getIndex() {
+            return index;
+        }
+
+        public int getShard() {
+            return shardId;
         }
     }
 

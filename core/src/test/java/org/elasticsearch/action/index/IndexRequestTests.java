@@ -18,25 +18,22 @@
  */
 package org.elasticsearch.action.index;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionRequestValidationException;
-import org.elasticsearch.action.support.ActiveShardCount;
+import org.elasticsearch.common.io.stream.BytesStreamOutput;
+import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.index.VersionType;
 import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.test.VersionUtils;
+import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.*;
 
 /**
- */
+  */
 public class IndexRequestTests extends ESTestCase {
+
+    @Test
     public void testIndexRequestOpTypeFromString() throws Exception {
         String create = "create";
         String index = "index";
@@ -49,50 +46,11 @@ public class IndexRequestTests extends ESTestCase {
         assertThat(IndexRequest.OpType.fromString(indexUpper), equalTo(IndexRequest.OpType.INDEX));
     }
 
-    public void testReadBogusString() {
-        try {
-            IndexRequest.OpType.fromString("foobar");
-            fail("Expected IllegalArgumentException");
-        } catch (IllegalArgumentException e) {
-            assertThat(e.getMessage(), containsString("opType [foobar] not allowed"));
-        }
+    @Test(expected= IllegalArgumentException.class)
+    public void testReadBogusString(){
+        String foobar = "foobar";
+        IndexRequest.OpType.fromString(foobar);
     }
-
-    public void testCreateOperationRejectsVersions() {
-        Set<VersionType> allButInternalSet = new HashSet<>(Arrays.asList(VersionType.values()));
-        allButInternalSet.remove(VersionType.INTERNAL);
-        VersionType[] allButInternal = allButInternalSet.toArray(new VersionType[]{});
-        IndexRequest request = new IndexRequest("index", "type", "1");
-        request.opType(IndexRequest.OpType.CREATE);
-        request.versionType(randomFrom(allButInternal));
-        assertThat(request.validate().validationErrors(), not(empty()));
-
-        request.versionType(VersionType.INTERNAL);
-        request.version(randomIntBetween(0, Integer.MAX_VALUE));
-        assertThat(request.validate().validationErrors(), not(empty()));
-    }
-
-    public void testIndexingRejectsLongIds() {
-        String id = randomAsciiOfLength(511);
-        IndexRequest request = new IndexRequest("index", "type", id);
-        request.source("{}");
-        ActionRequestValidationException validate = request.validate();
-        assertNull(validate);
-
-        id = randomAsciiOfLength(512);
-        request = new IndexRequest("index", "type", id);
-        request.source("{}");
-        validate = request.validate();
-        assertNull(validate);
-
-        id = randomAsciiOfLength(513);
-        request = new IndexRequest("index", "type", id);
-        request.source("{}");
-        validate = request.validate();
-        assertThat(validate, notNullValue());
-        assertThat(validate.getMessage(),
-                containsString("id is too long, must be no longer than 512 bytes but was: 513"));
-}
 
     public void testSetTTLAsTimeValue() {
         IndexRequest indexRequest = new IndexRequest();
@@ -133,21 +91,32 @@ public class IndexRequestTests extends ESTestCase {
         assertThat(validate.getMessage(), containsString("ttl must not be negative"));
     }
 
-    public void testWaitForActiveShards() {
-        IndexRequest request = new IndexRequest("index", "type");
-        final int count = randomIntBetween(0, 10);
-        request.waitForActiveShards(ActiveShardCount.from(count));
-        assertEquals(request.waitForActiveShards(), ActiveShardCount.from(count));
-        // test negative shard count value not allowed
-        expectThrows(IllegalArgumentException.class, () -> request.waitForActiveShards(ActiveShardCount.from(randomIntBetween(-10, -1))));
-    }
+    public void testTTLSerialization() throws Exception {
+        IndexRequest indexRequest = new IndexRequest("index", "type");
+        TimeValue expectedTTL = null;
+        if (randomBoolean()) {
+            String randomTimeValue = randomTimeValue();
+            expectedTTL = TimeValue.parseTimeValue(randomTimeValue, null, "ttl");
+            if (randomBoolean()) {
+                indexRequest.ttl(randomTimeValue);
+            } else {
+                if (randomBoolean()) {
+                    indexRequest.ttl(expectedTTL);
+                } else {
+                    indexRequest.ttl(expectedTTL.millis());
+                }
+            }
+        }
 
-    public void testAutoGenIdTimestampIsSet() {
-        IndexRequest request = new IndexRequest("index", "type");
-        request.process(null, true, "index");
-        assertTrue("expected > 0 but got: " + request.getAutoGeneratedTimestamp(), request.getAutoGeneratedTimestamp() > 0);
-        request = new IndexRequest("index", "type", "1");
-        request.process(null, true, "index");
-        assertEquals(IndexRequest.UNSET_AUTO_GENERATED_TIMESTAMP, request.getAutoGeneratedTimestamp());
+        Version version = VersionUtils.randomVersion(random());
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(version);
+        indexRequest.writeTo(out);
+
+        StreamInput in = StreamInput.wrap(out.bytes());
+        in.setVersion(version);
+        IndexRequest newIndexRequest = new IndexRequest();
+        newIndexRequest.readFrom(in);
+        assertThat(newIndexRequest.ttl(), equalTo(expectedTTL));
     }
 }

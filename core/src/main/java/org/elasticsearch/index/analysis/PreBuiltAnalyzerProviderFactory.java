@@ -22,17 +22,12 @@ package org.elasticsearch.index.analysis;
 import org.apache.lucene.analysis.Analyzer;
 import org.elasticsearch.Version;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
-import org.elasticsearch.indices.analysis.AnalysisModule;
 import org.elasticsearch.indices.analysis.PreBuiltAnalyzers;
-
-import java.io.IOException;
 
 /**
  *
  */
-public class PreBuiltAnalyzerProviderFactory implements AnalysisModule.AnalysisProvider<AnalyzerProvider<?>> {
+public class PreBuiltAnalyzerProviderFactory implements AnalyzerProviderFactory {
 
     private final PreBuiltAnalyzerProvider analyzerProvider;
 
@@ -40,7 +35,8 @@ public class PreBuiltAnalyzerProviderFactory implements AnalysisModule.AnalysisP
         analyzerProvider = new PreBuiltAnalyzerProvider(name, scope, analyzer);
     }
 
-    public AnalyzerProvider<?> create(String name, Settings settings) {
+    @Override
+    public AnalyzerProvider create(String name, Settings settings) {
         Version indexVersion = Version.indexCreated(settings);
         if (!Version.CURRENT.equals(indexVersion)) {
             PreBuiltAnalyzers preBuiltAnalyzers = PreBuiltAnalyzers.getOrDefault(name, null);
@@ -51,12 +47,6 @@ public class PreBuiltAnalyzerProviderFactory implements AnalysisModule.AnalysisP
         }
 
         return analyzerProvider;
-    }
-
-    @Override
-    public AnalyzerProvider<?> get(IndexSettings indexSettings, Environment environment, String name, Settings settings)
-            throws IOException {
-        return create(name, settings);
     }
 
     public Analyzer analyzer() {

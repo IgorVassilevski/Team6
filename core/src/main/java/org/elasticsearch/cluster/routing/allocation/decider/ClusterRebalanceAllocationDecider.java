@@ -19,14 +19,15 @@
 
 package org.elasticsearch.cluster.routing.allocation.decider;
 
-import java.util.Locale;
-
+import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
-import org.elasticsearch.common.settings.ClusterSettings;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
+import org.elasticsearch.cluster.settings.Validator;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.node.settings.NodeSettingsService;
+
+import java.util.Locale;
 
 /**
  * This {@link AllocationDecider} controls re-balancing operations based on the
@@ -48,9 +49,19 @@ import org.elasticsearch.common.settings.Settings;
 public class ClusterRebalanceAllocationDecider extends AllocationDecider {
 
     public static final String NAME = "cluster_rebalance";
-    public static final Setting<ClusterRebalanceType> CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE_SETTING =
-        new Setting<>("cluster.routing.allocation.allow_rebalance", ClusterRebalanceType.INDICES_ALL_ACTIVE.name().toLowerCase(Locale.ROOT),
-            ClusterRebalanceType::parseString, Property.Dynamic, Property.NodeScope);
+
+    public static final String CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE = "cluster.routing.allocation.allow_rebalance";
+    public static final Validator ALLOCATION_ALLOW_REBALANCE_VALIDATOR = new Validator() {
+        @Override
+        public String validate(String setting, String value, ClusterState clusterState) {
+            try {
+                ClusterRebalanceType.parseString(value);
+                return null;
+            } catch (IllegalArgumentException e) {
+                return "the value of " + setting + " must be one of: [always, indices_primaries_active, indices_all_active]";
+            }
+        }
+    };
 
     /**
      * An enum representation for the configured re-balance type.
@@ -77,31 +88,48 @@ public class ClusterRebalanceAllocationDecider extends AllocationDecider {
             } else if ("indices_all_active".equalsIgnoreCase(typeString) || "indicesAllActive".equalsIgnoreCase(typeString)) {
                 return ClusterRebalanceType.INDICES_ALL_ACTIVE;
             }
-            throw new IllegalArgumentException("Illegal value for " +
-                            CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE_SETTING + ": " + typeString);
+            throw new IllegalArgumentException("Illegal value for " + CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE + ": " + typeString);
         }
     }
 
-    private volatile ClusterRebalanceType type;
+    private ClusterRebalanceType type;
 
-    public ClusterRebalanceAllocationDecider(Settings settings, ClusterSettings clusterSettings) {
+    @Inject
+    public ClusterRebalanceAllocationDecider(Settings settings, NodeSettingsService nodeSettingsService) {
         super(settings);
+        String allowRebalance = settings.get(CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE, "indices_all_active");
         try {
-            type = CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE_SETTING.get(settings);
+            type = ClusterRebalanceType.parseString(allowRebalance);
         } catch (IllegalStateException e) {
-            logger.warn("[{}] has a wrong value {}, defaulting to 'indices_all_active'",
-                    CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE_SETTING,
-                    CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE_SETTING.getRaw(settings));
+            logger.warn("[{}] has a wrong value {}, defaulting to 'indices_all_active'", CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE, allowRebalance);
             type = ClusterRebalanceType.INDICES_ALL_ACTIVE;
         }
-        logger.debug("using [{}] with [{}]", CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE_SETTING.getKey(),
-                type.toString().toLowerCase(Locale.ROOT));
+        logger.debug("using [{}] with [{}]", CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE, type.toString().toLowerCase(Locale.ROOT));
 
-        clusterSettings.addSettingsUpdateConsumer(CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE_SETTING, this::setType);
+        nodeSettingsService.addListener(new ApplySettings());
     }
 
-    private void setType(ClusterRebalanceType type) {
-        this.type = type;
+    class ApplySettings implements NodeSettingsService.Listener {
+
+        @Override
+        public void onRefreshSettings(Settings settings) {
+            String newAllowRebalance = settings.get(CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE, null);
+            if (newAllowRebalance != null) {
+                ClusterRebalanceType newType = null;
+                try {
+                    newType = ClusterRebalanceType.parseString(newAllowRebalance);
+                } catch (IllegalArgumentException e) {
+                    // ignore
+                }
+
+                if (newType != null && newType != ClusterRebalanceAllocationDecider.this.type) {
+                    logger.info("updating [{}] from [{}] to [{}]", CLUSTER_ROUTING_ALLOCATION_ALLOW_REBALANCE,
+                            ClusterRebalanceAllocationDecider.this.type.toString().toLowerCase(Locale.ROOT),
+                            newType.toString().toLowerCase(Locale.ROOT));
+                    ClusterRebalanceAllocationDecider.this.type = newType;
+                }
+            }
+        }
     }
 
     @Override
@@ -113,32 +141,28 @@ public class ClusterRebalanceAllocationDecider extends AllocationDecider {
     public Decision canRebalance(RoutingAllocation allocation) {
         if (type == ClusterRebalanceType.INDICES_PRIMARIES_ACTIVE) {
             // check if there are unassigned primaries.
-            if ( allocation.routingNodes().hasUnassignedPrimaries() ) {
-                return allocation.decision(Decision.NO, NAME,
-                        "the cluster has unassigned primary shards and rebalance type is set to [%s]", type);
+            if (allocation.routingNodes().hasUnassignedPrimaries()) {
+                return allocation.decision(Decision.NO, NAME, "cluster has unassigned primary shards");
             }
             // check if there are initializing primaries that don't have a relocatingNodeId entry.
-            if ( allocation.routingNodes().hasInactivePrimaries() ) {
-                return allocation.decision(Decision.NO, NAME,
-                        "the cluster has inactive primary shards and rebalance type is set to [%s]", type);
+            if (allocation.routingNodes().hasInactivePrimaries()) {
+                return allocation.decision(Decision.NO, NAME, "cluster has inactive primary shards");
             }
 
             return allocation.decision(Decision.YES, NAME, "all primary shards are active");
         }
         if (type == ClusterRebalanceType.INDICES_ALL_ACTIVE) {
             // check if there are unassigned shards.
-            if (allocation.routingNodes().hasUnassignedShards() ) {
-                return allocation.decision(Decision.NO, NAME,
-                        "the cluster has unassigned shards and rebalance type is set to [%s]", type);
+            if (allocation.routingNodes().hasUnassignedShards()) {
+                return allocation.decision(Decision.NO, NAME, "cluster has unassigned shards");
             }
             // in case all indices are assigned, are there initializing shards which
             // are not relocating?
-            if ( allocation.routingNodes().hasInactiveShards() ) {
-                return allocation.decision(Decision.NO, NAME,
-                        "the cluster has inactive shards and rebalance type is set to [%s]", type);
+            if (allocation.routingNodes().hasInactiveShards()) {
+                return allocation.decision(Decision.NO, NAME, "cluster has inactive shards");
             }
         }
         // type == Type.ALWAYS
-        return allocation.decision(Decision.YES, NAME, "all shards are active, rebalance type is [%s]", type);
+        return allocation.decision(Decision.YES, NAME, "all shards are active");
     }
 }

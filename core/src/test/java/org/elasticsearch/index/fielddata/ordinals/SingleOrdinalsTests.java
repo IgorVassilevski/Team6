@@ -21,19 +21,21 @@ package org.elasticsearch.index.fielddata.ordinals;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.RandomAccessOrds;
 import org.apache.lucene.index.SortedDocValues;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.*;
 
 /**
  */
 public class SingleOrdinalsTests extends ESTestCase {
+
+    @Test
     public void testSvValues() throws IOException {
         int numDocs = 1000000;
         int numOrdinals = numDocs / 4;
@@ -48,7 +50,7 @@ public class SingleOrdinalsTests extends ESTestCase {
             builder.addDoc(doc);
         }
 
-        Ordinals ords = builder.build();
+        Ordinals ords = builder.build(Settings.EMPTY);
         assertThat(ords, instanceOf(SinglePackedOrdinals.class));
         RandomAccessOrds docs = ords.ordinals();
         final SortedDocValues singleOrds = DocValues.unwrapSingleton(docs);
@@ -59,6 +61,7 @@ public class SingleOrdinalsTests extends ESTestCase {
         }
     }
 
+    @Test
     public void testMvOrdinalsTrigger() throws IOException {
         int numDocs = 1000000;
         OrdinalsBuilder builder = new OrdinalsBuilder(numDocs);
@@ -67,12 +70,12 @@ public class SingleOrdinalsTests extends ESTestCase {
             builder.addDoc(doc);
         }
 
-        Ordinals ords = builder.build();
+        Ordinals ords = builder.build(Settings.EMPTY);
         assertThat(ords, instanceOf(SinglePackedOrdinals.class));
 
         builder.nextOrdinal();
         builder.addDoc(0);
-        ords = builder.build();
+        ords = builder.build(Settings.EMPTY);
         assertThat(ords, not(instanceOf(SinglePackedOrdinals.class)));
     }
 

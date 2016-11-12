@@ -29,6 +29,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.index.mapper.DocumentMapper;
 import org.elasticsearch.index.mapper.ParsedDocument;
+import org.junit.Test;
 
 import static org.hamcrest.Matchers.equalTo;
 
@@ -36,17 +37,19 @@ import static org.hamcrest.Matchers.equalTo;
  *
  */
 public class BinaryDVFieldDataTests extends AbstractFieldDataTestCase {
+
     @Override
     protected boolean hasDocValues() {
         return true;
     }
 
+    @Test
     public void testDocValue() throws Exception {
         String mapping = XContentFactory.jsonBuilder().startObject().startObject("test")
                 .startObject("properties")
                 .startObject("field")
                 .field("type", "binary")
-                .field("doc_values", true)
+                .startObject("fielddata").field("format", "doc_values").endObject()
                 .endObject()
                 .endObject()
                 .endObject().endObject().string();
@@ -107,12 +110,12 @@ public class BinaryDVFieldDataTests extends AbstractFieldDataTestCase {
     private byte[] randomBytes() {
         int size = randomIntBetween(10, 1000);
         byte[] bytes = new byte[size];
-        random().nextBytes(bytes);
+        getRandom().nextBytes(bytes);
         return bytes;
     }
 
     @Override
-    protected String getFieldDataType() {
-        return "binary";
+    protected FieldDataType getFieldDataType() {
+        return new FieldDataType("binary", Settings.builder().put("format", "doc_values"));
     }
 }

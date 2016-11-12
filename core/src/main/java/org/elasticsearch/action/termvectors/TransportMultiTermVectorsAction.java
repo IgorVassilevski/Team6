@@ -20,12 +20,13 @@
 package org.elasticsearch.action.termvectors;
 
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.DocumentRequest;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.AtomicArray;
@@ -48,7 +49,7 @@ public class TransportMultiTermVectorsAction extends HandledTransportAction<Mult
     public TransportMultiTermVectorsAction(Settings settings, ThreadPool threadPool, TransportService transportService,
                                            ClusterService clusterService, TransportShardMultiTermsVectorAction shardAction,
                                            ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, MultiTermVectorsAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver, MultiTermVectorsRequest::new);
+        super(settings, MultiTermVectorsAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver, MultiTermVectorsRequest.class);
         this.clusterService = clusterService;
         this.shardAction = shardAction;
     }
@@ -64,23 +65,24 @@ public class TransportMultiTermVectorsAction extends HandledTransportAction<Mult
         Map<ShardId, MultiTermVectorsShardRequest> shardRequests = new HashMap<>();
         for (int i = 0; i < request.requests.size(); i++) {
             TermVectorsRequest termVectorsRequest = request.requests.get(i);
-            termVectorsRequest.routing(clusterState.metaData().resolveIndexRouting(termVectorsRequest.parent(), termVectorsRequest.routing(), termVectorsRequest.index()));
+            termVectorsRequest.startTime = System.currentTimeMillis();
+            termVectorsRequest.routing(clusterState.metaData().resolveIndexRouting(termVectorsRequest.routing(), termVectorsRequest.index()));
             if (!clusterState.metaData().hasConcreteIndex(termVectorsRequest.index())) {
                 responses.set(i, new MultiTermVectorsItemResponse(null, new MultiTermVectorsResponse.Failure(termVectorsRequest.index(),
                         termVectorsRequest.type(), termVectorsRequest.id(), new IndexNotFoundException(termVectorsRequest.index()))));
                 continue;
             }
-            String concreteSingleIndex = indexNameExpressionResolver.concreteSingleIndex(clusterState, termVectorsRequest).getName();
+            String concreteSingleIndex = indexNameExpressionResolver.concreteSingleIndex(clusterState, (DocumentRequest) termVectorsRequest);
             if (termVectorsRequest.routing() == null && clusterState.getMetaData().routingRequired(concreteSingleIndex, termVectorsRequest.type())) {
                 responses.set(i, new MultiTermVectorsItemResponse(null, new MultiTermVectorsResponse.Failure(concreteSingleIndex, termVectorsRequest.type(), termVectorsRequest.id(),
                         new IllegalArgumentException("routing is required for [" + concreteSingleIndex + "]/[" + termVectorsRequest.type() + "]/[" + termVectorsRequest.id() + "]"))));
                 continue;
             }
-            ShardId shardId = clusterService.operationRouting().shardId(clusterState, concreteSingleIndex,
-                    termVectorsRequest.id(), termVectorsRequest.routing());
+            ShardId shardId = clusterService.operationRouting().shardId(clusterState, concreteSingleIndex, termVectorsRequest.type(),
+                termVectorsRequest.id(), termVectorsRequest.routing());
             MultiTermVectorsShardRequest shardRequest = shardRequests.get(shardId);
             if (shardRequest == null) {
-                shardRequest = new MultiTermVectorsShardRequest(shardId.getIndexName(), shardId.id());
+                shardRequest = new MultiTermVectorsShardRequest(request, shardId.index().name(), shardId.id());
                 shardRequest.preference(request.preference);
                 shardRequests.put(shardId, shardRequest);
             }
@@ -107,7 +109,7 @@ public class TransportMultiTermVectorsAction extends HandledTransportAction<Mult
                 }
 
                 @Override
-                public void onFailure(Exception e) {
+                public void onFailure(Throwable e) {
                     // create failures for all relevant requests
                     for (int i = 0; i < shardRequest.locations.size(); i++) {
                         TermVectorsRequest termVectorsRequest = shardRequest.requests.get(i);

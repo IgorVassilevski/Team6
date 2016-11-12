@@ -34,7 +34,7 @@ import java.io.IOException;
 /**
  *
  */
-public abstract class SingleShardRequest<Request extends SingleShardRequest<Request>> extends ActionRequest<Request> implements IndicesRequest {
+public abstract class SingleShardRequest<T extends SingleShardRequest> extends ActionRequest<T> implements IndicesRequest {
 
     public static final IndicesOptions INDICES_OPTIONS = IndicesOptions.strictSingleIndexNoExpandForbidClosed();
 
@@ -53,6 +53,15 @@ public abstract class SingleShardRequest<Request extends SingleShardRequest<Requ
     }
 
     protected SingleShardRequest(String index) {
+        this.index = index;
+    }
+
+    protected SingleShardRequest(ActionRequest request) {
+        super(request);
+    }
+
+    protected SingleShardRequest(ActionRequest request, String index) {
+        super(request);
         this.index = index;
     }
 
@@ -82,9 +91,9 @@ public abstract class SingleShardRequest<Request extends SingleShardRequest<Requ
      * Sets the index.
      */
     @SuppressWarnings("unchecked")
-    public final Request index(String index) {
+    public final T index(String index) {
         this.index = index;
-        return (Request) this;
+        return (T) this;
     }
 
     @Override
@@ -108,9 +117,9 @@ public abstract class SingleShardRequest<Request extends SingleShardRequest<Requ
      * Controls if the operation will be executed on a separate thread when executed locally.
      */
     @SuppressWarnings("unchecked")
-    public final Request operationThreaded(boolean threadedOperation) {
+    public final T operationThreaded(boolean threadedOperation) {
         this.threadedOperation = threadedOperation;
-        return (Request) this;
+        return (T) this;
     }
 
     @Override

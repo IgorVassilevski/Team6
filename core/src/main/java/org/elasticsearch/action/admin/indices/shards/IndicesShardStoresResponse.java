@@ -33,14 +33,14 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.index.shard.ShardStateMetaData;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.elasticsearch.action.admin.indices.shards.IndicesShardStoresResponse.StoreStatus.readStoreStatus;
+import static org.elasticsearch.action.admin.indices.shards.IndicesShardStoresResponse.StoreStatus.*;
 
 /**
  * Response for {@link IndicesShardStoresAction}
@@ -55,15 +55,14 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
      */
     public static class StoreStatus implements Streamable, ToXContent, Comparable<StoreStatus> {
         private DiscoveryNode node;
-        private long legacyVersion;
-        private String allocationId;
-        private Exception storeException;
-        private AllocationStatus allocationStatus;
+        private long version;
+        private Throwable storeException;
+        private Allocation allocation;
 
         /**
          * The status of the shard store with respect to the cluster
          */
-        public enum AllocationStatus {
+        public enum Allocation {
 
             /**
              * Allocated as primary
@@ -82,16 +81,16 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
 
             private final byte id;
 
-            AllocationStatus(byte id) {
+            Allocation(byte id) {
                 this.id = id;
             }
 
-            private static AllocationStatus fromId(byte id) {
+            private static Allocation fromId(byte id) {
                 switch (id) {
                     case 0: return PRIMARY;
                     case 1: return REPLICA;
                     case 2: return UNUSED;
-                    default: throw new IllegalArgumentException("unknown id for allocation status [" + id + "]");
+                    default: throw new IllegalArgumentException("unknown id for allocation [" + id + "]");
                 }
             }
 
@@ -100,11 +99,11 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
                     case 0: return "primary";
                     case 1: return "replica";
                     case 2: return "unused";
-                    default: throw new IllegalArgumentException("unknown id for allocation status [" + id + "]");
+                    default: throw new IllegalArgumentException("unknown id for allocation [" + id + "]");
                 }
             }
 
-            private static AllocationStatus readFrom(StreamInput in) throws IOException {
+            private static Allocation readFrom(StreamInput in) throws IOException {
                 return fromId(in.readByte());
             }
 
@@ -116,11 +115,10 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
         private StoreStatus() {
         }
 
-        public StoreStatus(DiscoveryNode node, long legacyVersion, String allocationId, AllocationStatus allocationStatus, Exception storeException) {
+        public StoreStatus(DiscoveryNode node, long version, Allocation allocation, Throwable storeException) {
             this.node = node;
-            this.legacyVersion = legacyVersion;
-            this.allocationId = allocationId;
-            this.allocationStatus = allocationStatus;
+            this.version = version;
+            this.allocation = allocation;
             this.storeException = storeException;
         }
 
@@ -132,39 +130,32 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
         }
 
         /**
-         * Version of the store for pre-3.0 shards that have not yet been active
-         */
-        public long getLegacyVersion() {
-            return legacyVersion;
-        }
-
-        /**
-         * AllocationStatus id of the store, used to select the store that will be
+         * Version of the store, used to select the store that will be
          * used as a primary.
          */
-        public String getAllocationId() {
-            return allocationId;
+        public long getVersion() {
+            return version;
         }
 
         /**
          * Exception while trying to open the
          * shard index or from when the shard failed
          */
-        public Exception getStoreException() {
+        public Throwable getStoreException() {
             return storeException;
         }
 
         /**
-         * The allocationStatus status of the store.
-         * {@link AllocationStatus#PRIMARY} indicates a primary shard copy
-         * {@link AllocationStatus#REPLICA} indicates a replica shard copy
-         * {@link AllocationStatus#UNUSED} indicates an unused shard copy
+         * The allocation status of the store.
+         * {@link Allocation#PRIMARY} indicates a primary shard copy
+         * {@link Allocation#REPLICA} indicates a replica shard copy
+         * {@link Allocation#UNUSED} indicates an unused shard copy
          */
-        public AllocationStatus getAllocationStatus() {
-            return allocationStatus;
+        public Allocation getAllocation() {
+            return allocation;
         }
 
-        public static StoreStatus readStoreStatus(StreamInput in) throws IOException {
+        static StoreStatus readStoreStatus(StreamInput in) throws IOException {
             StoreStatus storeStatus = new StoreStatus();
             storeStatus.readFrom(in);
             return storeStatus;
@@ -172,24 +163,22 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
 
         @Override
         public void readFrom(StreamInput in) throws IOException {
-            node = new DiscoveryNode(in);
-            legacyVersion = in.readLong();
-            allocationId = in.readOptionalString();
-            allocationStatus = AllocationStatus.readFrom(in);
+            node = DiscoveryNode.readNode(in);
+            version = in.readLong();
+            allocation = Allocation.readFrom(in);
             if (in.readBoolean()) {
-                storeException = in.readException();
+                storeException = in.readThrowable();
             }
         }
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
             node.writeTo(out);
-            out.writeLong(legacyVersion);
-            out.writeOptionalString(allocationId);
-            allocationStatus.writeTo(out);
+            out.writeLong(version);
+            allocation.writeTo(out);
             if (storeException != null) {
                 out.writeBoolean(true);
-                out.writeException(storeException);
+                out.writeThrowable(storeException);
             } else {
                 out.writeBoolean(false);
             }
@@ -198,13 +187,8 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
         @Override
         public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
             node.toXContent(builder, params);
-            if (legacyVersion != ShardStateMetaData.NO_VERSION) {
-                builder.field(Fields.LEGACY_VERSION, legacyVersion);
-            }
-            if (allocationId != null) {
-                builder.field(Fields.ALLOCATION_ID, allocationId);
-            }
-            builder.field(Fields.ALLOCATED, allocationStatus.value());
+            builder.field(Fields.VERSION, version);
+            builder.field(Fields.ALLOCATED, allocation.value());
             if (storeException != null) {
                 builder.startObject(Fields.STORE_EXCEPTION);
                 ElasticsearchException.toXContent(builder, params, storeException);
@@ -219,21 +203,10 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
                 return 1;
             } else if (other.storeException != null && storeException == null) {
                 return -1;
-            }
-            if (allocationId != null && other.allocationId == null) {
-                return -1;
-            } else if (allocationId == null && other.allocationId != null) {
-                return 1;
-            } else if (allocationId == null && other.allocationId == null) {
-                int compare = Long.compare(other.legacyVersion, legacyVersion);
-                if (compare == 0) {
-                    return Integer.compare(allocationStatus.id, other.allocationStatus.id);
-                }
-                return compare;
             } else {
-                int compare = Integer.compare(allocationStatus.id, other.allocationStatus.id);
+                int compare = Long.compare(other.version, version);
                 if (compare == 0) {
-                    return allocationId.compareTo(other.allocationId);
+                    return Integer.compare(allocation.id, other.allocation.id);
                 }
                 return compare;
             }
@@ -400,14 +373,13 @@ public class IndicesShardStoresResponse extends ActionResponse implements ToXCon
     }
 
     static final class Fields {
-        static final String INDICES = "indices";
-        static final String SHARDS = "shards";
-        static final String FAILURES = "failures";
-        static final String STORES = "stores";
+        static final XContentBuilderString INDICES = new XContentBuilderString("indices");
+        static final XContentBuilderString SHARDS = new XContentBuilderString("shards");
+        static final XContentBuilderString FAILURES = new XContentBuilderString("failures");
+        static final XContentBuilderString STORES = new XContentBuilderString("stores");
         // StoreStatus fields
-        static final String LEGACY_VERSION = "legacy_version";
-        static final String ALLOCATION_ID = "allocation_id";
-        static final String STORE_EXCEPTION = "store_exception";
-        static final String ALLOCATED = "allocation";
+        static final XContentBuilderString VERSION = new XContentBuilderString("version");
+        static final XContentBuilderString STORE_EXCEPTION = new XContentBuilderString("store_exception");
+        static final XContentBuilderString ALLOCATED = new XContentBuilderString("allocation");
     }
 }

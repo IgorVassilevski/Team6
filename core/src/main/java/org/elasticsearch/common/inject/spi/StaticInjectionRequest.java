@@ -19,8 +19,9 @@ package org.elasticsearch.common.inject.spi;
 import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.ConfigurationException;
 
-import java.util.Objects;
 import java.util.Set;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * A request to inject the static fields and methods of a type. Requests are created
@@ -37,8 +38,8 @@ public final class StaticInjectionRequest implements Element {
     private final Class<?> type;
 
     StaticInjectionRequest(Object source, Class<?> type) {
-        this.source = Objects.requireNonNull(source, "source");
-        this.type = Objects.requireNonNull(type, "type");
+        this.source = checkNotNull(source, "source");
+        this.type = checkNotNull(type, "type");
     }
 
     @Override

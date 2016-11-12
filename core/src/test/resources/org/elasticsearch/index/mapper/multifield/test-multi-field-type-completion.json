@@ -5,7 +5,8 @@
         "type":"multi_field",
         "fields":{
           "a":{
-            "type":"keyword"
+            "type":"string",
+            "index":"not_analyzed"
           },
           "b":{
             "type":"completion"
@@ -16,7 +17,8 @@
         "type":"multi_field",
         "fields":{
           "a":{
-            "type":"keyword"
+            "type":"string",
+            "index":"not_analyzed"
           },
           "b":{
             "type":"completion"

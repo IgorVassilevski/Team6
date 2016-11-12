@@ -24,6 +24,7 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -111,7 +112,7 @@ public class ThreadPoolStats implements Streamable, ToXContent, Iterable<ThreadP
 
         @Override
         public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-            builder.startObject(name);
+            builder.startObject(name, XContentBuilder.FieldCaseConversion.NONE);
             if (threads != -1) {
                 builder.field(Fields.THREADS, threads);
             }
@@ -194,13 +195,13 @@ public class ThreadPoolStats implements Streamable, ToXContent, Iterable<ThreadP
     }
 
     static final class Fields {
-        static final String THREAD_POOL = "thread_pool";
-        static final String THREADS = "threads";
-        static final String QUEUE = "queue";
-        static final String ACTIVE = "active";
-        static final String REJECTED = "rejected";
-        static final String LARGEST = "largest";
-        static final String COMPLETED = "completed";
+        static final XContentBuilderString THREAD_POOL = new XContentBuilderString("thread_pool");
+        static final XContentBuilderString THREADS = new XContentBuilderString("threads");
+        static final XContentBuilderString QUEUE = new XContentBuilderString("queue");
+        static final XContentBuilderString ACTIVE = new XContentBuilderString("active");
+        static final XContentBuilderString REJECTED = new XContentBuilderString("rejected");
+        static final XContentBuilderString LARGEST = new XContentBuilderString("largest");
+        static final XContentBuilderString COMPLETED = new XContentBuilderString("completed");
     }
 
     @Override

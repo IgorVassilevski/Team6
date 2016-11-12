@@ -21,20 +21,25 @@ package org.elasticsearch.index.analysis;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.hunspell.Dictionary;
 import org.apache.lucene.analysis.hunspell.HunspellStemFilter;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 import org.elasticsearch.indices.analysis.HunspellService;
 
 import java.util.Locale;
 
+@AnalysisSettingsRequired
 public class HunspellTokenFilterFactory extends AbstractTokenFilterFactory {
 
     private final Dictionary dictionary;
     private final boolean dedup;
     private final boolean longestOnly;
 
-    public HunspellTokenFilterFactory(IndexSettings indexSettings, String name,  Settings settings, HunspellService hunspellService)  {
-        super(indexSettings, name, settings);
+    @Inject
+    public HunspellTokenFilterFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings, HunspellService hunspellService)  {
+        super(index, indexSettingsService.getSettings(), name, settings);
 
         String locale = settings.get("locale", settings.get("language", settings.get("lang", null)));
         if (locale == null) {

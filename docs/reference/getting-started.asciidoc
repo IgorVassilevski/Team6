@@ -101,7 +101,7 @@ With that out of the way, let's get started with the fun part...
 
 == Installation
 
-Elasticsearch requires at least Java 8. Specifically as of this writing, it is recommended that you use the Oracle JDK version {jdk}. Java installation varies from platform to platform so we won't go into those details here. Oracle's recommended installation documentation can be found on http://docs.oracle.com/javase/8/docs/technotes/guides/install/install_overview.html[Oracle's website]. Suffice to say, before you install Elasticsearch, please check your Java version first by running (and then install/upgrade accordingly if needed):
+Elasticsearch requires at least Java 7. Specifically as of this writing, it is recommended that you use the Oracle JDK version {jdk}. Java installation varies from platform to platform so we won't go into those details here. Oracle's recommended installation documentation can be found on http://docs.oracle.com/javase/8/docs/technotes/guides/install/install_overview.html[Oracle's website]. Suffice to say, before you install Elasticsearch, please check your Java version first by running (and then install/upgrade accordingly if needed):
 
 [source,sh]
 --------------------------------------------------
@@ -163,7 +163,7 @@ As mentioned previously, we can override either the cluster or node name. This c
 
 [source,sh]
 --------------------------------------------------
-./elasticsearch -Ecluster.name=my_cluster_name -Enode.name=my_node_name
+./elasticsearch --cluster.name my_cluster_name --node.name my_node_name
 --------------------------------------------------
 
 Also note the line marked http with information about the HTTP address (`192.168.8.112`) and port (`9200`) that our node is reachable from. By default, Elasticsearch uses port `9200` to provide access to its REST API. This port is configurable if necessary.
@@ -260,8 +260,7 @@ And the response:
 --------------------------------------------------
 curl -XPUT 'localhost:9200/customer?pretty'
 {
-  "acknowledged" : true,
-  "shards_acknowledged": true
+  "acknowledged" : true
 }
 
 curl 'localhost:9200/_cat/indices?v'
@@ -906,7 +905,7 @@ curl -XPOST 'localhost:9200/bank/_search?pretty' -d '
   "aggs": {
     "group_by_state": {
       "terms": {
-        "field": "state.keyword"
+        "field": "state"
       }
     }
   }
@@ -981,7 +980,7 @@ curl -XPOST 'localhost:9200/bank/_search?pretty' -d '
   "aggs": {
     "group_by_state": {
       "terms": {
-        "field": "state.keyword"
+        "field": "state"
       },
       "aggs": {
         "average_balance": {
@@ -1007,7 +1006,7 @@ curl -XPOST 'localhost:9200/bank/_search?pretty' -d '
   "aggs": {
     "group_by_state": {
       "terms": {
-        "field": "state.keyword",
+        "field": "state",
         "order": {
           "average_balance": "desc"
         }

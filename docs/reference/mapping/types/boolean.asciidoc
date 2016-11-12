@@ -44,7 +44,7 @@ GET my_index/_search
   }
 }
 --------------------------------------------------
-// CONSOLE
+// AUTOSENSE
 <1> Indexing a document with a JSON `true`.
 <2> Querying for the document with `1`, which is interpreted as `true`.
 
@@ -76,15 +76,13 @@ GET my_index/_search
   },
   "script_fields": {
     "is_published": {
-      "script": {
-        "lang": "painless",
-        "inline": "doc['is_published'].value"
-      }
+      "script": "doc['is_published'].value" <1>
     }
   }
 }
 --------------------------------------------------
-// CONSOLE
+// AUTOSENSE
+<1> Inline scripts must be <<enable-dynamic-scripting,enabled>> for this example to work.
 
 [[boolean-params]]
 ==== Parameters for `boolean` fields
@@ -93,9 +91,9 @@ The following parameters are accepted by `boolean` fields:
 
 [horizontal]
 
-<<mapping-boost,`boost`>>::
+<<index-boost,`boost`>>::
 
-    Mapping field-level query time boosting. Accepts a floating point number, defaults
+    Field-level index time boosting. Accepts a floating point number, defaults
     to `1.0`.
 
 <<doc-values,`doc_values`>>::
@@ -106,7 +104,7 @@ The following parameters are accepted by `boolean` fields:
 
 <<mapping-index,`index`>>::
 
-    Should the field be searchable? Accepts `true` (default) and `false`.
+    Should the field be searchable? Accepts `not_analyzed` (default) and `no`.
 
 <<null-value,`null_value`>>::
 

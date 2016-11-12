@@ -18,7 +18,8 @@
  */
 package org.elasticsearch.index.search.nested;
 
-import org.apache.lucene.document.SortedNumericDocValuesField;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FloatField;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.FieldDoc;
@@ -30,13 +31,13 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.join.QueryBitSetProducer;
 import org.apache.lucene.search.join.ScoreMode;
 import org.apache.lucene.search.join.ToParentBlockJoinQuery;
-import org.apache.lucene.util.NumericUtils;
 import org.elasticsearch.common.lucene.search.Queries;
+import org.elasticsearch.index.fielddata.FieldDataType;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource.Nested;
-import org.elasticsearch.index.fielddata.IndexNumericFieldData;
 import org.elasticsearch.index.fielddata.fieldcomparator.FloatValuesComparatorSource;
+import org.elasticsearch.index.fielddata.plain.FloatArrayIndexFieldData;
 import org.elasticsearch.search.MultiValueMode;
 
 import java.io.IOException;
@@ -48,19 +49,19 @@ import static org.hamcrest.Matchers.equalTo;
 public class FloatNestedSortingTests extends DoubleNestedSortingTests {
 
     @Override
-    protected String getFieldDataType() {
-        return "float";
+    protected FieldDataType getFieldDataType() {
+        return new FieldDataType("float");
     }
 
     @Override
     protected IndexFieldData.XFieldComparatorSource createFieldComparator(String fieldName, MultiValueMode sortMode, Object missingValue, Nested nested) {
-        IndexNumericFieldData fieldData = getForField(fieldName);
+        FloatArrayIndexFieldData fieldData = getForField(fieldName);
         return new FloatValuesComparatorSource(fieldData, missingValue, sortMode, nested);
     }
 
     @Override
-    protected IndexableField createField(String name, int value) {
-        return new SortedNumericDocValuesField(name, NumericUtils.floatToSortableInt(value));
+    protected IndexableField createField(String name, int value, Field.Store store) {
+        return new FloatField(name, value, store);
     }
 
     protected void assertAvgScoreMode(Query parentFilter, IndexSearcher searcher, IndexFieldData.XFieldComparatorSource innerFieldComparator) throws IOException {

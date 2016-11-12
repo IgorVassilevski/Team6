@@ -19,10 +19,13 @@
 
 package org.elasticsearch.env;
 
+import org.apache.lucene.store.Lock;
+import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.index.shard.ShardId;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -49,7 +52,7 @@ public abstract class ShardLock implements Closeable {
     }
 
     @Override
-    public final void close() {
+    public final void close() throws IOException {
         if (this.closed.compareAndSet(false, true)) {
            closeInternal();
         }

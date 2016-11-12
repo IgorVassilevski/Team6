@@ -19,31 +19,41 @@
 
 package org.elasticsearch.index;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.logging.DeprecationLogger;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
+import org.elasticsearch.common.settings.Settings;
 
+/**
+ *
+ */
 public abstract class AbstractIndexComponent implements IndexComponent {
 
-    protected final Logger logger;
+    protected final ESLogger logger;
     protected final DeprecationLogger deprecationLogger;
-    protected final IndexSettings indexSettings;
+    protected final Index index;
+    protected final Settings indexSettings;
 
     /**
      * Constructs a new index component, with the index name and its settings.
+     *
+     * @param index         The index name
+     * @param indexSettings The index settings
      */
-    protected AbstractIndexComponent(IndexSettings indexSettings) {
-        this.logger = Loggers.getLogger(getClass(), indexSettings.getSettings(), indexSettings.getIndex());
-        this.deprecationLogger = new DeprecationLogger(logger);
+    protected AbstractIndexComponent(Index index, Settings indexSettings) {
+        this.index = index;
         this.indexSettings = indexSettings;
+        this.logger = Loggers.getLogger(getClass(), indexSettings, index);
+        this.deprecationLogger = new DeprecationLogger(logger);
     }
 
     @Override
     public Index index() {
-        return indexSettings.getIndex();
+        return this.index;
     }
 
-    public IndexSettings getIndexSettings() {
+    public Settings indexSettings() {
         return indexSettings;
     }
+
 }

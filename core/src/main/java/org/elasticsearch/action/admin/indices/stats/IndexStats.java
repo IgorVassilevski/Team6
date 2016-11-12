@@ -19,8 +19,9 @@
 
 package org.elasticsearch.action.admin.indices.stats;
 
+import com.google.common.collect.Maps;
+
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +53,7 @@ public class IndexStats implements Iterable<IndexShardStats> {
         if (indexShards != null) {
             return indexShards;
         }
-        Map<Integer, List<ShardStats>> tmpIndexShards = new HashMap<>();
+        Map<Integer, List<ShardStats>> tmpIndexShards = Maps.newHashMap();
         for (ShardStats shard : shards) {
             List<ShardStats> lst = tmpIndexShards.get(shard.getShardRouting().id());
             if (lst == null) {
@@ -61,7 +62,7 @@ public class IndexStats implements Iterable<IndexShardStats> {
             }
             lst.add(shard);
         }
-        indexShards = new HashMap<>();
+        indexShards = Maps.newHashMap();
         for (Map.Entry<Integer, List<ShardStats>> entry : tmpIndexShards.entrySet()) {
             indexShards.put(entry.getKey(), new IndexShardStats(entry.getValue().get(0).getShardRouting().shardId(), entry.getValue().toArray(new ShardStats[entry.getValue().size()])));
         }

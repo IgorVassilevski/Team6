@@ -45,7 +45,7 @@ public class SearchException extends ElasticsearchException implements Elasticse
     public SearchException(StreamInput in) throws IOException {
         super(in);
         if (in.readBoolean()) {
-            shardTarget = new SearchShardTarget(in);
+            shardTarget = SearchShardTarget.readSearchShardTarget(in);
         } else {
             shardTarget = null;
         }
@@ -54,12 +54,7 @@ public class SearchException extends ElasticsearchException implements Elasticse
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        if (shardTarget == null) {
-            out.writeBoolean(false);
-        } else {
-            out.writeBoolean(true);
-            shardTarget.writeTo(out);
-        }
+        out.writeOptionalStreamable(shardTarget);
     }
 
     public SearchShardTarget shard() {

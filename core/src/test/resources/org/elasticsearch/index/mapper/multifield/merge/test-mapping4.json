@@ -1,14 +1,15 @@
 {
-    "person":{
-        "properties":{
+    person:{
+        properties:{
             "name":{
-                "type": "text",
-                "store":true,
+                type:"string",
+                index:"analyzed",
+                store:"yes",
                 "fields":{
                     "not_indexed3":{
-                        "type": "text",
-                        "index":false,
-                        "store":true
+                        type:"string",
+                        index:"no",
+                        store:"yes"
                     }
                 }
             }

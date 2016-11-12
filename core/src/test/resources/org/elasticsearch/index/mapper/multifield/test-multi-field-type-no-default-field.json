@@ -5,12 +5,13 @@
         "type": "multi_field",
         "fields": {
           "indexed": {
-            "type": "text"
+            "type": "string",
+            "index": "analyzed"
           },
           "not_indexed": {
-            "type": "text",
+            "type": "string",
             "index": "no",
-            "store": true
+            "store": "yes"
           }
         }
       },
@@ -22,7 +23,7 @@
           },
           "stored": {
             "type": "long",
-            "store": true
+            "store": "yes"
           }
         }
       }

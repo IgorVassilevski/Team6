@@ -19,9 +19,12 @@
 
 package org.elasticsearch.search.aggregations.metrics.cardinality;
 
+import com.google.common.base.Preconditions;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LongBitSet;
+import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.packed.PackedInts;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.lease.Releasable;
@@ -34,6 +37,7 @@ import org.elasticsearch.common.util.IntArray;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 
 /**
  * Hyperloglog++ counter, implemented based on pseudo code from
@@ -46,7 +50,7 @@ import java.nio.ByteOrder;
  * requires more space and makes hyperloglog (which is less accurate) used sooner,
  * this is also considerably faster.
  *
- * Trying to understand what this class does without having read the paper is
+ * Trying to understand what this class does whithout having read the paper is
  * considered adventurous.
  */
 public final class HyperLogLogPlusPlus implements Releasable {
@@ -66,7 +70,7 @@ public final class HyperLogLogPlusPlus implements Releasable {
      */
     public static int precisionFromThreshold(long count) {
         final long hashTableEntries = (long) Math.ceil(count / MAX_LOAD_FACTOR);
-        int precision = PackedInts.bitsRequired(hashTableEntries * Integer.BYTES);
+        int precision = PackedInts.bitsRequired(hashTableEntries * RamUsageEstimator.NUM_BYTES_INT);
         precision = Math.max(precision, MIN_PRECISION);
         precision = Math.min(precision, MAX_PRECISION);
         return precision;
@@ -158,12 +162,8 @@ public final class HyperLogLogPlusPlus implements Releasable {
     private final double alphaMM;
 
     public HyperLogLogPlusPlus(int precision, BigArrays bigArrays, long initialBucketCount) {
-        if (precision < 4) {
-            throw new IllegalArgumentException("precision must be >= 4");
-        }
-        if (precision > 18) {
-            throw new IllegalArgumentException("precision must be <= 18");
-        }
+        Preconditions.checkArgument(precision >= 4, "precision must be >= 4");
+        Preconditions.checkArgument(precision <= 18, "precision must be <= 18");
         p = precision;
         m = 1 << p;
         this.bigArrays = bigArrays;
@@ -198,9 +198,7 @@ public final class HyperLogLogPlusPlus implements Releasable {
     }
 
     public void merge(long thisBucket, HyperLogLogPlusPlus other, long otherBucket) {
-        if (p != other.p) {
-            throw new IllegalArgumentException();
-        }
+        Preconditions.checkArgument(p == other.p);
         ensureCapacity(thisBucket + 1);
         if (other.algorithm.get(otherBucket) == LINEAR_COUNTING) {
             final IntArray values = other.hashSet.values(otherBucket);

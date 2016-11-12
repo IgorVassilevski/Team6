@@ -1,4 +1,5 @@
-setup:
+---
+"Validate query api":
   - do:
       indices.create:
         index: testing
@@ -6,8 +7,10 @@ setup:
           settings:
             number_of_replicas: 0
 
----
-"Validate query api":
+  - do:
+      cluster.health:
+        wait_for_status: yellow
+
   - do:
       indices.validate_query:
         q: query string
@@ -21,17 +24,6 @@ setup:
             invalid_query: {}
 
   - is_false: valid
-  - is_false: error
-
-  - do:
-      indices.validate_query:
-        explain: true
-        body:
-          query:
-            invalid_query: {}
-
-  - is_false: valid
-  - match: {error: 'org.elasticsearch.common.ParsingException: no [query] registered for [invalid_query]'}
 
   - do:
       indices.validate_query:
@@ -42,21 +34,3 @@ setup:
   - match: {explanations.0.index: 'testing'}
   - match: {explanations.0.explanation: '*:*'}
 
----
-"Validate body without query element":
-  - do:
-      indices.validate_query:
-        body:
-          match_all: {}
-
-  - is_false: valid
-  - is_false: error
-
-  - do:
-      indices.validate_query:
-        explain: true
-        body:
-          match_all: {}
-
-  - is_false: valid
-  - match: {error: 'org.elasticsearch.common.ParsingException: request does not support [match_all]'}

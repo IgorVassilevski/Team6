@@ -27,27 +27,31 @@ import org.elasticsearch.common.transport.LocalTransportAddress;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.store.Store;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static org.elasticsearch.test.VersionUtils.randomVersion;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.nullValue;
 
 /**
  */
 public class StartRecoveryRequestTests extends ESTestCase {
+
+    @Test
     public void testSerialization() throws Exception {
         Version targetNodeVersion = randomVersion(random());
         StartRecoveryRequest outRequest = new StartRecoveryRequest(
-                new ShardId("test", "_na_", 0),
-                new DiscoveryNode("a", new LocalTransportAddress("1"), emptyMap(), emptySet(), targetNodeVersion),
-                new DiscoveryNode("b", new LocalTransportAddress("1"), emptyMap(), emptySet(), targetNodeVersion),
+                new ShardId("test", 0),
+                new DiscoveryNode("a", new LocalTransportAddress("1"), targetNodeVersion),
+                new DiscoveryNode("b", new LocalTransportAddress("1"), targetNodeVersion),
+                true,
                 Store.MetadataSnapshot.EMPTY,
-                randomBoolean(),
-                1L
+                RecoveryState.Type.RELOCATION,
+                1l
+
         );
         ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
         OutputStreamStreamOutput out = new OutputStreamStreamOutput(outBuffer);
@@ -63,9 +67,10 @@ public class StartRecoveryRequestTests extends ESTestCase {
         assertThat(outRequest.shardId(), equalTo(inRequest.shardId()));
         assertThat(outRequest.sourceNode(), equalTo(inRequest.sourceNode()));
         assertThat(outRequest.targetNode(), equalTo(inRequest.targetNode()));
+        assertThat(outRequest.markAsRelocated(), equalTo(inRequest.markAsRelocated()));
         assertThat(outRequest.metadataSnapshot().asMap(), equalTo(inRequest.metadataSnapshot().asMap()));
         assertThat(outRequest.recoveryId(), equalTo(inRequest.recoveryId()));
-        assertThat(outRequest.isPrimaryRelocation(), equalTo(inRequest.isPrimaryRelocation()));
+        assertThat(outRequest.recoveryType(), equalTo(inRequest.recoveryType()));
     }
 
 }

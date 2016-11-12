@@ -18,34 +18,22 @@
  */
 package org.elasticsearch.search.aggregations.metrics.stats;
 
-import org.elasticsearch.common.ParseField;
-import org.elasticsearch.common.ParseFieldMatcher;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.search.aggregations.support.AbstractValuesSourceParser.NumericValuesSourceParser;
-import org.elasticsearch.search.aggregations.support.ValueType;
-import org.elasticsearch.search.aggregations.support.ValuesSourceType;
-
-import java.io.IOException;
-import java.util.Map;
+import org.elasticsearch.search.aggregations.AggregatorFactory;
+import org.elasticsearch.search.aggregations.metrics.NumericValuesSourceMetricsAggregatorParser;
+import org.elasticsearch.search.aggregations.support.ValuesSource;
+import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
 
 /**
  *
  */
-public class StatsParser extends NumericValuesSourceParser {
+public class StatsParser extends NumericValuesSourceMetricsAggregatorParser<InternalStats> {
 
     public StatsParser() {
-        super(true, true, false);
+        super(InternalStats.TYPE);
     }
 
     @Override
-    protected boolean token(String aggregationName, String currentFieldName, XContentParser.Token token, XContentParser parser,
-            ParseFieldMatcher parseFieldMatcher, Map<ParseField, Object> otherOptions) throws IOException {
-        return false;
-    }
-
-    @Override
-    protected StatsAggregationBuilder createFactory(String aggregationName, ValuesSourceType valuesSourceType,
-                                                    ValueType targetValueType, Map<ParseField, Object> otherOptions) {
-        return new StatsAggregationBuilder(aggregationName);
+    protected AggregatorFactory createFactory(String aggregationName, ValuesSourceConfig<ValuesSource.Numeric> config) {
+        return new StatsAggregator.Factory(aggregationName, config);
     }
 }

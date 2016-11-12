@@ -28,10 +28,6 @@ import org.apache.lucene.store.ByteArrayDataInput;
 import org.apache.lucene.store.ByteArrayDataOutput;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.InputStreamDataInput;
 import org.apache.lucene.store.OutputStreamDataOutput;
 import org.apache.lucene.util.ArrayUtil;
@@ -56,13 +52,13 @@ import org.apache.lucene.util.fst.PositiveIntOutputs;
 import org.apache.lucene.util.fst.Util;
 import org.apache.lucene.util.fst.Util.Result;
 import org.apache.lucene.util.fst.Util.TopResults;
-import org.elasticsearch.common.SuppressForbidden;
 import org.elasticsearch.common.collect.HppcMaps;
-import org.elasticsearch.common.io.PathUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -215,8 +211,7 @@ public class XAnalyzingSuggester extends Lookup {
    * @param analyzer Analyzer that will be used for analyzing suggestions while building the index.
    */
   public XAnalyzingSuggester(Analyzer analyzer) {
-    this(analyzer, null, analyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true, null, false, 0,
-        SEP_LABEL, PAYLOAD_SEP, END_BYTE, HOLE_CHARACTER);
+    this(analyzer, null, analyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true, null, false, 0, SEP_LABEL, PAYLOAD_SEP, END_BYTE, HOLE_CHARACTER);
   }
 
   /**
@@ -228,8 +223,7 @@ public class XAnalyzingSuggester extends Lookup {
    * @param queryAnalyzer Analyzer that will be used for analyzing query text during lookup
    */
   public XAnalyzingSuggester(Analyzer indexAnalyzer, Analyzer queryAnalyzer) {
-    this(indexAnalyzer, null, queryAnalyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true, null, false, 0,
-        SEP_LABEL, PAYLOAD_SEP, END_BYTE, HOLE_CHARACTER);
+    this(indexAnalyzer, null, queryAnalyzer, EXACT_FIRST | PRESERVE_SEP, 256, -1, true, null, false, 0, SEP_LABEL, PAYLOAD_SEP, END_BYTE, HOLE_CHARACTER);
   }
 
   /**
@@ -248,10 +242,8 @@ public class XAnalyzingSuggester extends Lookup {
    *   to expand from the analyzed form.  Set this to -1 for
    *   no limit.
    */
-  public XAnalyzingSuggester(Analyzer indexAnalyzer, Automaton queryPrefix, Analyzer queryAnalyzer,
-                             int options, int maxSurfaceFormsPerAnalyzedForm, int maxGraphExpansions,
-                             boolean preservePositionIncrements, FST<Pair<Long, BytesRef>> fst,
-                             boolean hasPayloads, int maxAnalyzedPathsForOneInput,
+  public XAnalyzingSuggester(Analyzer indexAnalyzer, Automaton queryPrefix, Analyzer queryAnalyzer, int options, int maxSurfaceFormsPerAnalyzedForm, int maxGraphExpansions,
+                             boolean preservePositionIncrements, FST<Pair<Long, BytesRef>> fst, boolean hasPayloads, int maxAnalyzedPathsForOneInput,
                              int sepLabel, int payloadSep, int endByte, int holeCharacter) {
       // SIMON EDIT: I added fst, hasPayloads and maxAnalyzedPathsForOneInput
     this.indexAnalyzer = indexAnalyzer;
@@ -272,14 +264,12 @@ public class XAnalyzingSuggester extends Lookup {
     // more than one byte to disambiguate ... but 256 seems
     // like it should be way more then enough.
     if (maxSurfaceFormsPerAnalyzedForm <= 0 || maxSurfaceFormsPerAnalyzedForm > 256) {
-      throw new IllegalArgumentException(
-          "maxSurfaceFormsPerAnalyzedForm must be > 0 and < 256 (got: " + maxSurfaceFormsPerAnalyzedForm + ")");
+      throw new IllegalArgumentException("maxSurfaceFormsPerAnalyzedForm must be > 0 and < 256 (got: " + maxSurfaceFormsPerAnalyzedForm + ")");
     }
     this.maxSurfaceFormsPerAnalyzedForm = maxSurfaceFormsPerAnalyzedForm;
 
     if (maxGraphExpansions < 1 && maxGraphExpansions != -1) {
-      throw new IllegalArgumentException(
-          "maxGraphExpansions must -1 (no limit) or > 0 (got: " + maxGraphExpansions + ")");
+      throw new IllegalArgumentException("maxGraphExpansions must -1 (no limit) or > 0 (got: " + maxGraphExpansions + ")");
     }
     this.maxGraphExpansions = maxGraphExpansions;
     this.maxAnalyzedPathsForOneInput = maxAnalyzedPathsForOneInput;
@@ -486,44 +476,22 @@ public long ramBytesUsed() {
     }
   }
 
-    /** Non-null if this sugggester created a temp dir, needed only during build */
-    private static FSDirectory tmpBuildDir;
-
-    @SuppressForbidden(reason = "access temp directory for building index")
-    protected static synchronized FSDirectory getTempDir() {
-        if (tmpBuildDir == null) {
-            // Lazy init
-            String tempDirPath = System.getProperty("java.io.tmpdir");
-            if (tempDirPath == null)  {
-                throw new RuntimeException("Java has no temporary folder property (java.io.tmpdir)?");
-            }
-            try {
-                tmpBuildDir = FSDirectory.open(PathUtils.get(tempDirPath));
-            } catch (IOException ioe) {
-                throw new RuntimeException(ioe);
-            }
-        }
-        return tmpBuildDir;
-    }
-
   @Override
   public void build(InputIterator iterator) throws IOException {
     String prefix = getClass().getSimpleName();
-      Directory tempDir = getTempDir();
-      OfflineSorter sorter = new OfflineSorter(tempDir, prefix, new AnalyzingComparator(hasPayloads));
-
-      IndexOutput tempInput = tempDir.createTempOutput(prefix, "input", IOContext.DEFAULT);
-
-      OfflineSorter.ByteSequencesWriter writer = new OfflineSorter.ByteSequencesWriter(tempInput);
-      OfflineSorter.ByteSequencesReader reader = null;
+    Path directory = OfflineSorter.getDefaultTempDir();
+    Path tempInput = Files.createTempFile(directory, prefix, ".input");
+    Path tempSorted = Files.createTempFile(directory, prefix, ".sorted");
 
     hasPayloads = iterator.hasPayloads();
 
+    OfflineSorter.ByteSequencesWriter writer = new OfflineSorter.ByteSequencesWriter(tempInput);
+    OfflineSorter.ByteSequencesReader reader = null;
     BytesRefBuilder scratch = new BytesRefBuilder();
 
     TokenStreamToAutomaton ts2a = getTokenStreamToAutomaton();
-      String tempSortedFileName = null;
 
+    boolean success = false;
     count = 0;
     byte buffer[] = new byte[8];
     try {
@@ -537,8 +505,7 @@ public long ramBytesUsed() {
 
           // length of the analyzed text (FST input)
           if (scratch.length() > Short.MAX_VALUE-2) {
-            throw new IllegalArgumentException(
-                "cannot handle analyzed forms > " + (Short.MAX_VALUE-2) + " in length (got " + scratch.length() + ")");
+            throw new IllegalArgumentException("cannot handle analyzed forms > " + (Short.MAX_VALUE-2) + " in length (got " + scratch.length() + ")");
           }
           short analyzedLength = (short) scratch.length();
 
@@ -550,8 +517,7 @@ public long ramBytesUsed() {
 
           if (hasPayloads) {
             if (surfaceForm.length > (Short.MAX_VALUE-2)) {
-              throw new IllegalArgumentException(
-                  "cannot handle surface form > " + (Short.MAX_VALUE-2) + " in length (got " + surfaceForm.length + ")");
+              throw new IllegalArgumentException("cannot handle surface form > " + (Short.MAX_VALUE-2) + " in length (got " + surfaceForm.length + ")");
             }
             payload = iterator.payload();
             // payload + surfaceLength (short)
@@ -573,8 +539,7 @@ public long ramBytesUsed() {
           if (hasPayloads) {
             for(int i=0;i<surfaceForm.length;i++) {
               if (surfaceForm.bytes[i] == payloadSep) {
-                throw new IllegalArgumentException(
-                    "surface form cannot contain unit separator character U+001F; this character is reserved");
+                throw new IllegalArgumentException("surface form cannot contain unit separator character U+001F; this character is reserved");
               }
             }
             output.writeShort((short) surfaceForm.length);
@@ -593,16 +558,14 @@ public long ramBytesUsed() {
       writer.close();
 
       // Sort all input/output pairs (required by FST.Builder):
-        tempSortedFileName = sorter.sort(tempInput.getName());
+      new OfflineSorter(new AnalyzingComparator(hasPayloads)).sort(tempInput, tempSorted);
 
       // Free disk space:
-        tempDir.deleteFile(tempInput.getName());
+      Files.delete(tempInput);
 
-        reader = new OfflineSorter.ByteSequencesReader(
-            tempDir.openChecksumInput(tempSortedFileName, IOContext.READONCE), prefix);
+      reader = new OfflineSorter.ByteSequencesReader(tempSorted);
 
-      PairOutputs<Long,BytesRef> outputs = new PairOutputs<>(
-          PositiveIntOutputs.getSingleton(), ByteSequenceOutputs.getSingleton());
+      PairOutputs<Long,BytesRef> outputs = new PairOutputs<>(PositiveIntOutputs.getSingleton(), ByteSequenceOutputs.getSingleton());
       Builder<Pair<Long,BytesRef>> builder = new Builder<>(FST.INPUT_TYPE.BYTE1, outputs);
 
       // Build FST:
@@ -619,12 +582,8 @@ public long ramBytesUsed() {
       Set<BytesRef> seenSurfaceForms = new HashSet<>();
 
       int dedup = 0;
-      while (true) {
-        BytesRef bytes = reader.next();
-        if (bytes == null) {
-          break;
-        }
-        input.reset(bytes.bytes, bytes.offset, bytes.length);
+      while (reader.read(scratch)) {
+        input.reset(scratch.bytes(), 0, scratch.length());
         short analyzedLength = input.readShort();
         analyzed.grow(analyzedLength+2);
         input.readBytes(analyzed.bytes(), 0, analyzedLength);
@@ -632,13 +591,13 @@ public long ramBytesUsed() {
 
         long cost = input.readInt();
 
-        surface.bytes = bytes.bytes;
+        surface.bytes = scratch.bytes();
         if (hasPayloads) {
           surface.length = input.readShort();
           surface.offset = input.getPosition();
         } else {
           surface.offset = input.getPosition();
-          surface.length = bytes.length - surface.offset;
+          surface.length = scratch.length() - surface.offset;
         }
 
         if (previousAnalyzed == null) {
@@ -680,11 +639,11 @@ public long ramBytesUsed() {
           builder.add(scratchInts.get(), outputs.newPair(cost, BytesRef.deepCopyOf(surface)));
         } else {
           int payloadOffset = input.getPosition() + surface.length;
-          int payloadLength = bytes.length - payloadOffset;
+          int payloadLength = scratch.length() - payloadOffset;
           BytesRef br = new BytesRef(surface.length + 1 + payloadLength);
           System.arraycopy(surface.bytes, surface.offset, br.bytes, 0, surface.length);
           br.bytes[surface.length] = (byte) payloadSep;
-          System.arraycopy(bytes.bytes, payloadOffset, br.bytes, surface.length+1, payloadLength);
+          System.arraycopy(scratch.bytes(), payloadOffset, br.bytes, surface.length+1, payloadLength);
           br.length = br.bytes.length;
           builder.add(scratchInts.get(), outputs.newPair(cost, br));
         }
@@ -695,9 +654,15 @@ public long ramBytesUsed() {
       //Util.toDot(fst, pw, true, true);
       //pw.close();
 
+      success = true;
     } finally {
-        IOUtils.closeWhileHandlingException(reader, writer);
-        IOUtils.deleteFilesIgnoringExceptions(tempDir, tempInput.getName(), tempSortedFileName);
+      IOUtils.closeWhileHandlingException(reader, writer);
+
+      if (success) {
+        IOUtils.deleteFilesIfExist(tempInput, tempSorted);
+      } else {
+        IOUtils.deleteFilesIgnoringExceptions(tempInput, tempSorted);
+      }
     }
   }
 
@@ -727,8 +692,7 @@ public long ramBytesUsed() {
   public boolean load(InputStream input) throws IOException {
     DataInput dataIn = new InputStreamDataInput(input);
     try {
-      this.fst = new FST<>(dataIn, new PairOutputs<>(
-          PositiveIntOutputs.getSingleton(), ByteSequenceOutputs.getSingleton()));
+      this.fst = new FST<>(dataIn, new PairOutputs<>(PositiveIntOutputs.getSingleton(), ByteSequenceOutputs.getSingleton()));
       maxAnalyzedPathsForOneInput = dataIn.readVInt();
       hasPayloads = dataIn.readByte() == 1;
     } finally {
@@ -793,12 +757,10 @@ public long ramBytesUsed() {
     //System.out.println("lookup key=" + key + " num=" + num);
     for (int i = 0; i < key.length(); i++) {
       if (key.charAt(i) == holeCharacter) {
-        throw new IllegalArgumentException(
-            "lookup key cannot contain HOLE character U+001E; this character is reserved");
+        throw new IllegalArgumentException("lookup key cannot contain HOLE character U+001E; this character is reserved");
       }
       if (key.charAt(i) == sepLabel) {
-        throw new IllegalArgumentException(
-            "lookup key cannot contain unit separator character U+001F; this character is reserved");
+        throw new IllegalArgumentException("lookup key cannot contain unit separator character U+001F; this character is reserved");
       }
     }
     final BytesRef utf8Key = new BytesRef(key);
@@ -838,8 +800,7 @@ public long ramBytesUsed() {
         // Searcher just to find the single exact only
         // match, if present:
         Util.TopNSearcher<Pair<Long,BytesRef>> searcher;
-        searcher = new Util.TopNSearcher<>(
-            fst, count * maxSurfaceFormsPerAnalyzedForm, count * maxSurfaceFormsPerAnalyzedForm, weightComparator);
+        searcher = new Util.TopNSearcher<>(fst, count * maxSurfaceFormsPerAnalyzedForm, count * maxSurfaceFormsPerAnalyzedForm, weightComparator);
 
         // NOTE: we could almost get away with only using
         // the first start node.  The only catch is if
@@ -1110,7 +1071,7 @@ public long ramBytesUsed() {
             this.analyzed.copyBytes(analyzed);
         }
 
-        private static final class SurfaceFormAndPayload implements Comparable<SurfaceFormAndPayload> {
+        private final static class SurfaceFormAndPayload implements Comparable<SurfaceFormAndPayload> {
             BytesRef payload;
             long weight;
 

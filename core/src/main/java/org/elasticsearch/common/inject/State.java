@@ -16,6 +16,7 @@
 
 package org.elasticsearch.common.inject;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.internal.BindingImpl;
 import org.elasticsearch.common.inject.internal.Errors;
 import org.elasticsearch.common.inject.internal.MatcherAndConverter;
@@ -26,8 +27,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Collections.emptySet;
-
 /**
  * The inheritable data within an injector. This class is intended to allow parent and local
  * injector data to be accessed as a unit.
@@ -36,7 +35,7 @@ import static java.util.Collections.emptySet;
  */
 interface State {
 
-    State NONE = new State() {
+    static final State NONE = new State() {
         @Override
         public State parent() {
             throw new UnsupportedOperationException();
@@ -80,7 +79,7 @@ interface State {
 
         @Override
         public Iterable<MatcherAndConverter> getConvertersThisLevel() {
-            return emptySet();
+            return ImmutableSet.of();
         }
 
         @Override

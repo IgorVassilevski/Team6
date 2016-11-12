@@ -20,20 +20,51 @@
 package org.elasticsearch.common.util.concurrent;
 
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.Transports;
 
-import java.util.Objects;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 
-public abstract class BaseFuture<V> implements Future<V> {
+import static com.google.common.base.Preconditions.checkNotNull;
 
-    private static final String BLOCKING_OP_REASON = "Blocking operation";
+/**
+ * An abstract implementation of the {@link com.google.common.util.concurrent.ListenableFuture} interface. This
+ * class is preferable to {@link java.util.concurrent.FutureTask} for two
+ * reasons: It implements {@code ListenableFuture}, and it does not implement
+ * {@code Runnable}. (If you want a {@code Runnable} implementation of {@code
+ * ListenableFuture}, create a {@link com.google.common.util.concurrent.ListenableFutureTask}, or submit your
+ * tasks to a {@link com.google.common.util.concurrent.ListeningExecutorService}.)
+ * <p>
+ * This class implements all methods in {@code ListenableFuture}.
+ * Subclasses should provide a way to set the result of the computation through
+ * the protected methods {@link #set(Object)} and
+ * {@link #setException(Throwable)}. Subclasses may also override {@link
+ * #interruptTask()}, which will be invoked automatically if a call to {@link
+ * #cancel(boolean) cancel(true)} succeeds in canceling the future.
+ * <p>
+ * {@code AbstractFuture} uses an {@link AbstractQueuedSynchronizer} to deal
+ * with concurrency issues and guarantee thread safety.
+ * <p>
+ * The state changing methods all return a boolean indicating success or
+ * failure in changing the future's state.  Valid states are running,
+ * completed, failed, or cancelled.
+ * <p>
+ * This class uses an {@link com.google.common.util.concurrent.ExecutionList} to guarantee that all registered
+ * listeners will be executed, either when the future finishes or, for listeners
+ * that are added after the future completes, immediately.
+ * {@code Runnable}-{@code Executor} pairs are stored in the execution list but
+ * are not necessarily executed in the order in which they were added.  (If a
+ * listener is added after the Future is complete, it will be executed
+ * immediately, even if earlier listeners have not been executed. Additionally,
+ * executors need not guarantee FIFO execution, or different listeners may run
+ * in different executors.)
+ *
+ * @author Sven Mawson
+ * @since 1.0
+ */
+// Same as AbstractFuture from Guava, but without the listeners and with
+// additional assertions
+public abstract class BaseFuture<V> implements Future<V> {
 
     /**
      * Synchronization control for AbstractFutures.
@@ -59,8 +90,7 @@ public abstract class BaseFuture<V> implements Future<V> {
     @Override
     public V get(long timeout, TimeUnit unit) throws InterruptedException,
             TimeoutException, ExecutionException {
-        assert timeout <= 0 ||
-            (Transports.assertNotTransportThread(BLOCKING_OP_REASON) && ThreadPool.assertNotScheduleThread(BLOCKING_OP_REASON));
+        assert timeout <= 0 || Transports.assertNotTransportThread("Blocking operation");
         return sync.get(unit.toNanos(timeout));
     }
 
@@ -82,7 +112,7 @@ public abstract class BaseFuture<V> implements Future<V> {
      */
     @Override
     public V get() throws InterruptedException, ExecutionException {
-        assert Transports.assertNotTransportThread(BLOCKING_OP_REASON) && ThreadPool.assertNotScheduleThread(BLOCKING_OP_REASON);
+        assert Transports.assertNotTransportThread("Blocking operation");
         return sync.get();
     }
 
@@ -148,7 +178,7 @@ public abstract class BaseFuture<V> implements Future<V> {
      * @throws Error if the throwable was an {@link Error}.
      */
     protected boolean setException(Throwable throwable) {
-        boolean result = sync.setException(Objects.requireNonNull(throwable));
+        boolean result = sync.setException(checkNotNull(throwable));
         if (result) {
             done();
         }
@@ -184,6 +214,9 @@ public abstract class BaseFuture<V> implements Future<V> {
      * pass around a -1 everywhere.
      */
     static final class Sync<V> extends AbstractQueuedSynchronizer {
+
+        private static final long serialVersionUID = 0L;
+
         /* Valid states. */
         static final int RUNNING = 0;
         static final int COMPLETING = 1;

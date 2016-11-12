@@ -28,9 +28,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.sameInstance;
+import static org.hamcrest.Matchers.*;
 
 /**
  * Basic tests for the {@link BoundTransportAddress} class. These tests should not bind to any addresses but should
@@ -44,14 +42,13 @@ public class BoundTransportAddressTests extends ESTestCase {
         for (InetAddress address : inetAddresses) {
             transportAddressList.add(new InetSocketTransportAddress(address, randomIntBetween(9200, 9299)));
         }
-        final BoundTransportAddress transportAddress =
-            new BoundTransportAddress(transportAddressList.toArray(new InetSocketTransportAddress[0]), transportAddressList.get(0));
+        final BoundTransportAddress transportAddress = new BoundTransportAddress(transportAddressList.toArray(new InetSocketTransportAddress[0]), transportAddressList.get(0));
         assertThat(transportAddress.boundAddresses().length, equalTo(transportAddressList.size()));
 
         // serialize
         BytesStreamOutput streamOutput = new BytesStreamOutput();
         transportAddress.writeTo(streamOutput);
-        StreamInput in = streamOutput.bytes().streamInput();
+        StreamInput in = ByteBufferStreamInput.wrap(streamOutput.bytes());
 
         BoundTransportAddress serializedAddress;
         if (randomBoolean()) {

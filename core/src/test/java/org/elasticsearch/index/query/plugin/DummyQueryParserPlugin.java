@@ -23,26 +23,59 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Weight;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentParser;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryParseContext;
+import org.elasticsearch.index.query.QueryParser;
+import org.elasticsearch.index.query.QueryParsingException;
+import org.elasticsearch.indices.IndicesModule;
 import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.plugins.SearchPlugin;
 
 import java.io.IOException;
-import java.util.List;
 
-import static java.util.Collections.singletonList;
-
-public class DummyQueryParserPlugin extends Plugin implements SearchPlugin {
+public class DummyQueryParserPlugin extends Plugin {
 
     @Override
-    public List<QuerySpec<?>> getQueries() {
-        return singletonList(new QuerySpec<>(DummyQueryBuilder.NAME, DummyQueryBuilder::new, DummyQueryBuilder::fromXContent));
+    public String name() {
+        return "dummy";
+    }
+
+    @Override
+    public String description() {
+        return "dummy query";
+    }
+
+    public void onModule(IndicesModule module) {
+        module.registerQueryParser(DummyQueryParser.class);
+    }
+
+    public static class DummyQueryBuilder extends QueryBuilder {
+        @Override
+        protected void doXContent(XContentBuilder builder, Params params) throws IOException {
+            builder.startObject("dummy").endObject();
+        }
+    }
+
+    public static class DummyQueryParser implements QueryParser {
+        @Override
+        public String[] names() {
+            return new String[]{"dummy"};
+        }
+
+        @Override
+        public Query parse(QueryParseContext parseContext) throws IOException, QueryParsingException {
+            XContentParser.Token token = parseContext.parser().nextToken();
+            assert token == XContentParser.Token.END_OBJECT;
+            return new DummyQuery(parseContext.isFilter());
+        }
     }
 
     public static class DummyQuery extends Query {
         public final boolean isFilter;
         private final Query matchAllDocsQuery = new MatchAllDocsQuery();
 
-        public DummyQuery(boolean isFilter) {
+        private DummyQuery(boolean isFilter) {
             this.isFilter = isFilter;
         }
 
@@ -54,16 +87,6 @@ public class DummyQueryParserPlugin extends Plugin implements SearchPlugin {
         @Override
         public Weight createWeight(IndexSearcher searcher, boolean needsScores) throws IOException {
             return matchAllDocsQuery.createWeight(searcher, needsScores);
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            return sameClassAs(obj);
-        }
-
-        @Override
-        public int hashCode() {
-            return classHash();
         }
     }
 }

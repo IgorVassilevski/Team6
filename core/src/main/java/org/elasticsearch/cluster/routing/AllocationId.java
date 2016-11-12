@@ -19,21 +19,13 @@
 
 package org.elasticsearch.cluster.routing;
 
-import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.ParseField;
-import org.elasticsearch.common.ParseFieldMatcher;
-import org.elasticsearch.common.ParseFieldMatcherSupplier;
-import org.elasticsearch.common.UUIDs;
+import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
-import org.elasticsearch.common.xcontent.ObjectParser;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentParser;
 
 import java.io.IOException;
-import java.util.Objects;
 
 /**
  * Uniquely identifies an allocation. An allocation is a shard moving from unassigned to initializing,
@@ -44,37 +36,9 @@ import java.util.Objects;
  * relocationId. Once relocation is done, the new allocation id is set to the relocationId. This is similar
  * behavior to how ShardRouting#currentNodeId is used.
  */
-public class AllocationId implements ToXContent, Writeable {
-    private static final String ID_KEY = "id";
-    private static final String RELOCATION_ID_KEY = "relocation_id";
-
-    private static final ObjectParser<AllocationId.Builder, ParseFieldMatcherSupplier> ALLOCATION_ID_PARSER = new ObjectParser<>(
-            "allocationId");
-
-    static {
-        ALLOCATION_ID_PARSER.declareString(AllocationId.Builder::setId, new ParseField(ID_KEY));
-        ALLOCATION_ID_PARSER.declareString(AllocationId.Builder::setRelocationId, new ParseField(RELOCATION_ID_KEY));
-    }
-
-    private static class Builder {
-        private String id;
-        private String relocationId;
-
-        public void setId(String id) {
-            this.id = id;
-        }
-
-        public void setRelocationId(String relocationId) {
-            this.relocationId = relocationId;
-        }
-
-        public AllocationId build() {
-            return new AllocationId(id, relocationId);
-        }
-    }
+public class AllocationId implements ToXContent {
 
     private final String id;
-    @Nullable
     private final String relocationId;
 
     AllocationId(StreamInput in) throws IOException {
@@ -82,14 +46,12 @@ public class AllocationId implements ToXContent, Writeable {
         this.relocationId = in.readOptionalString();
     }
 
-    @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(this.id);
         out.writeOptionalString(this.relocationId);
     }
 
     private AllocationId(String id, String relocationId) {
-        Objects.requireNonNull(id, "Argument [id] must be non-null");
         this.id = id;
         this.relocationId = relocationId;
     }
@@ -98,14 +60,7 @@ public class AllocationId implements ToXContent, Writeable {
      * Creates a new allocation id for initializing allocation.
      */
     public static AllocationId newInitializing() {
-        return new AllocationId(UUIDs.randomBase64UUID(), null);
-    }
-
-    /**
-     * Creates a new allocation id for initializing allocation based on an existing id.
-     */
-    public static AllocationId newInitializing(String existingAllocationId) {
-        return new AllocationId(existingAllocationId, null);
+        return new AllocationId(Strings.randomBase64UUID(), null);
     }
 
     /**
@@ -123,7 +78,7 @@ public class AllocationId implements ToXContent, Writeable {
      */
     public static AllocationId newRelocation(AllocationId allocationId) {
         assert allocationId.getRelocationId() == null;
-        return new AllocationId(allocationId.getId(), UUIDs.randomBase64UUID());
+        return new AllocationId(allocationId.getId(), Strings.randomBase64UUID());
     }
 
     /**
@@ -193,16 +148,12 @@ public class AllocationId implements ToXContent, Writeable {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        builder.field(ID_KEY, id);
+        builder.startObject("allocation_id");
+        builder.field("id", id);
         if (relocationId != null) {
-            builder.field(RELOCATION_ID_KEY, relocationId);
+            builder.field("relocation_id", relocationId);
         }
         builder.endObject();
         return builder;
-    }
-
-    public static AllocationId fromXContent(XContentParser parser) throws IOException {
-        return ALLOCATION_ID_PARSER.parse(parser, new AllocationId.Builder(), () -> ParseFieldMatcher.STRICT).build();
     }
 }

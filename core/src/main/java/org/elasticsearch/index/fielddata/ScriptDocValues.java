@@ -22,13 +22,11 @@ package org.elasticsearch.index.fielddata;
 
 import org.apache.lucene.index.SortedNumericDocValues;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.common.geo.GeoHashUtils;
+import org.elasticsearch.common.geo.GeoDistance;
 import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.geo.GeoUtils;
 import org.elasticsearch.common.unit.DistanceUnit;
 import org.joda.time.DateTimeZone;
 import org.joda.time.MutableDateTime;
-import org.joda.time.ReadableDateTime;
 
 import java.util.AbstractList;
 import java.util.Collections;
@@ -51,7 +49,7 @@ public interface ScriptDocValues<T> extends List<T> {
      */
     List<T> getValues();
 
-    public static final class Strings extends AbstractList<String> implements ScriptDocValues<String> {
+    public final static class Strings extends AbstractList<String> implements ScriptDocValues<String> {
 
         private final SortedBinaryDocValues values;
 
@@ -123,7 +121,7 @@ public interface ScriptDocValues<T> extends List<T> {
         public long getValue() {
             int numValues = values.count();
             if (numValues == 0) {
-                return 0L;
+                return 0l;
             }
             return values.valueAt(0);
         }
@@ -133,7 +131,7 @@ public interface ScriptDocValues<T> extends List<T> {
             return Collections.unmodifiableList(this);
         }
 
-        public ReadableDateTime getDate() {
+        public MutableDateTime getDate() {
             date.setMillis(getValue());
             return date;
         }
@@ -191,7 +189,7 @@ public interface ScriptDocValues<T> extends List<T> {
         }
     }
 
-    class GeoPoints extends AbstractList<GeoPoint> implements ScriptDocValues<GeoPoint> {
+    public static class GeoPoints extends AbstractList<GeoPoint> implements ScriptDocValues<GeoPoint> {
 
         private final MultiGeoPointValues values;
 
@@ -254,41 +252,124 @@ public interface ScriptDocValues<T> extends List<T> {
             return values.count();
         }
 
+        public double factorDistance(double lat, double lon) {
+            GeoPoint point = getValue();
+            return GeoDistance.FACTOR.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.DEFAULT);
+        }
+
+        public double factorDistanceWithDefault(double lat, double lon, double defaultValue) {
+            if (isEmpty()) {
+                return defaultValue;
+            }
+            GeoPoint point = getValue();
+            return GeoDistance.FACTOR.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.DEFAULT);
+        }
+
+        public double factorDistance02(double lat, double lon) {
+            GeoPoint point = getValue();
+            return GeoDistance.FACTOR.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.DEFAULT) + 1;
+        }
+
+        public double factorDistance13(double lat, double lon) {
+            GeoPoint point = getValue();
+            return GeoDistance.FACTOR.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.DEFAULT) + 2;
+        }
+
         public double arcDistance(double lat, double lon) {
             GeoPoint point = getValue();
-            return GeoUtils.arcDistance(point.lat(), point.lon(), lat, lon);
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.DEFAULT);
         }
 
         public double arcDistanceWithDefault(double lat, double lon, double defaultValue) {
             if (isEmpty()) {
                 return defaultValue;
             }
-            return arcDistance(lat, lon);
-        }
-
-        public double planeDistance(double lat, double lon) {
             GeoPoint point = getValue();
-            return GeoUtils.planeDistance(point.lat(), point.lon(), lat, lon);
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.DEFAULT);
         }
 
-        public double planeDistanceWithDefault(double lat, double lon, double defaultValue) {
+        public double arcDistanceInKm(double lat, double lon) {
+            GeoPoint point = getValue();
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.KILOMETERS);
+        }
+
+        public double arcDistanceInKmWithDefault(double lat, double lon, double defaultValue) {
             if (isEmpty()) {
                 return defaultValue;
             }
-            return planeDistance(lat, lon);
+            GeoPoint point = getValue();
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.KILOMETERS);
+        }
+
+        public double arcDistanceInMiles(double lat, double lon) {
+            GeoPoint point = getValue();
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.MILES);
+        }
+
+        public double arcDistanceInMilesWithDefault(double lat, double lon, double defaultValue) {
+            if (isEmpty()) {
+                return defaultValue;
+            }
+            GeoPoint point = getValue();
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.MILES);
+        }
+
+        public double distance(double lat, double lon) {
+            GeoPoint point = getValue();
+            return GeoDistance.PLANE.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.DEFAULT);
+        }
+
+        public double distanceWithDefault(double lat, double lon, double defaultValue) {
+            if (isEmpty()) {
+                return defaultValue;
+            }
+            GeoPoint point = getValue();
+            return GeoDistance.PLANE.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.DEFAULT);
+        }
+
+        public double distanceInKm(double lat, double lon) {
+            GeoPoint point = getValue();
+            return GeoDistance.PLANE.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.KILOMETERS);
+        }
+
+        public double distanceInKmWithDefault(double lat, double lon, double defaultValue) {
+            if (isEmpty()) {
+                return defaultValue;
+            }
+            GeoPoint point = getValue();
+            return GeoDistance.PLANE.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.KILOMETERS);
+        }
+
+        public double distanceInMiles(double lat, double lon) {
+            GeoPoint point = getValue();
+            return GeoDistance.PLANE.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.MILES);
+        }
+
+        public double distanceInMilesWithDefault(double lat, double lon, double defaultValue) {
+            if (isEmpty()) {
+                return defaultValue;
+            }
+            GeoPoint point = getValue();
+            return GeoDistance.PLANE.calculate(point.lat(), point.lon(), lat, lon, DistanceUnit.MILES);
         }
 
         public double geohashDistance(String geohash) {
             GeoPoint point = getValue();
-            return GeoUtils.arcDistance(point.lat(), point.lon(), GeoHashUtils.decodeLatitude(geohash),
-                GeoHashUtils.decodeLongitude(geohash));
+            GeoPoint p = new GeoPoint().resetFromGeoHash(geohash);
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), p.lat(), p.lon(), DistanceUnit.DEFAULT);
         }
 
-        public double geohashDistanceWithDefault(String geohash, double defaultValue) {
-            if (isEmpty()) {
-                return defaultValue;
-            }
-            return geohashDistance(geohash);
+        public double geohashDistanceInKm(String geohash) {
+            GeoPoint point = getValue();
+            GeoPoint p = new GeoPoint().resetFromGeoHash(geohash);
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), p.lat(), p.lon(), DistanceUnit.KILOMETERS);
         }
+
+        public double geohashDistanceInMiles(String geohash) {
+            GeoPoint point = getValue();
+            GeoPoint p = new GeoPoint().resetFromGeoHash(geohash);
+            return GeoDistance.ARC.calculate(point.lat(), point.lon(), p.lat(), p.lon(), DistanceUnit.MILES);
+        }
+
     }
 }

@@ -18,18 +18,20 @@
  */
 package org.elasticsearch.search.lookup;
 
-import org.apache.lucene.index.LeafReaderContext;
+import com.google.common.collect.Maps;
+
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.index.fielddata.IndexFieldDataService;
 import org.elasticsearch.index.fielddata.ScriptDocValues;
+import org.elasticsearch.index.mapper.FieldMapper;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
+import org.apache.lucene.index.LeafReaderContext;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,7 +40,7 @@ import java.util.Set;
  */
 public class LeafDocLookup implements Map {
 
-    private final Map<String, ScriptDocValues> localCacheFieldData = new HashMap<>(4);
+    private final Map<String, ScriptDocValues> localCacheFieldData = Maps.newHashMapWithExpectedSize(4);
 
     private final MapperService mapperService;
     private final IndexFieldDataService fieldDataService;
@@ -75,7 +77,7 @@ public class LeafDocLookup implements Map {
         String fieldName = key.toString();
         ScriptDocValues scriptValues = localCacheFieldData.get(fieldName);
         if (scriptValues == null) {
-            final MappedFieldType fieldType = mapperService.fullName(fieldName);
+            final MappedFieldType fieldType = mapperService.smartNameFieldType(fieldName, types);
             if (fieldType == null) {
                 throw new IllegalArgumentException("No field found for [" + fieldName + "] in mapping with types " + Arrays.toString(types) + "");
             }
@@ -99,7 +101,7 @@ public class LeafDocLookup implements Map {
         String fieldName = key.toString();
         ScriptDocValues scriptValues = localCacheFieldData.get(fieldName);
         if (scriptValues == null) {
-            MappedFieldType fieldType = mapperService.fullName(fieldName);
+            MappedFieldType fieldType = mapperService.smartNameFieldType(fieldName, types);
             if (fieldType == null) {
                 return false;
             }

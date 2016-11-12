@@ -20,11 +20,7 @@
 package org.elasticsearch.transport;
 
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.common.breaker.CircuitBreaker;
-import org.elasticsearch.common.breaker.NoopCircuitBreaker;
 import org.elasticsearch.common.component.LifecycleComponent;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.transport.BoundTransportAddress;
 import org.elasticsearch.common.transport.TransportAddress;
 
@@ -35,10 +31,12 @@ import java.util.Map;
 /**
  *
  */
-public interface Transport extends LifecycleComponent {
+public interface Transport extends LifecycleComponent<Transport> {
 
 
-    Setting<Boolean> TRANSPORT_TCP_COMPRESS = Setting.boolSetting("transport.tcp.compress", false, Property.NodeScope);
+    public static class TransportSettings {
+        public static final String TRANSPORT_TCP_COMPRESS = "transport.tcp.compress";
+    }
 
     void transportServiceAdapter(TransportServiceAdapter service);
 
@@ -49,7 +47,7 @@ public interface Transport extends LifecycleComponent {
 
     /**
      * Further profile bound addresses
-     * @return <code>null</code> iff profiles are unsupported, otherwise a map with name of profile and its bound transport address
+     * @return Should return null if transport does not support profiles, otherwise a map with name of profile and its bound transport address
      */
     Map<String, BoundTransportAddress> profileBoundAddresses();
 
@@ -86,10 +84,8 @@ public interface Transport extends LifecycleComponent {
 
     /**
      * Sends the request to the node.
-     * @throws NodeNotConnectedException if the given node is not connected
      */
-    void sendRequest(DiscoveryNode node, long requestId, String action, TransportRequest request, TransportRequestOptions options) throws
-        IOException, TransportException;
+    void sendRequest(DiscoveryNode node, long requestId, String action, TransportRequest request, TransportRequestOptions options) throws IOException, TransportException;
 
     /**
      * Returns count of currently open connections
@@ -97,9 +93,4 @@ public interface Transport extends LifecycleComponent {
     long serverOpen();
 
     List<String> getLocalAddresses();
-
-    default CircuitBreaker getInFlightRequestBreaker() {
-        return new NoopCircuitBreaker("in-flight-noop");
-    }
-
 }

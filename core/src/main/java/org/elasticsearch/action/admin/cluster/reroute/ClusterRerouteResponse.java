@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.cluster.reroute;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.support.master.AcknowledgedResponse;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.routing.allocation.RoutingExplanations;

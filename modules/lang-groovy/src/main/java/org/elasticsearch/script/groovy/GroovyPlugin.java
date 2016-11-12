@@ -19,17 +19,22 @@
 
 package org.elasticsearch.script.groovy;
 
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.plugins.ScriptPlugin;
-import org.elasticsearch.script.ScriptEngineRegistry;
-import org.elasticsearch.script.ScriptEngineService;
 import org.elasticsearch.script.ScriptModule;
 
-public class GroovyPlugin extends Plugin implements ScriptPlugin {
+public class GroovyPlugin extends Plugin {
 
     @Override
-    public ScriptEngineService getScriptEngineService(Settings settings) {
-        return new GroovyScriptEngineService(settings);
+    public String name() {
+        return "lang-groovy";
+    }
+
+    @Override
+    public String description() {
+        return "Groovy scripting integration for Elasticsearch";
+    }
+
+    public void onModule(ScriptModule module) {
+        module.addScriptEngine(GroovyScriptEngineService.class);
     }
 }

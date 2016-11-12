@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.elasticsearch.common;
 
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -24,48 +23,94 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 
 import java.io.IOException;
 
-public enum Priority {
-
-    IMMEDIATE((byte) 0),
-    URGENT((byte) 1),
-    HIGH((byte) 2),
-    NORMAL((byte) 3),
-    LOW((byte) 4),
-    LANGUID((byte) 5);
+/**
+ *
+ */
+public final class Priority implements Comparable<Priority> {
 
     public static Priority readFrom(StreamInput input) throws IOException {
         return fromByte(input.readByte());
     }
 
     public static void writeTo(Priority priority, StreamOutput output) throws IOException {
-        output.writeByte(priority.value);
+        byte b = priority.value;
+        output.writeByte(b);
     }
 
     public static Priority fromByte(byte b) {
         switch (b) {
-            case 0: return IMMEDIATE;
-            case 1: return URGENT;
-            case 2: return HIGH;
-            case 3: return NORMAL;
-            case 4: return LOW;
-            case 5: return LANGUID;
+            case -1: return IMMEDIATE;
+            case 0: return URGENT;
+            case 1: return HIGH;
+            case 2: return NORMAL;
+            case 3: return LOW;
+            case 4: return LANGUID;
             default:
                 throw new IllegalArgumentException("can't find priority for [" + b + "]");
         }
     }
 
+    public static final Priority IMMEDIATE = new Priority((byte) -1);
+    public static final Priority URGENT = new Priority((byte) 0);
+    public static final Priority HIGH = new Priority((byte) 1);
+    public static final Priority NORMAL = new Priority((byte) 2);
+    public static final Priority LOW = new Priority((byte) 3);
+    public static final Priority LANGUID = new Priority((byte) 4);
+    private static final Priority[] values = new Priority[] { IMMEDIATE, URGENT, HIGH, NORMAL, LOW, LANGUID };
+
     private final byte value;
 
-    Priority(byte value) {
+    private Priority(byte value) {
         this.value = value;
     }
 
+    /**
+     * @return an array of all available priorities, sorted from the highest to the lowest.
+     */
+    public static Priority[] values() {
+        return values;
+    }
+
+    @Override
+    public int compareTo(Priority p) {
+        return (this.value < p.value) ? -1 : ((this.value > p.value) ? 1 : 0);
+    }
+
     public boolean after(Priority p) {
-        return this.compareTo(p) > 0;
+        return value > p.value;
     }
 
     public boolean sameOrAfter(Priority p) {
-        return this.compareTo(p) >= 0;
+        return value >= p.value;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || Priority.class != o.getClass()) return false;
+
+        Priority priority = (Priority) o;
+
+        if (value != priority.value) return false;
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        return (int) value;
+    }
+
+    @Override
+    public String toString() {
+        switch (value) {
+            case (byte) -1: return "IMMEDIATE";
+            case (byte) 0: return "URGENT";
+            case (byte) 1: return "HIGH";
+            case (byte) 2: return "NORMAL";
+            case (byte) 3: return "LOW";
+            default:
+                return "LANGUID";
+        }
+    }
 }

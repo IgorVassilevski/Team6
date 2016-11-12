@@ -22,6 +22,7 @@ package org.elasticsearch.search.dfs;
 
 import com.carrotsearch.hppc.ObjectObjectHashMap;
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
+
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.TermStatistics;
@@ -71,8 +72,8 @@ public class AggregatedDfs implements Streamable {
         termStatistics = HppcMaps.newMap(size);
         for (int i = 0; i < size; i++) {
             Term term = new Term(in.readString(), in.readBytesRef());
-            TermStatistics stats = new TermStatistics(in.readBytesRef(),
-                    in.readVLong(),
+            TermStatistics stats = new TermStatistics(in.readBytesRef(), 
+                    in.readVLong(), 
                     DfsSearchResult.subOne(in.readVLong()));
             termStatistics.put(term, stats);
         }
@@ -83,7 +84,7 @@ public class AggregatedDfs implements Streamable {
     @Override
     public void writeTo(final StreamOutput out) throws IOException {
         out.writeVInt(termStatistics.size());
-
+        
         for (ObjectObjectCursor<Term, TermStatistics> c : termStatistics()) {
             Term term = (Term) c.key;
             out.writeString(term.field());

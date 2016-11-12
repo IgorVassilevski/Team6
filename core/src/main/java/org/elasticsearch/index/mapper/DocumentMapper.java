@@ -19,11 +19,14 @@
 
 package org.elasticsearch.index.mapper;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.elasticsearch.ElasticsearchGenerationException;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.compress.CompressedXContent;
 import org.elasticsearch.common.settings.Settings;
@@ -31,9 +34,26 @@ import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.analysis.AnalysisService;
+import org.elasticsearch.index.mapper.Mapping.SourceTransform;
 import org.elasticsearch.index.mapper.MetadataFieldMapper.TypeParser;
+import org.elasticsearch.index.mapper.internal.AllFieldMapper;
+import org.elasticsearch.index.mapper.internal.IdFieldMapper;
+import org.elasticsearch.index.mapper.internal.IndexFieldMapper;
+import org.elasticsearch.index.mapper.internal.ParentFieldMapper;
+import org.elasticsearch.index.mapper.internal.RoutingFieldMapper;
+import org.elasticsearch.index.mapper.internal.SourceFieldMapper;
+import org.elasticsearch.index.mapper.internal.TTLFieldMapper;
+import org.elasticsearch.index.mapper.internal.TimestampFieldMapper;
+import org.elasticsearch.index.mapper.internal.TypeFieldMapper;
+import org.elasticsearch.index.mapper.internal.UidFieldMapper;
+import org.elasticsearch.index.mapper.object.ObjectMapper;
+import org.elasticsearch.index.mapper.object.RootObjectMapper;
+import org.elasticsearch.script.ExecutableScript;
+import org.elasticsearch.script.Script;
+import org.elasticsearch.script.ScriptContext;
+import org.elasticsearch.script.ScriptService;
+import org.elasticsearch.script.ScriptService.ScriptType;
 import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
@@ -45,8 +65,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static java.util.Collections.emptyMap;
-
 /**
  *
  */
@@ -56,14 +74,16 @@ public class DocumentMapper implements ToXContent {
 
         private Map<Class<? extends MetadataFieldMapper>, MetadataFieldMapper> metadataMappers = new LinkedHashMap<>();
 
+        private List<SourceTransform> sourceTransforms = new ArrayList<>(1);
+
         private final RootObjectMapper rootObjectMapper;
 
-        private Map<String, Object> meta = emptyMap();
+        private ImmutableMap<String, Object> meta = ImmutableMap.of();
 
         private final Mapper.BuilderContext builderContext;
 
         public Builder(RootObjectMapper.Builder builder, MapperService mapperService) {
-            final Settings indexSettings = mapperService.getIndexSettings().getSettings();
+            final Settings indexSettings = mapperService.indexSettings();
             this.builderContext = new Mapper.BuilderContext(indexSettings, new ContentPath(1));
             this.rootObjectMapper = builder.build(builderContext);
 
@@ -85,7 +105,7 @@ public class DocumentMapper implements ToXContent {
             }
         }
 
-        public Builder meta(Map<String, Object> meta) {
+        public Builder meta(ImmutableMap<String, Object> meta) {
             this.meta = meta;
             return this;
         }
@@ -96,12 +116,28 @@ public class DocumentMapper implements ToXContent {
             return this;
         }
 
+        public Builder transform(ScriptService scriptService, Script script) {
+            sourceTransforms.add(new ScriptTransform(scriptService, script));
+            return this;
+        }
+
+        /**
+         * @deprecated Use {@link #transform(ScriptService, Script)} instead.
+         */
+        @Deprecated
+        public Builder transform(ScriptService scriptService, String script, ScriptType scriptType, String language,
+                Map<String, Object> parameters) {
+            sourceTransforms.add(new ScriptTransform(scriptService, new Script(script, scriptType, language, parameters)));
+            return this;
+        }
+
         public DocumentMapper build(MapperService mapperService) {
             Objects.requireNonNull(rootObjectMapper, "Mapper builder must have the root object mapper set");
             Mapping mapping = new Mapping(
-                    mapperService.getIndexSettings().getIndexVersionCreated(),
+                    Version.indexCreated(mapperService.indexSettings()),
                     rootObjectMapper,
                     metadataMappers.values().toArray(new MetadataFieldMapper[metadataMappers.values().size()]),
+                    sourceTransforms.toArray(new SourceTransform[sourceTransforms.size()]),
                     meta);
             return new DocumentMapper(mapperService, mapping);
         }
@@ -128,9 +164,8 @@ public class DocumentMapper implements ToXContent {
         this.mapperService = mapperService;
         this.type = mapping.root().name();
         this.typeText = new Text(this.type);
-        final IndexSettings indexSettings = mapperService.getIndexSettings();
         this.mapping = mapping;
-        this.documentParser = new DocumentParser(indexSettings, mapperService.documentMapperParser(), this);
+        this.documentParser = new DocumentParser(mapperService.indexSettings(), mapperService.documentMapperParser(), this);
 
         if (metadataMapper(ParentFieldMapper.class).active()) {
             // mark the routing field mapper as required
@@ -189,7 +224,7 @@ public class DocumentMapper implements ToXContent {
         return this.typeText;
     }
 
-    public Map<String, Object> meta() {
+    public ImmutableMap<String, Object> meta() {
         return mapping.meta;
     }
 
@@ -267,7 +302,7 @@ public class DocumentMapper implements ToXContent {
     }
 
     public ParsedDocument parse(String index, String type, String id, BytesReference source) throws MapperParsingException {
-        return parse(SourceToParse.source(index, type, id, source));
+        return parse(SourceToParse.source(source).index(index).type(type).id(id));
     }
 
     public ParsedDocument parse(SourceToParse source) throws MapperParsingException {
@@ -324,6 +359,15 @@ public class DocumentMapper implements ToXContent {
         }
     }
 
+    /**
+     * Transform the source when it is expressed as a map.  This is public so it can be transformed the source is loaded.
+     * @param sourceAsMap source to transform.  This may be mutated by the script.
+     * @return transformed version of transformMe.  This may actually be the same object as sourceAsMap
+     */
+    public Map<String, Object> transformSourceAsMap(Map<String, Object> sourceAsMap) {
+        return DocumentParser.transformSourceAsMap(mapping, sourceAsMap);
+    }
+
     public boolean isParent(String type) {
         return mapperService.getParentTypes().contains(type);
     }
@@ -341,8 +385,50 @@ public class DocumentMapper implements ToXContent {
         return new DocumentMapper(mapperService, updated);
     }
 
+    public void close() {
+        documentParser.close();
+    }
+
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         return mapping.toXContent(builder, params);
+    }
+
+    /**
+     * Script based source transformation.
+     */
+    private static class ScriptTransform implements SourceTransform {
+        private final ScriptService scriptService;
+        /**
+         * The script to transform the source document before indexing.
+         */
+        private final Script script;
+
+        public ScriptTransform(ScriptService scriptService, Script script) {
+            this.scriptService = scriptService;
+            this.script = script;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public Map<String, Object> transformSourceAsMap(Map<String, Object> sourceAsMap) {
+            try {
+                // We use the ctx variable and the _source name to be consistent with the update api.
+                ExecutableScript executable = scriptService.executable(script, ScriptContext.Standard.MAPPING, null, Collections.<String, String>emptyMap());
+                Map<String, Object> ctx = new HashMap<>(1);
+                ctx.put("_source", sourceAsMap);
+                executable.setNextVar("ctx", ctx);
+                executable.run();
+                ctx = (Map<String, Object>) executable.unwrap(ctx);
+                return (Map<String, Object>) ctx.get("_source");
+            } catch (Exception e) {
+                throw new IllegalArgumentException("failed to execute script", e);
+            }
+        }
+
+        @Override
+        public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+            return script.toXContent(builder, params);
+        }
     }
 }

@@ -22,8 +22,9 @@ package org.elasticsearch.transport;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.tasks.TaskManager;
 
+import java.lang.reflect.Constructor;
+import java.util.concurrent.Callable;
 import java.io.IOException;
-import java.util.function.Supplier;
 
 /**
  *
@@ -33,20 +34,21 @@ public class RequestHandlerRegistry<Request extends TransportRequest> {
     private final String action;
     private final TransportRequestHandler<Request> handler;
     private final boolean forceExecution;
-    private final boolean canTripCircuitBreaker;
     private final String executor;
-    private final Supplier<Request> requestFactory;
+    private final Callable<Request> requestFactory;
     private final TaskManager taskManager;
 
-    public RequestHandlerRegistry(String action, Supplier<Request> requestFactory, TaskManager taskManager,
-                                  TransportRequestHandler<Request> handler, String executor, boolean forceExecution,
-                                  boolean canTripCircuitBreaker) {
+    RequestHandlerRegistry(String action, Class<Request> request, TaskManager taskManager, TransportRequestHandler<Request> handler,
+                           String executor, boolean forceExecution) {
+        this(action, new ReflectionFactory<>(request), taskManager, handler, executor, forceExecution);
+    }
+
+    public RequestHandlerRegistry(String action, Callable<Request> requestFactory, TaskManager taskManager, TransportRequestHandler<Request> handler, String executor, boolean forceExecution) {
         this.action = action;
         this.requestFactory = requestFactory;
         assert newRequest() != null;
         this.handler = handler;
         this.forceExecution = forceExecution;
-        this.canTripCircuitBreaker = canTripCircuitBreaker;
         this.executor = executor;
         this.taskManager = taskManager;
     }
@@ -56,7 +58,11 @@ public class RequestHandlerRegistry<Request extends TransportRequest> {
     }
 
     public Request newRequest() {
-            return requestFactory.get();
+        try {
+            return requestFactory.call();
+        } catch (Exception e) {
+            throw new IllegalStateException("failed to instantiate request ", e);
+        }
     }
 
     public void processMessageReceived(Request request, TransportChannel channel) throws Exception {
@@ -80,12 +86,29 @@ public class RequestHandlerRegistry<Request extends TransportRequest> {
         return forceExecution;
     }
 
-    public boolean canTripCircuitBreaker() {
-        return canTripCircuitBreaker;
-    }
-
     public String getExecutor() {
         return executor;
+    }
+
+    private final static class ReflectionFactory<Request> implements Callable<Request> {
+        private final Constructor<Request> requestConstructor;
+
+        public ReflectionFactory(Class<Request> request) {
+            try {
+                this.requestConstructor = request.getDeclaredConstructor();
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException("failed to create constructor (does it have a default constructor?) for request " + request, e);
+            }
+        }
+
+        @Override
+        public Request call() throws Exception {
+            try {
+                return requestConstructor.newInstance();
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException("Could not access '" + requestConstructor + "'. Implementations must be a public class and have a public no-arg ctor.", e);
+            }
+        }
     }
 
     @Override
@@ -118,9 +141,9 @@ public class RequestHandlerRegistry<Request extends TransportRequest> {
         }
 
         @Override
-        public void sendResponse(Exception exception) throws IOException {
+        public void sendResponse(Throwable error) throws IOException {
             endTask();
-            super.sendResponse(exception);
+            super.sendResponse(error);
         }
 
         private void endTask() {

@@ -22,14 +22,16 @@ package org.elasticsearch.action.admin.indices.create;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.master.TransportMasterNodeAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.ack.ClusterStateUpdateResponse;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.metadata.MetaDataCreateIndexService;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.indices.IndexAlreadyExistsException;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
@@ -44,7 +46,7 @@ public class TransportCreateIndexAction extends TransportMasterNodeAction<Create
     public TransportCreateIndexAction(Settings settings, TransportService transportService, ClusterService clusterService,
                                       ThreadPool threadPool, MetaDataCreateIndexService createIndexService,
                                       ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, CreateIndexAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, CreateIndexRequest::new);
+        super(settings, CreateIndexAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, CreateIndexRequest.class);
         this.createIndexService = createIndexService;
     }
 
@@ -75,12 +77,24 @@ public class TransportCreateIndexAction extends TransportMasterNodeAction<Create
         final CreateIndexClusterStateUpdateRequest updateRequest = new CreateIndexClusterStateUpdateRequest(request, cause, indexName, request.updateAllTypes())
                 .ackTimeout(request.timeout()).masterNodeTimeout(request.masterNodeTimeout())
                 .settings(request.settings()).mappings(request.mappings())
-                .aliases(request.aliases()).customs(request.customs())
-                .waitForActiveShards(request.waitForActiveShards());
+                .aliases(request.aliases()).customs(request.customs());
 
-        createIndexService.createIndex(updateRequest, ActionListener.wrap(response ->
-            listener.onResponse(new CreateIndexResponse(response.isAcknowledged(), response.isShardsAcked())),
-            listener::onFailure));
+        createIndexService.createIndex(updateRequest, new ActionListener<ClusterStateUpdateResponse>() {
+
+            @Override
+            public void onResponse(ClusterStateUpdateResponse response) {
+                listener.onResponse(new CreateIndexResponse(response.isAcknowledged()));
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                if (t instanceof IndexAlreadyExistsException) {
+                    logger.trace("[{}] failed to create", t, request.index());
+                } else {
+                    logger.debug("[{}] failed to create", t, request.index());
+                }
+                listener.onFailure(t);
+            }
+        });
     }
-
 }

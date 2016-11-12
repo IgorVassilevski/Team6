@@ -27,7 +27,6 @@ import org.elasticsearch.common.xcontent.smile.SmileXContent;
 import org.elasticsearch.common.xcontent.yaml.YamlXContent;
 
 import java.io.IOException;
-import java.util.Locale;
 
 /**
  * The content type of {@link org.elasticsearch.common.xcontent.XContent}.
@@ -39,12 +38,7 @@ public enum XContentType {
      */
     JSON(0) {
         @Override
-        protected String mediaTypeWithoutParameters() {
-            return "application/json";
-        }
-
-        @Override
-        public String mediaType() {
+        public String restContentType() {
             return "application/json; charset=UTF-8";
         }
 
@@ -63,7 +57,7 @@ public enum XContentType {
      */
     SMILE(1) {
         @Override
-        protected String mediaTypeWithoutParameters() {
+        public String restContentType() {
             return "application/smile";
         }
 
@@ -82,7 +76,7 @@ public enum XContentType {
      */
     YAML(2) {
         @Override
-        protected String mediaTypeWithoutParameters() {
+        public String restContentType() {
             return "application/yaml";
         }
 
@@ -101,7 +95,7 @@ public enum XContentType {
      */
     CBOR(3) {
         @Override
-        protected String mediaTypeWithoutParameters() {
+        public String restContentType() {
             return "application/cbor";
         }
 
@@ -114,28 +108,29 @@ public enum XContentType {
         public XContent xContent() {
             return CborXContent.cborXContent;
         }
-    };
+    },;
 
-    public static XContentType fromMediaTypeOrFormat(String mediaType) {
-        if (mediaType == null) {
+    public static XContentType fromRestContentType(String contentType) {
+        if (contentType == null) {
             return null;
         }
-        for (XContentType type : values()) {
-            if (isSameMediaTypeAs(mediaType, type)) {
-                return type;
-            }
-        }
-        if(mediaType.toLowerCase(Locale.ROOT).startsWith("application/*")) {
+        if ("application/json".equals(contentType) || "json".equalsIgnoreCase(contentType)) {
             return JSON;
         }
 
-        return null;
-    }
+        if ("application/smile".equals(contentType) || "smile".equalsIgnoreCase(contentType)) {
+            return SMILE;
+        }
 
-    private static boolean isSameMediaTypeAs(String stringType, XContentType type) {
-        return type.mediaTypeWithoutParameters().equalsIgnoreCase(stringType) ||
-                stringType.toLowerCase(Locale.ROOT).startsWith(type.mediaTypeWithoutParameters().toLowerCase(Locale.ROOT) + ";") ||
-                type.shortName().equalsIgnoreCase(stringType);
+        if ("application/yaml".equals(contentType) || "yaml".equalsIgnoreCase(contentType)) {
+            return YAML;
+        }
+
+        if ("application/cbor".equals(contentType) || "cbor".equalsIgnoreCase(contentType)) {
+            return CBOR;
+        }
+
+        return null;
     }
 
     private int index;
@@ -148,15 +143,11 @@ public enum XContentType {
         return index;
     }
 
-    public String mediaType() {
-        return mediaTypeWithoutParameters();
-    }
+    public abstract String restContentType();
 
     public abstract String shortName();
 
     public abstract XContent xContent();
-
-    protected abstract String mediaTypeWithoutParameters();
 
     public static XContentType readFrom(StreamInput in) throws IOException {
         int index = in.readVInt();

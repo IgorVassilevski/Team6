@@ -20,25 +20,15 @@
 package org.elasticsearch.client.transport;
 
 import com.carrotsearch.randomizedtesting.generators.RandomInts;
-import org.elasticsearch.Version;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.admin.cluster.node.liveness.LivenessResponse;
-import org.elasticsearch.action.admin.cluster.node.liveness.TransportLivenessAction;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.component.Lifecycle;
 import org.elasticsearch.common.component.LifecycleListener;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.BoundTransportAddress;
 import org.elasticsearch.common.transport.TransportAddress;
-import org.elasticsearch.transport.ConnectTransportException;
-import org.elasticsearch.transport.Transport;
-import org.elasticsearch.transport.TransportException;
-import org.elasticsearch.transport.TransportRequest;
-import org.elasticsearch.transport.TransportRequestOptions;
-import org.elasticsearch.transport.TransportResponse;
-import org.elasticsearch.transport.TransportResponseHandler;
-import org.elasticsearch.transport.TransportService;
-import org.elasticsearch.transport.TransportServiceAdapter;
+import org.elasticsearch.transport.*;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -51,7 +41,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 abstract class FailAndRetryMockTransport<Response extends TransportResponse> implements Transport {
 
     private final Random random;
-    private final ClusterName clusterName;
 
     private boolean connectMode = true;
 
@@ -62,21 +51,18 @@ abstract class FailAndRetryMockTransport<Response extends TransportResponse> imp
     private final AtomicInteger successes = new AtomicInteger();
     private final Set<DiscoveryNode> triedNodes = new CopyOnWriteArraySet<>();
 
-    FailAndRetryMockTransport(Random random, ClusterName clusterName) {
+    FailAndRetryMockTransport(Random random) {
         this.random = new Random(random.nextLong());
-        this.clusterName = clusterName;
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public void sendRequest(DiscoveryNode node, long requestId, String action, TransportRequest request, TransportRequestOptions options)
-        throws IOException, TransportException {
+    public void sendRequest(DiscoveryNode node, long requestId, String action, TransportRequest request, TransportRequestOptions options) throws IOException, TransportException {
 
         //we make sure that nodes get added to the connected ones when calling addTransportAddress, by returning proper nodes info
         if (connectMode) {
             TransportResponseHandler transportResponseHandler = transportServiceAdapter.onResponseReceived(requestId);
-            transportResponseHandler.handleResponse(new LivenessResponse(ClusterName.CLUSTER_NAME_SETTING.getDefault(Settings.EMPTY),
-                node));
+            transportResponseHandler.handleResponse(new LivenessResponse(ClusterName.DEFAULT, node));
             return;
         }
 
@@ -187,16 +173,22 @@ abstract class FailAndRetryMockTransport<Response extends TransportResponse> imp
     }
 
     @Override
-    public void start() {}
+    public Transport start() {
+        return null;
+    }
 
     @Override
-    public void stop() {}
+    public Transport stop() {
+        return null;
+    }
 
     @Override
-    public void close() {}
+    public void close() {
+
+    }
 
     @Override
     public Map<String, BoundTransportAddress> profileBoundAddresses() {
-        return Collections.emptyMap();
+        return Collections.EMPTY_MAP;
     }
 }

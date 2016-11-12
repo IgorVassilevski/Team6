@@ -21,9 +21,11 @@ package org.elasticsearch.client.node;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
-import org.elasticsearch.test.ESIntegTestCase.Scope;
+import org.junit.Test;
 
+import static org.elasticsearch.common.settings.Settings.settingsBuilder;
+import static org.elasticsearch.test.ESIntegTestCase.ClusterScope;
+import static org.elasticsearch.test.ESIntegTestCase.Scope;
 import static org.hamcrest.Matchers.is;
 
 /**
@@ -31,14 +33,17 @@ import static org.hamcrest.Matchers.is;
  */
 @ClusterScope(scope = Scope.SUITE)
 public class NodeClientIT extends ESIntegTestCase {
+
     @Override
     protected Settings nodeSettings(int nodeOrdinal) {
-        return Settings.builder().put(super.nodeSettings(nodeOrdinal)).put(Client.CLIENT_TYPE_SETTING_S.getKey(), "anything").build();
+        return settingsBuilder().put(super.nodeSettings(nodeOrdinal)).put(Client.CLIENT_TYPE_SETTING, "anything").build();
     }
 
+    @Test
     public void testThatClientTypeSettingCannotBeChanged() {
         for (Settings settings : internalCluster().getInstances(Settings.class)) {
-            assertThat(Client.CLIENT_TYPE_SETTING_S.get(settings), is("node"));
+            assertThat(settings.get(Client.CLIENT_TYPE_SETTING), is("node"));
         }
     }
+
 }

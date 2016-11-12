@@ -27,6 +27,11 @@ import org.elasticsearch.transport.TransportRequest;
 
 import java.io.IOException;
 
+import static org.elasticsearch.search.Scroll.readScroll;
+
+/**
+ *
+ */
 public class InternalScrollSearchRequest extends TransportRequest {
 
     private long id;
@@ -37,6 +42,7 @@ public class InternalScrollSearchRequest extends TransportRequest {
     }
 
     public InternalScrollSearchRequest(SearchScrollRequest request, long id) {
+        super(request);
         this.id = id;
         this.scroll = request.scroll();
     }
@@ -58,13 +64,20 @@ public class InternalScrollSearchRequest extends TransportRequest {
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         id = in.readLong();
-        scroll = in.readOptionalWriteable(Scroll::new);
+        if (in.readBoolean()) {
+            scroll = readScroll(in);
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeLong(id);
-        out.writeOptionalWriteable(scroll);
+        if (scroll == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            scroll.writeTo(out);
+        }
     }
 }

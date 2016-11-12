@@ -19,16 +19,17 @@ package org.elasticsearch.mapper.attachments;
  * under the License.
  */
 
-import org.apache.lucene.util.LuceneTestCase.SuppressFileSystems;
-import org.apache.lucene.util.TestUtil;
-import org.apache.tika.metadata.Metadata;
-import org.elasticsearch.test.ESTestCase;
-
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/**
+import org.apache.lucene.util.LuceneTestCase.SuppressFileSystems;
+import org.apache.lucene.util.TestUtil;
+import org.apache.tika.metadata.Metadata;
+
+import org.elasticsearch.test.ESTestCase;
+
+/** 
  * Evil test-coverage cheat, we parse a bunch of docs from tika
  * so that we have a nice grab-bag variety, and assert some content
  * comes back and no exception.
@@ -42,7 +43,7 @@ public class TikaDocTests extends ESTestCase {
     public void testFiles() throws Exception {
         Path tmp = createTempDir();
         TestUtil.unzip(getClass().getResourceAsStream(TIKA_FILES), tmp);
-
+        
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(tmp)) {
             for (Path doc : stream) {
               logger.debug("parsing: {}", doc);
@@ -50,7 +51,7 @@ public class TikaDocTests extends ESTestCase {
             }
         }
     }
-
+    
     void assertParseable(Path fileName) throws Exception {
         try {
             byte bytes[] = Files.readAllBytes(fileName);
@@ -58,8 +59,8 @@ public class TikaDocTests extends ESTestCase {
             assertNotNull(parsedContent);
             assertFalse(parsedContent.isEmpty());
             logger.debug("extracted content: {}", parsedContent);
-        } catch (Exception e) {
-            throw new RuntimeException("parsing of filename: " + fileName.getFileName() + " failed", e);
+        } catch (Throwable e) {
+            throw new RuntimeException("parsing of filename: " + fileName.getFileName() + " failed", e);  
         }
     }
 }

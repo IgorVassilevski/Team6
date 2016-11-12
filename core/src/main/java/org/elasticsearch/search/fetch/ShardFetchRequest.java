@@ -22,6 +22,7 @@ package org.elasticsearch.search.fetch;
 import com.carrotsearch.hppc.IntArrayList;
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.ScoreDoc;
+import org.elasticsearch.action.search.SearchScrollRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.lucene.Lucene;
@@ -46,7 +47,16 @@ public class ShardFetchRequest extends TransportRequest {
     public ShardFetchRequest() {
     }
 
-    public ShardFetchRequest(long id, IntArrayList list, ScoreDoc lastEmittedDoc) {
+    public ShardFetchRequest(SearchScrollRequest request, long id, IntArrayList list, ScoreDoc lastEmittedDoc) {
+        super(request);
+        this.id = id;
+        this.docIds = list.buffer;
+        this.size = list.size();
+        this.lastEmittedDoc = lastEmittedDoc;
+    }
+
+    protected ShardFetchRequest(TransportRequest originalRequest, long id, IntArrayList list, ScoreDoc lastEmittedDoc) {
+        super(originalRequest);
         this.id = id;
         this.docIds = list.buffer;
         this.size = list.size();

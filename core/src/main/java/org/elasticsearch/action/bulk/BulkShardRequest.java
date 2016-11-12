@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.bulk;
 
-import org.elasticsearch.action.support.replication.ReplicatedWriteRequest;
 import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -32,17 +31,23 @@ import java.util.List;
 /**
  *
  */
-public class BulkShardRequest extends ReplicatedWriteRequest<BulkShardRequest> {
+public class BulkShardRequest extends ReplicationRequest<BulkShardRequest> {
 
     private BulkItemRequest[] items;
+
+    private boolean refresh;
 
     public BulkShardRequest() {
     }
 
-    BulkShardRequest(ShardId shardId, RefreshPolicy refreshPolicy, BulkItemRequest[] items) {
-        super(shardId);
+    BulkShardRequest(BulkRequest bulkRequest, ShardId shardId, boolean refresh, BulkItemRequest[] items) {
+        super(bulkRequest, shardId);
         this.items = items;
-        setRefreshPolicy(refreshPolicy);
+        this.refresh = refresh;
+    }
+
+    boolean refresh() {
+        return this.refresh;
     }
 
     BulkItemRequest[] items() {
@@ -72,6 +77,7 @@ public class BulkShardRequest extends ReplicatedWriteRequest<BulkShardRequest> {
                 out.writeBoolean(false);
             }
         }
+        out.writeBoolean(refresh);
     }
 
     @Override
@@ -83,6 +89,7 @@ public class BulkShardRequest extends ReplicatedWriteRequest<BulkShardRequest> {
                 items[i] = BulkItemRequest.readBulkItem(in);
             }
         }
+        refresh = in.readBoolean();
     }
 
     @Override
@@ -90,27 +97,9 @@ public class BulkShardRequest extends ReplicatedWriteRequest<BulkShardRequest> {
         // This is included in error messages so we'll try to make it somewhat user friendly.
         StringBuilder b = new StringBuilder("BulkShardRequest to [");
         b.append(index).append("] containing [").append(items.length).append("] requests");
-        switch (getRefreshPolicy()) {
-        case IMMEDIATE:
+        if (refresh) {
             b.append(" and a refresh");
-            break;
-        case WAIT_UNTIL:
-            b.append(" blocking until refresh");
-            break;
-        case NONE:
-            break;
         }
         return b.toString();
-    }
-
-    @Override
-    public void onRetry() {
-        for (BulkItemRequest item : items) {
-            if (item.request() instanceof ReplicationRequest) {
-                // all replication requests need to be notified here as well to ie. make sure that internal optimizations are
-                // disabled see IndexRequest#canHaveDuplicates()
-                ((ReplicationRequest) item.request()).onRetry();
-            }
-        }
     }
 }

@@ -22,13 +22,13 @@ package org.elasticsearch.action.admin.indices.stats;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.broadcast.node.TransportBroadcastByNodeAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardsIterator;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.settings.Settings;
@@ -53,7 +53,7 @@ public class TransportIndicesStatsAction extends TransportBroadcastByNodeAction<
                                        TransportService transportService, IndicesService indicesService,
                                        ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
         super(settings, IndicesStatsAction.NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver,
-                IndicesStatsRequest::new, ThreadPool.Names.MANAGEMENT);
+                IndicesStatsRequest.class, ThreadPool.Names.MANAGEMENT);
         this.indicesService = indicesService;
     }
 
@@ -95,7 +95,7 @@ public class TransportIndicesStatsAction extends TransportBroadcastByNodeAction<
     @Override
     protected ShardStats shardOperation(IndicesStatsRequest request, ShardRouting shardRouting) {
         IndexService indexService = indicesService.indexServiceSafe(shardRouting.shardId().getIndex());
-        IndexShard indexShard = indexService.getShard(shardRouting.shardId().id());
+        IndexShard indexShard = indexService.shardSafe(shardRouting.shardId().id());
         // if we don't have the routing entry yet, we need it stats wise, we treat it as if the shard is not ready yet
         if (indexShard.routingEntry() == null) {
             throw new ShardNotFoundException(indexShard.shardId());
@@ -139,9 +139,11 @@ public class TransportIndicesStatsAction extends TransportBroadcastByNodeAction<
             flags.set(CommonStatsFlags.Flag.FieldData);
             flags.fieldDataFields(request.fieldDataFields());
         }
+        if (request.percolate()) {
+            flags.set(CommonStatsFlags.Flag.Percolate);
+        }
         if (request.segments()) {
             flags.set(CommonStatsFlags.Flag.Segments);
-            flags.includeSegmentFileSizes(request.includeSegmentFileSizes());
         }
         if (request.completion()) {
             flags.set(CommonStatsFlags.Flag.Completion);
@@ -160,6 +162,6 @@ public class TransportIndicesStatsAction extends TransportBroadcastByNodeAction<
             flags.set(CommonStatsFlags.Flag.Recovery);
         }
 
-        return new ShardStats(indexShard.routingEntry(), indexShard.shardPath(), new CommonStats(indicesService.getIndicesQueryCache(), indexShard, flags), indexShard.commitStats());
+        return new ShardStats(indexShard.routingEntry(), indexShard.shardPath(), new CommonStats(indexShard, flags), indexShard.commitStats());
     }
 }

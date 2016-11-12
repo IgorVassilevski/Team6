@@ -37,7 +37,7 @@ public interface ScriptContext {
      */
     enum Standard implements ScriptContext {
 
-        AGGS("aggs"), SEARCH("search"), UPDATE("update"), INGEST("ingest");
+        AGGS("aggs"), MAPPING("mapping"), SEARCH("search"), UPDATE("update");
 
         private final String key;
 
@@ -84,21 +84,21 @@ public interface ScriptContext {
             this.key = pluginName + "_" + operation;
         }
 
-        public String getPluginName() {
+        public final String getPluginName() {
             return pluginName;
         }
 
-        public String getOperation() {
+        public final String getOperation() {
             return operation;
         }
 
         @Override
-        public String getKey() {
+        public final String getKey() {
             return key;
         }
 
         @Override
-        public String toString() {
+        public final String toString() {
             return getKey();
         }
     }

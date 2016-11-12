@@ -25,6 +25,8 @@ import org.apache.lucene.search.similarities.IndependenceChiSquared;
 import org.apache.lucene.search.similarities.IndependenceSaturated;
 import org.apache.lucene.search.similarities.IndependenceStandardized;
 import org.apache.lucene.search.similarities.Similarity;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
 
 import java.util.HashMap;
@@ -55,7 +57,8 @@ public class DFISimilarityProvider extends AbstractSimilarityProvider {
 
     private final DFISimilarity similarity;
 
-    public DFISimilarityProvider(String name, Settings settings) {
+    @Inject
+    public DFISimilarityProvider(@Assisted String name, @Assisted Settings settings) {
         super(name);
         boolean discountOverlaps = settings.getAsBoolean("discount_overlaps", true);
         Independence measure = parseIndependence(settings);

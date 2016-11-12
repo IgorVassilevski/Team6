@@ -20,28 +20,16 @@
 package org.elasticsearch.cluster;
 
 import com.carrotsearch.hppc.cursors.ObjectCursor;
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.block.ClusterBlock;
 import org.elasticsearch.cluster.block.ClusterBlocks;
-import org.elasticsearch.cluster.metadata.AliasMetaData;
-import org.elasticsearch.cluster.metadata.IndexGraveyard;
-import org.elasticsearch.cluster.metadata.IndexGraveyardTests;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
-import org.elasticsearch.cluster.metadata.MetaData;
-import org.elasticsearch.cluster.metadata.RepositoriesMetaData;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.snapshots.SnapshotId;
+import org.elasticsearch.cluster.metadata.*;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
-import org.elasticsearch.cluster.routing.IndexRoutingTable;
-import org.elasticsearch.cluster.routing.IndexShardRoutingTable;
-import org.elasticsearch.cluster.routing.RoutingTable;
-import org.elasticsearch.cluster.routing.ShardRouting;
-import org.elasticsearch.cluster.routing.ShardRoutingState;
-import org.elasticsearch.cluster.routing.TestShardRouting;
-import org.elasticsearch.cluster.routing.UnassignedInfo;
-import org.elasticsearch.common.UUIDs;
+import org.elasticsearch.cluster.routing.*;
+import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -49,36 +37,33 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.LocalTransportAddress;
 import org.elasticsearch.discovery.DiscoverySettings;
 import org.elasticsearch.gateway.GatewayService;
-import org.elasticsearch.index.Index;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.snapshots.Snapshot;
+import org.elasticsearch.search.warmer.IndexWarmersMetaData;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static org.elasticsearch.cluster.metadata.AliasMetaData.newAliasMetaDataBuilder;
 import static org.elasticsearch.cluster.routing.RandomShardRoutingMutator.randomChange;
 import static org.elasticsearch.cluster.routing.RandomShardRoutingMutator.randomReason;
-import static org.elasticsearch.test.VersionUtils.randomVersion;
 import static org.elasticsearch.test.XContentTestUtils.convertToMap;
 import static org.elasticsearch.test.XContentTestUtils.differenceBetweenMapsIgnoringArrayOrder;
+import static org.elasticsearch.test.VersionUtils.randomVersion;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
 
 @ESIntegTestCase.ClusterScope(scope = ESIntegTestCase.Scope.SUITE, numDataNodes = 0, numClientNodes = 0)
 public class ClusterStateDiffIT extends ESIntegTestCase {
+
+    @Test
     public void testClusterStateDiffSerialization() throws Exception {
-        DiscoveryNode masterNode = new DiscoveryNode("master", new LocalTransportAddress("master"),
-                emptyMap(), emptySet(), Version.CURRENT);
-        DiscoveryNode otherNode = new DiscoveryNode("other", new LocalTransportAddress("other"),
-                emptyMap(), emptySet(), Version.CURRENT);
-        DiscoveryNodes discoveryNodes = DiscoveryNodes.builder().add(masterNode).add(otherNode).localNodeId(masterNode.getId()).build();
+        DiscoveryNode masterNode = new DiscoveryNode("master", new LocalTransportAddress("master"), Version.CURRENT);
+        DiscoveryNode otherNode = new DiscoveryNode("other", new LocalTransportAddress("other"), Version.CURRENT);
+        DiscoveryNodes discoveryNodes = DiscoveryNodes.builder().put(masterNode).put(otherNode).localNodeId(masterNode.id()).build();
         ClusterState clusterState = ClusterState.builder(new ClusterName("test")).nodes(discoveryNodes).build();
         ClusterState clusterStateFromDiffs = ClusterState.Builder.fromBytes(ClusterState.Builder.toBytes(clusterState), otherNode);
 
@@ -116,13 +101,13 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
 
             if (randomIntBetween(0, 10) < 1) {
                 // Update cluster state via full serialization from time to time
-                clusterStateFromDiffs = ClusterState.Builder.fromBytes(ClusterState.Builder.toBytes(clusterState), previousClusterStateFromDiffs.nodes().getLocalNode());
+                clusterStateFromDiffs = ClusterState.Builder.fromBytes(ClusterState.Builder.toBytes(clusterState), previousClusterStateFromDiffs.nodes().localNode());
             } else {
                 // Update cluster states using diffs
                 Diff<ClusterState> diffBeforeSerialization = clusterState.diff(previousClusterState);
                 BytesStreamOutput os = new BytesStreamOutput();
                 diffBeforeSerialization.writeTo(os);
-                byte[] diffBytes = BytesReference.toBytes(os.bytes());
+                byte[] diffBytes = os.bytes().toBytes();
                 Diff<ClusterState> diff;
                 try (StreamInput input = StreamInput.wrap(diffBytes)) {
                     diff = previousClusterStateFromDiffs.readDiffFrom(input);
@@ -137,15 +122,15 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
                 assertThat(clusterStateFromDiffs.stateUUID(), equalTo(clusterState.stateUUID()));
 
                 // Check nodes
-                assertThat(clusterStateFromDiffs.nodes().getNodes(), equalTo(clusterState.nodes().getNodes()));
-                assertThat(clusterStateFromDiffs.nodes().getLocalNodeId(), equalTo(previousClusterStateFromDiffs.nodes().getLocalNodeId()));
-                assertThat(clusterStateFromDiffs.nodes().getNodes(), equalTo(clusterState.nodes().getNodes()));
-                for (ObjectCursor<String> node : clusterStateFromDiffs.nodes().getNodes().keys()) {
+                assertThat(clusterStateFromDiffs.nodes().nodes(), equalTo(clusterState.nodes().nodes()));
+                assertThat(clusterStateFromDiffs.nodes().localNodeId(), equalTo(previousClusterStateFromDiffs.nodes().localNodeId()));
+                assertThat(clusterStateFromDiffs.nodes().nodes(), equalTo(clusterState.nodes().nodes()));
+                for (ObjectCursor<String> node : clusterStateFromDiffs.nodes().nodes().keys()) {
                     DiscoveryNode node1 = clusterState.nodes().get(node.value);
                     DiscoveryNode node2 = clusterStateFromDiffs.nodes().get(node.value);
-                    assertThat(node1.getVersion(), equalTo(node2.getVersion()));
-                    assertThat(node1.getAddress(), equalTo(node2.getAddress()));
-                    assertThat(node1.getAttributes(), equalTo(node2.getAttributes()));
+                    assertThat(node1.version(), equalTo(node2.version()));
+                    assertThat(node1.address(), equalTo(node2.address()));
+                    assertThat(node1.attributes(), equalTo(node2.attributes()));
                 }
 
                 // Check routing table
@@ -188,20 +173,19 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
      */
     private ClusterState.Builder randomNodes(ClusterState clusterState) {
         DiscoveryNodes.Builder nodes = DiscoveryNodes.builder(clusterState.nodes());
-        List<String> nodeIds = randomSubsetOf(randomInt(clusterState.nodes().getNodes().size() - 1), clusterState.nodes().getNodes().keys().toArray(String.class));
+        List<String> nodeIds = randomSubsetOf(randomInt(clusterState.nodes().nodes().size() - 1), clusterState.nodes().nodes().keys().toArray(String.class));
         for (String nodeId : nodeIds) {
             if (nodeId.startsWith("node-")) {
-                nodes.remove(nodeId);
                 if (randomBoolean()) {
-                    nodes.add(new DiscoveryNode(nodeId, new LocalTransportAddress(randomAsciiOfLength(10)), emptyMap(),
-                            emptySet(), randomVersion(random())));
+                    nodes.remove(nodeId);
+                } else {
+                    nodes.put(new DiscoveryNode(nodeId, new LocalTransportAddress(randomAsciiOfLength(10)), randomVersion(random())));
                 }
             }
         }
         int additionalNodeCount = randomIntBetween(1, 20);
         for (int i = 0; i < additionalNodeCount; i++) {
-            nodes.add(new DiscoveryNode("node-" + randomAsciiOfLength(10), new LocalTransportAddress(randomAsciiOfLength(10)),
-                    emptyMap(), emptySet(), randomVersion(random())));
+            nodes.put(new DiscoveryNode("node-" + randomAsciiOfLength(10), new LocalTransportAddress(randomAsciiOfLength(10)), randomVersion(random())));
         }
         return ClusterState.builder(clusterState).nodes(nodes);
     }
@@ -213,18 +197,18 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
         RoutingTable.Builder builder = RoutingTable.builder(clusterState.routingTable());
         int numberOfIndices = clusterState.routingTable().indicesRouting().size();
         if (numberOfIndices > 0) {
-            List<String> randomIndices = randomSubsetOf(randomInt(numberOfIndices - 1), clusterState.routingTable().indicesRouting().keys().toArray(String.class));
+            List<String> randomIndices = randomSubsetOf(randomInt(numberOfIndices - 1), clusterState.routingTable().indicesRouting().keySet().toArray(new String[numberOfIndices]));
             for (String index : randomIndices) {
                 if (randomBoolean()) {
                     builder.remove(index);
                 } else {
-                    builder.add(randomChangeToIndexRoutingTable(clusterState.routingTable().indicesRouting().get(index), clusterState.nodes().getNodes().keys().toArray(String.class)));
+                    builder.add(randomChangeToIndexRoutingTable(clusterState.routingTable().indicesRouting().get(index), clusterState.nodes().nodes().keys().toArray(String.class)));
                 }
             }
         }
         int additionalIndexCount = randomIntBetween(1, 20);
         for (int i = 0; i < additionalIndexCount; i++) {
-            builder.add(randomIndexRoutingTable("index-" + randomInt(), clusterState.nodes().getNodes().keys().toArray(String.class)));
+            builder.add(randomIndexRoutingTable("index-" + randomInt(), clusterState.nodes().nodes().keys().toArray(String.class)));
         }
         return ClusterState.builder(clusterState).routingTable(builder.build());
     }
@@ -233,11 +217,11 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
      * Randomly updates index routing table in the cluster state
      */
     private IndexRoutingTable randomIndexRoutingTable(String index, String[] nodeIds) {
-        IndexRoutingTable.Builder builder = IndexRoutingTable.builder(new Index(index, "_na_"));
+        IndexRoutingTable.Builder builder = IndexRoutingTable.builder(index);
         int shardCount = randomInt(10);
 
         for (int i = 0; i < shardCount; i++) {
-            IndexShardRoutingTable.Builder indexShard = new IndexShardRoutingTable.Builder(new ShardId(index, "_na_", i));
+            IndexShardRoutingTable.Builder indexShard = new IndexShardRoutingTable.Builder(new ShardId(index, i));
             int replicaCount = randomIntBetween(1, 10);
             for (int j = 0; j < replicaCount; j++) {
                 UnassignedInfo unassignedInfo = null;
@@ -245,8 +229,8 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
                     unassignedInfo = new UnassignedInfo(randomReason(), randomAsciiOfLength(10));
                 }
                 indexShard.addShard(
-                        TestShardRouting.newShardRouting(index, i, randomFrom(nodeIds), null, j == 0,
-                                ShardRoutingState.fromValue((byte) randomIntBetween(2, 3)), unassignedInfo));
+                        TestShardRouting.newShardRouting(index, i, randomFrom(nodeIds), null, null, j == 0,
+                                ShardRoutingState.fromValue((byte) randomIntBetween(2, 4)), 1, unassignedInfo));
             }
             builder.addIndexShard(indexShard.build());
         }
@@ -260,8 +244,9 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
         IndexRoutingTable.Builder builder = IndexRoutingTable.builder(original.getIndex());
         for (ObjectCursor<IndexShardRoutingTable> indexShardRoutingTable :  original.shards().values()) {
             for (ShardRouting shardRouting : indexShardRoutingTable.value.shards()) {
-                final ShardRouting updatedShardRouting = randomChange(shardRouting, nodes);
-                builder.addShard(updatedShardRouting);
+                final ShardRouting newShardRouting = new ShardRouting(shardRouting);
+                randomChange(newShardRouting, nodes);
+                builder.addShard(indexShardRoutingTable.value, newShardRouting);
             }
         }
         return builder.build();
@@ -494,11 +479,14 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
             public IndexMetaData randomCreate(String name) {
                 IndexMetaData.Builder builder = IndexMetaData.builder(name);
                 Settings.Builder settingsBuilder = Settings.builder();
-                setRandomIndexSettings(random(), settingsBuilder);
+                setRandomIndexSettings(getRandom(), settingsBuilder);
                 settingsBuilder.put(randomSettings(Settings.EMPTY)).put(IndexMetaData.SETTING_VERSION_CREATED, randomVersion(random()));
                 builder.settings(settingsBuilder);
                 builder.numberOfShards(randomIntBetween(1, 10)).numberOfReplicas(randomInt(10));
                 int aliasCount = randomInt(10);
+                if (randomBoolean()) {
+                    builder.putCustom(IndexWarmersMetaData.TYPE, randomWarmers());
+                }
                 for (int i = 0; i < aliasCount; i++) {
                     builder.putAlias(randomAlias());
                 }
@@ -508,7 +496,7 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
             @Override
             public IndexMetaData randomChange(IndexMetaData part) {
                 IndexMetaData.Builder builder = IndexMetaData.builder(part);
-                switch (randomIntBetween(0, 2)) {
+                switch (randomIntBetween(0, 3)) {
                     case 0:
                         builder.settings(Settings.builder().put(part.getSettings()).put(randomSettings(Settings.EMPTY)));
                         break;
@@ -520,7 +508,10 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
                         }
                         break;
                     case 2:
-                        builder.settings(Settings.builder().put(part.getSettings()).put(IndexMetaData.SETTING_INDEX_UUID, UUIDs.randomBase64UUID()));
+                        builder.settings(Settings.builder().put(part.getSettings()).put(IndexMetaData.SETTING_INDEX_UUID, Strings.randomBase64UUID()));
+                        break;
+                    case 3:
+                        builder.putCustom(IndexWarmersMetaData.TYPE, randomWarmers());
                         break;
                     default:
                         throw new IllegalArgumentException("Shouldn't be here");
@@ -528,6 +519,23 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
                 return builder.build();
             }
         });
+    }
+
+    /**
+     * Generates a random warmer
+     */
+    private IndexWarmersMetaData randomWarmers() {
+        if (randomBoolean()) {
+            return new IndexWarmersMetaData(
+                    new IndexWarmersMetaData.Entry(
+                            randomName("warm"),
+                            new String[]{randomName("type")},
+                            randomBoolean(),
+                            new BytesArray(randomAsciiOfLength(1000)))
+            );
+        } else {
+            return new IndexWarmersMetaData();
+        }
     }
 
     /**
@@ -559,6 +567,9 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
                 int aliasCount = randomIntBetween(0, 10);
                 for (int i = 0; i < aliasCount; i++) {
                     builder.putAlias(randomAlias());
+                }
+                if (randomBoolean()) {
+                    builder.putCustom(IndexWarmersMetaData.TYPE, randomWarmers());
                 }
                 return builder.build();
             }
@@ -604,21 +615,12 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
 
             @Override
             public MetaData.Builder remove(MetaData.Builder builder, String name) {
-                if (IndexGraveyard.TYPE.equals(name)) {
-                    // there must always be at least an empty graveyard
-                    return builder.indexGraveyard(IndexGraveyard.builder().build());
-                } else {
-                    return builder.removeCustom(name);
-                }
+                return builder.removeCustom(name);
             }
 
             @Override
             public MetaData.Custom randomCreate(String name) {
-                if (randomBoolean()) {
-                    return new RepositoriesMetaData();
-                } else {
-                    return IndexGraveyardTests.createRandom();
-                }
+                return new RepositoriesMetaData();
             }
 
             @Override
@@ -654,19 +656,18 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
                 switch (randomIntBetween(0, 1)) {
                     case 0:
                         return new SnapshotsInProgress(new SnapshotsInProgress.Entry(
-                                new Snapshot(randomName("repo"), new SnapshotId(randomName("snap"), UUIDs.randomBase64UUID())),
-                                randomBoolean(),
+                                new SnapshotId(randomName("repo"), randomName("snap")),
                                 randomBoolean(),
                                 SnapshotsInProgress.State.fromValue((byte) randomIntBetween(0, 6)),
-                                Collections.emptyList(),
+                                Collections.<String>emptyList(),
                                 Math.abs(randomLong()),
-                                ImmutableOpenMap.of()));
+                                ImmutableMap.<ShardId, SnapshotsInProgress.ShardSnapshotStatus>of()));
                     case 1:
                         return new RestoreInProgress(new RestoreInProgress.Entry(
-                                new Snapshot(randomName("repo"), new SnapshotId(randomName("snap"), UUIDs.randomBase64UUID())),
+                                new SnapshotId(randomName("repo"), randomName("snap")),
                                 RestoreInProgress.State.fromValue((byte) randomIntBetween(0, 3)),
-                                emptyList(),
-                                ImmutableOpenMap.of()));
+                                Collections.<String>emptyList(),
+                                ImmutableMap.<ShardId, RestoreInProgress.ShardRestoreStatus>of()));
                     default:
                         throw new IllegalArgumentException("Shouldn't be here");
                 }
@@ -683,6 +684,6 @@ public class ClusterStateDiffIT extends ESIntegTestCase {
      * Generates a random name that starts with the given prefix
      */
     private String randomName(String prefix) {
-        return prefix + UUIDs.randomBase64UUID(random());
+        return prefix + Strings.randomBase64UUID(getRandom());
     }
 }

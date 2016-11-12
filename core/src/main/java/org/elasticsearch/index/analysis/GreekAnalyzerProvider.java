@@ -20,19 +20,20 @@
 package org.elasticsearch.index.analysis;
 
 import org.apache.lucene.analysis.el.GreekAnalyzer;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
-/**
- *
- */
 public class GreekAnalyzerProvider extends AbstractIndexAnalyzerProvider<GreekAnalyzer> {
 
     private final GreekAnalyzer analyzer;
 
-    public GreekAnalyzerProvider(IndexSettings indexSettings, Environment env, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public GreekAnalyzerProvider(Index index, IndexSettingsService indexSettingsService, Environment env, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         analyzer = new GreekAnalyzer(Analysis.parseStopWords(env, settings, GreekAnalyzer.getDefaultStopSet()));
         analyzer.setVersion(version);
     }

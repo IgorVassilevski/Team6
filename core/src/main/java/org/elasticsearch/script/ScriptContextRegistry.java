@@ -19,30 +19,27 @@
 
 package org.elasticsearch.script;
 
-import org.elasticsearch.common.settings.Settings;
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-
-import static java.util.Collections.unmodifiableMap;
-import static java.util.Collections.unmodifiableSet;
 
 /**
  * Registry for operations that use scripts as part of their execution. Can be standard operations of custom defined ones (via plugin).
- * Allows plugins to register custom operations that they use scripts for,
- * via {@link org.elasticsearch.plugins.ScriptPlugin}
+ * Allows plugins to register custom operations that they use scripts for, via {@link ScriptModule#registerScriptContext(org.elasticsearch.script.ScriptContext.Plugin)}.
  * Scripts can be enabled/disabled via fine-grained settings for each single registered operation.
  */
 public final class ScriptContextRegistry {
-    static final Set<String> RESERVED_SCRIPT_CONTEXTS = reservedScriptContexts();
+    static final ImmutableSet<String> RESERVED_SCRIPT_CONTEXTS = reservedScriptContexts();
 
-    private final Map<String, ScriptContext> scriptContexts;
+    private final ImmutableMap<String, ScriptContext> scriptContexts;
 
-    public ScriptContextRegistry(Collection<ScriptContext.Plugin> customScriptContexts) {
-        Map<String, ScriptContext> scriptContexts = new HashMap<>();
+    public ScriptContextRegistry(Iterable<ScriptContext.Plugin> customScriptContexts) {
+        Map<String, ScriptContext> scriptContexts = Maps.newHashMap();
         for (ScriptContext.Standard scriptContext : ScriptContext.Standard.values()) {
             scriptContexts.put(scriptContext.getKey(), scriptContext);
         }
@@ -53,13 +50,13 @@ public final class ScriptContextRegistry {
                 throw new IllegalArgumentException("script context [" + customScriptContext.getKey() + "] cannot be registered twice");
             }
         }
-        this.scriptContexts = unmodifiableMap(scriptContexts);
+        this.scriptContexts = ImmutableMap.copyOf(scriptContexts);
     }
 
     /**
      * @return a list that contains all the supported {@link ScriptContext}s, both standard ones and registered via plugins
      */
-    Collection<ScriptContext> scriptContexts() {
+    ImmutableCollection<ScriptContext> scriptContexts() {
         return scriptContexts.values();
     }
 
@@ -80,16 +77,15 @@ public final class ScriptContextRegistry {
         }
     }
 
-    private static Set<String> reservedScriptContexts() {
-        Set<String> reserved = new HashSet<>(ScriptService.ScriptType.values().length + ScriptContext.Standard.values().length);
+    private static ImmutableSet<String> reservedScriptContexts() {
+        ImmutableSet.Builder<String> builder = ImmutableSet.builder();
         for (ScriptService.ScriptType scriptType : ScriptService.ScriptType.values()) {
-            reserved.add(scriptType.toString());
+            builder.add(scriptType.toString());
         }
         for (ScriptContext.Standard scriptContext : ScriptContext.Standard.values()) {
-            reserved.add(scriptContext.getKey());
+            builder.add(scriptContext.getKey());
         }
-        reserved.add("script");
-        reserved.add("engine");
-        return unmodifiableSet(reserved);
+        builder.add("script").add("engine");
+        return builder.build();
     }
 }

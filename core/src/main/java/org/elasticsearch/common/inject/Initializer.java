@@ -16,16 +16,17 @@
 
 package org.elasticsearch.common.inject;
 
+import com.google.common.collect.Maps;
 import org.elasticsearch.common.inject.internal.Errors;
 import org.elasticsearch.common.inject.internal.ErrorsException;
 import org.elasticsearch.common.inject.spi.InjectionPoint;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Manages and injects instances at injector-creation time. This is made more complicated by
@@ -48,7 +49,7 @@ class Initializer {
     /**
      * Maps instances that need injection to a source that registered them
      */
-    private final Map<Object, InjectableReference<?>> pendingInjection = new IdentityHashMap<>();
+    private final Map<Object, InjectableReference<?>> pendingInjection = Maps.newIdentityHashMap();
 
     /**
      * Registers an instance for member injection when that step is performed.
@@ -59,7 +60,7 @@ class Initializer {
      */
     public <T> Initializable<T> requestInjection(InjectorImpl injector, T instance, Object source,
                                                  Set<InjectionPoint> injectionPoints) {
-        Objects.requireNonNull(source);
+        checkNotNull(source);
 
         // short circuit if the object has no injections
         if (instance == null
@@ -117,8 +118,8 @@ class Initializer {
 
         public InjectableReference(InjectorImpl injector, T instance, Object source) {
             this.injector = injector;
-            this.instance = Objects.requireNonNull(instance, "instance");
-            this.source = Objects.requireNonNull(source, "source");
+            this.instance = checkNotNull(instance, "instance");
+            this.source = checkNotNull(source, "source");
         }
 
         public void validate(Errors errors) throws ErrorsException {

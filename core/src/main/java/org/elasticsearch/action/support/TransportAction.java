@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.support;
 
-import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
@@ -28,6 +27,7 @@ import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.common.ParseFieldMatcher;
 import org.elasticsearch.common.component.AbstractComponent;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.tasks.TaskListener;
@@ -41,7 +41,7 @@ import static org.elasticsearch.action.support.PlainActionFuture.newFuture;
 /**
  *
  */
-public abstract class TransportAction<Request extends ActionRequest<Request>, Response extends ActionResponse> extends AbstractComponent {
+public abstract class TransportAction<Request extends ActionRequest, Response extends ActionResponse> extends AbstractComponent {
 
     protected final ThreadPool threadPool;
     protected final String actionName;
@@ -72,15 +72,13 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
      *
      * This is a typical behavior.
      */
-    public final Task execute(Request request, ActionListener<Response> listener) {
+    public final Task execute(Request request, final ActionListener<Response> listener) {
         /*
-         * While this version of execute could delegate to the TaskListener
-         * version of execute that'd add yet another layer of wrapping on the
-         * listener and prevent us from using the listener bare if there isn't a
-         * task. That just seems like too many objects. Thus the two versions of
-         * this method.
+         * While this version of execute could delegate to the TaskListener version of execute that'd add yet another layer of wrapping on
+         * the listener and prevent us from using the listener bare if there isn't a task. That just seems like too many objects. Thus the
+         * two versions of this method.
          */
-        Task task = taskManager.register("transport", actionName, request);
+        final Task task = taskManager.register("transport", actionName, request);
         if (task == null) {
             execute(null, request, listener);
         } else {
@@ -92,7 +90,7 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
                 }
 
                 @Override
-                public void onFailure(Exception e) {
+                public void onFailure(Throwable e) {
                     taskManager.unregister(task);
                     listener.onFailure(e);
                 }
@@ -101,12 +99,8 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
         return task;
     }
 
-    /**
-     * Execute the transport action on the local node, returning the {@link Task} used to track its execution and accepting a
-     * {@link TaskListener} which listens for the completion of the action.
-     */
-    public final Task execute(Request request, TaskListener<Response> listener) {
-        Task task = taskManager.register("transport", actionName, request);
+    public final Task execute(Request request, final TaskListener<Response> listener) {
+        final Task task = taskManager.register("transport", actionName, request);
         execute(task, request, new ActionListener<Response>() {
             @Override
             public void onResponse(Response response) {
@@ -117,7 +111,7 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
             }
 
             @Override
-            public void onFailure(Exception e) {
+            public void onFailure(Throwable e) {
                 if (task != null) {
                     taskManager.unregister(task);
                 }
@@ -131,25 +125,22 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
      * Use this method when the transport action should continue to run in the context of the current task
      */
     public final void execute(Task task, Request request, ActionListener<Response> listener) {
+
         ActionRequestValidationException validationException = request.validate();
         if (validationException != null) {
             listener.onFailure(validationException);
             return;
         }
 
-        if (task != null && request.getShouldStoreResult()) {
-            listener = new TaskResultStoringActionListener<>(taskManager, task, listener);
-        }
-
         if (filters.length == 0) {
             try {
                 doExecute(task, request, listener);
-            } catch(Exception e) {
-                logger.trace("Error during transport action execution.", e);
-                listener.onFailure(e);
+            } catch(Throwable t) {
+                logger.trace("Error during transport action execution.", t);
+                listener.onFailure(t);
             }
         } else {
-            RequestFilterChain<Request, Response> requestFilterChain = new RequestFilterChain<>(this, logger);
+            RequestFilterChain requestFilterChain = new RequestFilterChain<>(this, logger);
             requestFilterChain.proceed(task, actionName, request, listener);
         }
     }
@@ -160,62 +151,59 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
 
     protected abstract void doExecute(Request request, ActionListener<Response> listener);
 
-    private static class RequestFilterChain<Request extends ActionRequest<Request>, Response extends ActionResponse>
-            implements ActionFilterChain<Request, Response> {
+    private static class RequestFilterChain<Request extends ActionRequest, Response extends ActionResponse> implements ActionFilterChain {
 
         private final TransportAction<Request, Response> action;
         private final AtomicInteger index = new AtomicInteger();
-        private final Logger logger;
+        private final ESLogger logger;
 
-        private RequestFilterChain(TransportAction<Request, Response> action, Logger logger) {
+        private RequestFilterChain(TransportAction<Request, Response> action, ESLogger logger) {
             this.action = action;
             this.logger = logger;
         }
 
-        @Override
-        public void proceed(Task task, String actionName, Request request, ActionListener<Response> listener) {
+        @Override @SuppressWarnings("unchecked")
+        public void proceed(Task task, String actionName, ActionRequest request, ActionListener listener) {
             int i = index.getAndIncrement();
             try {
                 if (i < this.action.filters.length) {
                     this.action.filters[i].apply(task, actionName, request, listener, this);
                 } else if (i == this.action.filters.length) {
-                    this.action.doExecute(task, request, new FilteredActionListener<>(actionName, listener,
-                            new ResponseFilterChain<>(this.action.filters, logger)));
+                    this.action.doExecute(task, (Request) request, new FilteredActionListener<Response>(actionName, listener, new ResponseFilterChain(this.action.filters, logger)));
                 } else {
                     listener.onFailure(new IllegalStateException("proceed was called too many times"));
                 }
-            } catch(Exception e) {
-                logger.trace("Error during transport action execution.", e);
-                listener.onFailure(e);
+            } catch(Throwable t) {
+                logger.trace("Error during transport action execution.", t);
+                listener.onFailure(t);
             }
         }
 
         @Override
-        public void proceed(String action, Response response, ActionListener<Response> listener) {
+        public void proceed(String action, ActionResponse response, ActionListener listener) {
             assert false : "request filter chain should never be called on the response side";
         }
     }
 
-    private static class ResponseFilterChain<Request extends ActionRequest<Request>, Response extends ActionResponse>
-            implements ActionFilterChain<Request, Response> {
+    private static class ResponseFilterChain implements ActionFilterChain {
 
         private final ActionFilter[] filters;
         private final AtomicInteger index;
-        private final Logger logger;
+        private final ESLogger logger;
 
-        private ResponseFilterChain(ActionFilter[] filters, Logger logger) {
+        private ResponseFilterChain(ActionFilter[] filters, ESLogger logger) {
             this.filters = filters;
             this.index = new AtomicInteger(filters.length);
             this.logger = logger;
         }
 
         @Override
-        public void proceed(Task task, String action, Request request, ActionListener<Response> listener) {
+        public void proceed(Task task, String action, ActionRequest request, ActionListener listener) {
             assert false : "response filter chain should never be called on the request side";
         }
 
-        @Override
-        public void proceed(String action, Response response, ActionListener<Response> listener) {
+        @Override @SuppressWarnings("unchecked")
+        public void proceed(String action, ActionResponse response, ActionListener listener) {
             int i = index.decrementAndGet();
             try {
                 if (i >= 0) {
@@ -225,9 +213,9 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
                 } else {
                     listener.onFailure(new IllegalStateException("proceed was called too many times"));
                 }
-            } catch (Exception e) {
-                logger.trace("Error during transport action execution.", e);
-                listener.onFailure(e);
+            } catch (Throwable t) {
+                logger.trace("Error during transport action execution.", t);
+                listener.onFailure(t);
             }
         }
     }
@@ -235,10 +223,10 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
     private static class FilteredActionListener<Response extends ActionResponse> implements ActionListener<Response> {
 
         private final String actionName;
-        private final ActionListener<Response> listener;
-        private final ResponseFilterChain<?, Response> chain;
+        private final ActionListener listener;
+        private final ResponseFilterChain chain;
 
-        private FilteredActionListener(String actionName, ActionListener<Response> listener, ResponseFilterChain<?, Response> chain) {
+        private FilteredActionListener(String actionName, ActionListener listener, ResponseFilterChain chain) {
             this.actionName = actionName;
             this.listener = listener;
             this.chain = chain;
@@ -250,42 +238,8 @@ public abstract class TransportAction<Request extends ActionRequest<Request>, Re
         }
 
         @Override
-        public void onFailure(Exception e) {
+        public void onFailure(Throwable e) {
             listener.onFailure(e);
-        }
-    }
-
-    /**
-     * Wrapper for an action listener that stores the result at the end of the execution
-     */
-    private static class TaskResultStoringActionListener<Response extends ActionResponse> implements ActionListener<Response> {
-        private final ActionListener<Response> delegate;
-        private final Task task;
-        private final TaskManager taskManager;
-
-        private TaskResultStoringActionListener(TaskManager taskManager, Task task, ActionListener<Response> delegate) {
-            this.taskManager = taskManager;
-            this.task = task;
-            this.delegate = delegate;
-        }
-
-        @Override
-        public void onResponse(Response response) {
-            try {
-                taskManager.storeResult(task, response, delegate);
-            } catch (Exception e) {
-                delegate.onFailure(e);
-            }
-        }
-
-        @Override
-        public void onFailure(Exception e) {
-            try {
-                taskManager.storeResult(task, e, delegate);
-            } catch (Exception inner) {
-                inner.addSuppressed(e);
-                delegate.onFailure(inner);
-            }
         }
     }
 }

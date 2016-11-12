@@ -23,6 +23,7 @@ import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.search.aggregations.Aggregator.SubAggCollectionMode;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.terms;
@@ -84,7 +85,8 @@ public class BooleanTermsIT extends ESIntegTestCase {
         indexRandom(true, builders);
     }
 
-    public void testSingleValueField() throws Exception {
+    @Test
+    public void singleValueField() throws Exception {
         SearchResponse response = client().prepareSearch("idx").setTypes("type")
                 .addAggregation(terms("terms")
                         .field(SINGLE_VALUED_FIELD_NAME)
@@ -99,26 +101,25 @@ public class BooleanTermsIT extends ESIntegTestCase {
         final int bucketCount = numSingleFalses > 0 && numSingleTrues > 0 ? 2 : numSingleFalses + numSingleTrues > 0 ? 1 : 0;
         assertThat(terms.getBuckets().size(), equalTo(bucketCount));
 
-        Terms.Bucket bucket = terms.getBucketByKey("false");
+        Terms.Bucket bucket = terms.getBucketByKey("0");
         if (numSingleFalses == 0) {
             assertNull(bucket);
         } else {
             assertNotNull(bucket);
             assertEquals(numSingleFalses, bucket.getDocCount());
-            assertEquals("false", bucket.getKeyAsString());
         }
 
-        bucket = terms.getBucketByKey("true");
+        bucket = terms.getBucketByKey("1");
         if (numSingleTrues == 0) {
             assertNull(bucket);
         } else {
             assertNotNull(bucket);
             assertEquals(numSingleTrues, bucket.getDocCount());
-            assertEquals("true", bucket.getKeyAsString());
         }
     }
 
-    public void testMultiValueField() throws Exception {
+    @Test
+    public void multiValueField() throws Exception {
         SearchResponse response = client().prepareSearch("idx").setTypes("type")
                 .addAggregation(terms("terms")
                         .field(MULTI_VALUED_FIELD_NAME)
@@ -133,30 +134,29 @@ public class BooleanTermsIT extends ESIntegTestCase {
         final int bucketCount = numMultiFalses > 0 && numMultiTrues > 0 ? 2 : numMultiFalses + numMultiTrues > 0 ? 1 : 0;
         assertThat(terms.getBuckets().size(), equalTo(bucketCount));
 
-        Terms.Bucket bucket = terms.getBucketByKey("false");
+        Terms.Bucket bucket = terms.getBucketByKey("0");
         if (numMultiFalses == 0) {
             assertNull(bucket);
         } else {
             assertNotNull(bucket);
             assertEquals(numMultiFalses, bucket.getDocCount());
-            assertEquals("false", bucket.getKeyAsString());
         }
 
-        bucket = terms.getBucketByKey("true");
+        bucket = terms.getBucketByKey("1");
         if (numMultiTrues == 0) {
             assertNull(bucket);
         } else {
             assertNotNull(bucket);
             assertEquals(numMultiTrues, bucket.getDocCount());
-            assertEquals("true", bucket.getKeyAsString());
         }
     }
 
-    public void testUnmapped() throws Exception {
+    @Test
+    public void unmapped() throws Exception {
         SearchResponse response = client().prepareSearch("idx_unmapped").setTypes("type")
                 .addAggregation(terms("terms")
                         .field(SINGLE_VALUED_FIELD_NAME)
-                        .size(between(1, 5))
+                        .size(randomInt(5))
                         .collectMode(randomFrom(SubAggCollectionMode.values())))
                 .execute().actionGet();
 

@@ -20,13 +20,16 @@ package org.elasticsearch.index.mapper;
 
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import static org.hamcrest.Matchers.equalTo;
 
 public class UidTests extends ESTestCase {
+    
+    @Test
     public void testCreateAndSplitId() {
         BytesRef createUid = Uid.createUidAsBytes("foo", "bar");
-        BytesRef[] splitUidIntoTypeAndId = splitUidIntoTypeAndId(createUid);
+        BytesRef[] splitUidIntoTypeAndId = Uid.splitUidIntoTypeAndId(createUid);
         assertThat("foo", equalTo(splitUidIntoTypeAndId[0].utf8ToString()));
         assertThat("bar", equalTo(splitUidIntoTypeAndId[1].utf8ToString()));
         // split also with an offset
@@ -34,29 +37,8 @@ public class UidTests extends ESTestCase {
         ref.offset = 9;
         ref.length = createUid.length;
         System.arraycopy(createUid.bytes, createUid.offset, ref.bytes, ref.offset, ref.length);
-        splitUidIntoTypeAndId = splitUidIntoTypeAndId(ref);
+        splitUidIntoTypeAndId = Uid.splitUidIntoTypeAndId(ref);
         assertThat("foo", equalTo(splitUidIntoTypeAndId[0].utf8ToString()));
         assertThat("bar", equalTo(splitUidIntoTypeAndId[1].utf8ToString()));
-    }
-
-    public static BytesRef[] splitUidIntoTypeAndId(BytesRef uid) {
-        int loc = -1;
-        final int limit = uid.offset + uid.length;
-        for (int i = uid.offset; i < limit; i++) {
-            if (uid.bytes[i] == Uid.DELIMITER_BYTE) { // 0x23 is equal to '#'
-                loc = i;
-                break;
-            }
-        }
-
-        if (loc == -1) {
-            return null;
-        }
-
-        int idStart = loc + 1;
-        return new BytesRef[] {
-            new BytesRef(uid.bytes, uid.offset, loc - uid.offset),
-            new BytesRef(uid.bytes, idStart, limit - idStart)
-        };
     }
 }

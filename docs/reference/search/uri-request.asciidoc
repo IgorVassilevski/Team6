@@ -8,44 +8,36 @@ example:
 
 [source,js]
 --------------------------------------------------
-GET twitter/tweet/_search?q=user:kimchy
+$ curl -XGET 'http://localhost:9200/twitter/tweet/_search?q=user:kimchy'
 --------------------------------------------------
-// CONSOLE
-// TEST[setup:twitter]
 
 And here is a sample response:
 
 [source,js]
 --------------------------------------------------
 {
-    "timed_out": false,
-    "took": 62,
     "_shards":{
-        "total" : 1,
-        "successful" : 1,
+        "total" : 5,
+        "successful" : 5,
         "failed" : 0
     },
     "hits":{
         "total" : 1,
-        "max_score": 1.3862944,
         "hits" : [
             {
                 "_index" : "twitter",
                 "_type" : "tweet",
-                "_id" : "0",
-                "_score": 1.3862944,
+                "_id" : "1",
                 "_source" : {
                     "user" : "kimchy",
-                    "date" : "2009-11-15T14:12:12",
-                    "message" : "trying out Elasticsearch",
-                    "likes": 0
+                    "postDate" : "2009-11-15T14:12:12",
+                    "message" : "trying out Elasticsearch"
                 }
             }
         ]
     }
 }
 --------------------------------------------------
-// TESTRESPONSE[s/"took": 62/"took": "$body.took"/]
 
 [float]
 === Parameters
@@ -83,7 +75,7 @@ hits was computed.
 part of the document by using `_source_include` & `_source_exclude` (see the <<search-request-source-filtering, request body>>
 documentation for more details)
 
-|`stored_fields` |The selective stored fields of the document to return for each hit,
+|`fields` |The selective stored fields of the document to return for each hit, 
 comma delimited. Not specifying any value will cause no fields to return.
 
 |`sort` |Sorting to perform. Can either be in the form of `fieldName`, or
@@ -110,8 +102,11 @@ Defaults to no terminate_after.
 |`size` |The number of hits to return. Defaults to `10`.
 
 |`search_type` |The type of the search operation to perform. Can be
-`dfs_query_then_fetch` or `query_then_fetch`.
-Defaults to `query_then_fetch`. See
+`dfs_query_then_fetch`, `query_then_fetch`, `scan`
+deprecated[2.1.0,Replaced by a regular `scroll` sorted by `_doc`]
+or `count`
+deprecated[2.0.0-beta1,Replaced by `size: 0`]. Defaults to `query_then_fetch`. See
 <<search-request-search-type,_Search Type_>> for
 more details on the different types of search that can be performed.
 |=======================================================================
+

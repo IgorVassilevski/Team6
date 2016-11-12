@@ -18,76 +18,44 @@
  */
 package org.elasticsearch.cluster.metadata;
 
-import org.elasticsearch.Version;
-import org.elasticsearch.common.settings.IndexScopedSettings;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.indices.mapper.MapperRegistry;
-import org.elasticsearch.test.ESTestCase;
-import org.elasticsearch.test.VersionUtils;
+import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 
-import java.util.Collections;
+import org.elasticsearch.Version;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.store.IndexStoreModule;
+import org.elasticsearch.indices.IndicesModule;
+import org.elasticsearch.test.ESTestCase;
+
+import java.util.Arrays;
+import java.util.Locale;
 
 public class MetaDataIndexUpgradeServiceTests extends ESTestCase {
 
-    public void testArchiveBrokenIndexSettings() {
-        MetaDataIndexUpgradeService service = new MetaDataIndexUpgradeService(Settings.EMPTY, new MapperRegistry(Collections.emptyMap(), Collections.emptyMap()), IndexScopedSettings.DEFAULT_SCOPED_SETTINGS);
-        IndexMetaData src = newIndexMeta("foo", Settings.EMPTY);
-        IndexMetaData indexMetaData = service.archiveBrokenIndexSettings(src);
-        assertSame(indexMetaData, src);
-
-        src = newIndexMeta("foo", Settings.builder().put("index.refresh_interval", "-200").build());
-        indexMetaData = service.archiveBrokenIndexSettings(src);
-        assertNotSame(indexMetaData, src);
-        assertEquals("-200", indexMetaData.getSettings().get("archived.index.refresh_interval"));
-
-        src = newIndexMeta("foo", Settings.builder().put("index.codec", "best_compression1").build());
-        indexMetaData = service.archiveBrokenIndexSettings(src);
-        assertNotSame(indexMetaData, src);
-        assertEquals("best_compression1", indexMetaData.getSettings().get("archived.index.codec"));
-
-        src = newIndexMeta("foo", Settings.builder().put("index.refresh.interval", "-1").build());
-        indexMetaData = service.archiveBrokenIndexSettings(src);
-        assertNotSame(indexMetaData, src);
-        assertEquals("-1", indexMetaData.getSettings().get("archived.index.refresh.interval"));
-
-        src = newIndexMeta("foo", indexMetaData.getSettings()); // double archive?
-        indexMetaData = service.archiveBrokenIndexSettings(src);
-        assertSame(indexMetaData, src);
+    public void testUpgradeStoreSettings() {
+        final String type = RandomPicks.randomFrom(random(), Arrays.asList("nio_fs", "mmap_fs", "simple_fs", "default", "fs"));
+        MetaDataIndexUpgradeService metaDataIndexUpgradeService = new MetaDataIndexUpgradeService(Settings.EMPTY, null, new IndicesModule().getMapperRegistry());
+        Settings indexSettings = Settings.builder().put(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT)
+                .put(IndexStoreModule.STORE_TYPE, randomBoolean() ? type : type.toUpperCase(Locale.ROOT))
+                .build();
+        IndexMetaData test = IndexMetaData.builder("test")
+                .settings(indexSettings)
+                .numberOfShards(1)
+                .numberOfReplicas(1)
+                .build();
+        IndexMetaData indexMetaData = metaDataIndexUpgradeService.upgradeSettings(test);
+        assertEquals(type.replace("_", ""), indexMetaData.getSettings().get(IndexStoreModule.STORE_TYPE));
     }
 
-    public void testUpgrade() {
-        MetaDataIndexUpgradeService service = new MetaDataIndexUpgradeService(Settings.EMPTY, new MapperRegistry(Collections.emptyMap(), Collections.emptyMap()), IndexScopedSettings.DEFAULT_SCOPED_SETTINGS);
-        IndexMetaData src = newIndexMeta("foo", Settings.builder().put("index.refresh_interval", "-200").build());
-        assertFalse(service.isUpgraded(src));
-        src = service.upgradeIndexMetaData(src);
-        assertTrue(service.isUpgraded(src));
-        assertEquals("-200", src.getSettings().get("archived.index.refresh_interval"));
-        assertNull(src.getSettings().get("index.refresh_interval"));
-        assertSame(src, service.upgradeIndexMetaData(src)); // no double upgrade
+    public void testNoStoreSetting() {
+        Settings indexSettings = Settings.builder().put(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT)
+                .build();
+        IndexMetaData test = IndexMetaData.builder("test")
+                .settings(indexSettings)
+                .numberOfShards(1)
+                .numberOfReplicas(1)
+                .build();
+        MetaDataIndexUpgradeService metaDataIndexUpgradeService = new MetaDataIndexUpgradeService(Settings.EMPTY, null, new IndicesModule().getMapperRegistry());
+        IndexMetaData indexMetaData = metaDataIndexUpgradeService.upgradeSettings(test);
+        assertSame(indexMetaData, test);
     }
-
-    public void testIsUpgraded() {
-        MetaDataIndexUpgradeService service = new MetaDataIndexUpgradeService(Settings.EMPTY, new MapperRegistry(Collections.emptyMap(), Collections.emptyMap()), IndexScopedSettings.DEFAULT_SCOPED_SETTINGS);
-        IndexMetaData src = newIndexMeta("foo", Settings.builder().put("index.refresh_interval", "-200").build());
-        assertFalse(service.isUpgraded(src));
-        Version version = VersionUtils.randomVersionBetween(random(), VersionUtils.getFirstVersion(), VersionUtils.getPreviousVersion());
-        src = newIndexMeta("foo", Settings.builder().put(IndexMetaData.SETTING_VERSION_UPGRADED, version).build());
-        assertFalse(service.isUpgraded(src));
-        src = newIndexMeta("foo", Settings.builder().put(IndexMetaData.SETTING_VERSION_UPGRADED, Version.CURRENT).build());
-        assertTrue(service.isUpgraded(src));
-    }
-
-    public static IndexMetaData newIndexMeta(String name, Settings indexSettings) {
-        Settings build = Settings.builder().put(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT)
-            .put(IndexMetaData.SETTING_NUMBER_OF_REPLICAS, 1)
-            .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, 1)
-            .put(IndexMetaData.SETTING_CREATION_DATE, 1)
-            .put(IndexMetaData.SETTING_INDEX_UUID, "BOOM")
-            .put(IndexMetaData.SETTING_VERSION_UPGRADED, Version.V_2_0_0_beta1)
-            .put(indexSettings)
-            .build();
-        IndexMetaData metaData = IndexMetaData.builder(name).settings(build).build();
-        return metaData;
-    }
-
 }

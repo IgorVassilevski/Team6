@@ -20,27 +20,29 @@ package org.elasticsearch.index.analysis;
 
 import org.apache.lucene.analysis.pattern.PatternReplaceCharFilter;
 import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.regex.Regex;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 import java.io.Reader;
 import java.util.regex.Pattern;
 
+@AnalysisSettingsRequired
 public class PatternReplaceCharFilterFactory extends AbstractCharFilterFactory {
 
     private final Pattern pattern;
     private final String replacement;
 
-    public PatternReplaceCharFilterFactory(IndexSettings indexSettings, Environment env, String name, Settings settings) {
-        super(indexSettings, name);
+    @Inject
+    public PatternReplaceCharFilterFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name);
 
-        String sPattern = settings.get("pattern");
-        if (!Strings.hasLength(sPattern)) {
+        if (!Strings.hasLength(settings.get("pattern"))) {
             throw new IllegalArgumentException("pattern is missing for [" + name + "] char filter of type 'pattern_replace'");
         }
-        pattern = Regex.compile(sPattern, settings.get("flags"));
+        pattern = Pattern.compile(settings.get("pattern"));
         replacement = settings.get("replacement", ""); // when not set or set to "", use "".
     }
 

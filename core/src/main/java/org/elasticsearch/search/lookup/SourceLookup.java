@@ -18,6 +18,8 @@
  */
 package org.elasticsearch.search.lookup;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.elasticsearch.ElasticsearchParseException;
@@ -32,8 +34,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static java.util.Collections.emptyMap;
 
 /**
  *
@@ -71,7 +71,7 @@ public class SourceLookup implements Map {
             reader.document(docId, sourceFieldVisitor);
             BytesReference source = sourceFieldVisitor.source();
             if (source == null) {
-                this.source = emptyMap();
+                this.source = ImmutableMap.of();
                 this.sourceContentType = null;
             } else {
                 Tuple<XContentType, Map<String, Object>> tuple = sourceAsMapAndType(source);

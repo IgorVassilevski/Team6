@@ -27,14 +27,25 @@ import java.util.Arrays;
 /**
  * A synced flush request to sync flush one or more indices. The synced flush process of an index performs a flush
  * and writes the same sync id to primary and all copies.
- *
- * <p>Best created with {@link org.elasticsearch.client.Requests#syncedFlushRequest(String...)}. </p>
+ * <p>
+ * <p>Best created with {@link org.elasticsearch.client.Requests#syncedFlushRequest(String...)}.
  *
  * @see org.elasticsearch.client.Requests#flushRequest(String...)
  * @see org.elasticsearch.client.IndicesAdminClient#syncedFlush(SyncedFlushRequest)
  * @see SyncedFlushResponse
  */
 public class SyncedFlushRequest extends BroadcastRequest<SyncedFlushRequest> {
+
+    public SyncedFlushRequest() {
+    }
+
+    /**
+     * Copy constructor that creates a new synced flush request that is a copy of the one provided as an argument.
+     * The new request will inherit though headers and context from the original request that caused it.
+     */
+    public SyncedFlushRequest(ActionRequest originalRequest) {
+        super(originalRequest);
+    }
 
     /**
      * Constructs a new synced flush request against one or more indices. If nothing is provided, all indices will

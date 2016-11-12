@@ -19,18 +19,21 @@
 
 package org.elasticsearch.index.analysis;
 
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.icu.ICUFoldingFilter;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.Index;
+
 import com.ibm.icu.text.FilteredNormalizer2;
 import com.ibm.icu.text.Normalizer2;
 import com.ibm.icu.text.UnicodeSet;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.icu.ICUFoldingFilter;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 
 /**
- * Uses the {@link org.apache.lucene.analysis.icu.ICUFoldingFilter}.
+ * Uses the {@link org.apache.lucene.analysis.icu.ICUFoldingFilter}. 
  * Applies foldings from UTR#30 Character Foldings.
  * <p>
  * Can be filtered to handle certain characters in a specified way (see http://icu-project.org/apiref/icu4j/com/ibm/icu/text/UnicodeSet.html)
@@ -40,20 +43,19 @@ import org.elasticsearch.index.IndexSettings;
  *
  * @author kimchy (shay.banon)
  */
-public class IcuFoldingTokenFilterFactory extends AbstractTokenFilterFactory implements MultiTermAwareComponent {
+public class IcuFoldingTokenFilterFactory extends AbstractTokenFilterFactory {
     private final String unicodeSetFilter;
 
-    public IcuFoldingTokenFilterFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject public IcuFoldingTokenFilterFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         this.unicodeSetFilter = settings.get("unicodeSetFilter");
     }
 
-    @Override
-    public TokenStream create(TokenStream tokenStream) {
+    @Override public TokenStream create(TokenStream tokenStream) {
 
         // The ICUFoldingFilter is in fact implemented as a ICUNormalizer2Filter.
         // ICUFoldingFilter lacks a constructor for adding filtering so we implemement it here
-        if (unicodeSetFilter != null) {
+        if (unicodeSetFilter != null) { 
             Normalizer2 base = Normalizer2.getInstance(
                     ICUFoldingFilter.class.getResourceAsStream("utr30.nrm"),
                     "utr30", Normalizer2.Mode.COMPOSE);
@@ -61,15 +63,10 @@ public class IcuFoldingTokenFilterFactory extends AbstractTokenFilterFactory imp
 
             unicodeSet.freeze();
             Normalizer2 filtered = new FilteredNormalizer2(base, unicodeSet);
-            return new org.apache.lucene.analysis.icu.ICUNormalizer2Filter(tokenStream, filtered);
+            return new org.apache.lucene.analysis.icu.ICUNormalizer2Filter(tokenStream, filtered); 
         }
         else {
             return new ICUFoldingFilter(tokenStream);
         }
-    }
-
-    @Override
-    public Object getMultiTermComponent() {
-        return this;
     }
 }

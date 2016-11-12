@@ -20,20 +20,21 @@
 package org.elasticsearch.common;
 
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.query.IndexQueryParserService;
 
 /**
  * Matcher to use in combination with {@link ParseField} while parsing requests. Matches a {@link ParseField}
- * against a field name and throw deprecation exception depending on the current value of the {@link #PARSE_STRICT} setting.
+ * against a field name and throw deprecation exception depending on the current value of the {@link IndexQueryParserService#PARSE_STRICT} setting.
  */
 public class ParseFieldMatcher {
-    public static final String PARSE_STRICT = "index.query.parse.strict";
+
     public static final ParseFieldMatcher EMPTY = new ParseFieldMatcher(false);
     public static final ParseFieldMatcher STRICT = new ParseFieldMatcher(true);
 
     private final boolean strict;
 
     public ParseFieldMatcher(Settings settings) {
-        this(settings.getAsBoolean(PARSE_STRICT, false));
+        this(settings.getAsBoolean(IndexQueryParserService.PARSE_STRICT, false));
     }
 
     public ParseFieldMatcher(boolean strict) {
@@ -47,7 +48,7 @@ public class ParseFieldMatcher {
 
     /**
      * Matches a {@link ParseField} against a field name, and throws deprecation exception depending on the current
-     * value of the {@link #PARSE_STRICT} setting.
+     * value of the {@link IndexQueryParserService#PARSE_STRICT} setting.
      * @param fieldName the field name found in the request while parsing
      * @param parseField the parse field that we are looking for
      * @throws IllegalArgumentException whenever we are in strict mode and the request contained a deprecated field

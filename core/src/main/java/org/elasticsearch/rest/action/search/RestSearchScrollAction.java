@@ -21,7 +21,7 @@ package org.elasticsearch.rest.action.search;
 
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchScrollRequest;
-import org.elasticsearch.client.node.NodeClient;
+import org.elasticsearch.client.Client;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
@@ -30,12 +30,9 @@ import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.rest.BaseRestHandler;
-import org.elasticsearch.rest.RestChannel;
-import org.elasticsearch.rest.RestController;
-import org.elasticsearch.rest.RestRequest;
-import org.elasticsearch.rest.action.RestActions;
-import org.elasticsearch.rest.action.RestStatusToXContentListener;
+import org.elasticsearch.rest.*;
+import org.elasticsearch.rest.action.support.RestActions;
+import org.elasticsearch.rest.action.support.RestStatusToXContentListener;
 import org.elasticsearch.search.Scroll;
 
 import java.io.IOException;
@@ -44,11 +41,14 @@ import static org.elasticsearch.common.unit.TimeValue.parseTimeValue;
 import static org.elasticsearch.rest.RestRequest.Method.GET;
 import static org.elasticsearch.rest.RestRequest.Method.POST;
 
+/**
+ *
+ */
 public class RestSearchScrollAction extends BaseRestHandler {
 
     @Inject
-    public RestSearchScrollAction(Settings settings, RestController controller) {
-        super(settings);
+    public RestSearchScrollAction(Settings settings, RestController controller, Client client) {
+        super(settings, controller, client);
 
         controller.registerHandler(GET, "/_search/scroll", this);
         controller.registerHandler(POST, "/_search/scroll", this);
@@ -57,7 +57,7 @@ public class RestSearchScrollAction extends BaseRestHandler {
     }
 
     @Override
-    public void handleRequest(final RestRequest request, final RestChannel channel, final NodeClient client) {
+    public void handleRequest(final RestRequest request, final RestChannel channel, final Client client) {
         String scrollId = request.param("scroll_id");
         SearchScrollRequest searchScrollRequest = new SearchScrollRequest();
         searchScrollRequest.scrollId(scrollId);
@@ -70,7 +70,7 @@ public class RestSearchScrollAction extends BaseRestHandler {
             XContentType type = XContentFactory.xContentType(RestActions.getRestContent(request));
             if (type == null) {
                 if (scrollId == null) {
-                    scrollId = RestActions.getRestContent(request).utf8ToString();
+                    scrollId = RestActions.getRestContent(request).toUtf8();
                     searchScrollRequest.scrollId(scrollId);
                 }
             } else {
@@ -84,7 +84,7 @@ public class RestSearchScrollAction extends BaseRestHandler {
     public static void buildFromContent(BytesReference content, SearchScrollRequest searchScrollRequest) {
         try (XContentParser parser = XContentHelper.createParser(content)) {
             if (parser.nextToken() != XContentParser.Token.START_OBJECT) {
-                throw new IllegalArgumentException("Malformed content, must start with an object");
+                throw new IllegalArgumentException("Malforrmed content, must start with an object");
             } else {
                 XContentParser.Token token;
                 String currentFieldName = null;
@@ -96,8 +96,7 @@ public class RestSearchScrollAction extends BaseRestHandler {
                     } else if ("scroll".equals(currentFieldName) && token == XContentParser.Token.VALUE_STRING) {
                         searchScrollRequest.scroll(new Scroll(TimeValue.parseTimeValue(parser.text(), null, "scroll")));
                     } else {
-                        throw new IllegalArgumentException("Unknown parameter [" + currentFieldName
-                                + "] in request body or parameter is of the wrong type[" + token + "] ");
+                        throw new IllegalArgumentException("Unknown parameter [" + currentFieldName + "] in request body or parameter is of the wrong type[" + token + "] ");
                     }
                 }
             }

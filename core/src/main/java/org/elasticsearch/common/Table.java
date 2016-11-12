@@ -19,16 +19,13 @@
 
 package org.elasticsearch.common;
 
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
-import static java.util.Collections.emptyMap;
 
 /**
  */
@@ -36,28 +33,16 @@ public class Table {
 
     private List<Cell> headers = new ArrayList<>();
     private List<List<Cell>> rows = new ArrayList<>();
-    private Map<String, List<Cell>> map = new HashMap<>();
-    private Map<String, Cell> headerMap = new HashMap<>();
+    private Map<String, List<Cell>> map = Maps.newHashMap();
+    private Map<String, Cell> headerMap = Maps.newHashMap();
     private List<Cell> currentCells;
     private boolean inHeaders = false;
-    private boolean withTime = false;
-    public static final String EPOCH = "epoch";
-    public static final String TIMESTAMP = "timestamp";
 
     public Table startHeaders() {
         inHeaders = true;
         currentCells = new ArrayList<>();
         return this;
     }
-
-    public Table startHeadersWithTimestamp() {
-        startHeaders();
-        this.withTime = true;
-        addCell("epoch", "alias:t,time;desc:seconds since 1970-01-01 00:00:00");
-        addCell("timestamp", "alias:ts,hms,hhmmss;desc:time in HH:MM:SS");
-        return this;
-    }
-
 
     public Table endHeaders() {
         if (currentCells == null || currentCells.isEmpty()) {
@@ -85,18 +70,11 @@ public class Table {
         return this;
     }
 
-    private DateTimeFormatter dateFormat = DateTimeFormat.forPattern("HH:mm:ss");
-
     public Table startRow() {
         if (headers.isEmpty()) {
             throw new IllegalStateException("no headers added...");
         }
         currentCells = new ArrayList<>(headers.size());
-        if (withTime) {
-            long time = System.currentTimeMillis();
-            addCell(TimeUnit.SECONDS.convert(time, TimeUnit.MILLISECONDS));
-            addCell(dateFormat.print(time));
-        }
         return this;
     }
 
@@ -138,7 +116,7 @@ public class Table {
         Map<String, String> mAttr;
         if (attributes.length() == 0) {
             if (inHeaders) {
-                mAttr = emptyMap();
+                mAttr = ImmutableMap.of();
             } else {
                 // get the attributes of the header cell we are going to add to
                 mAttr = headers.get(currentCells.size()).attr;
@@ -149,7 +127,7 @@ public class Table {
                 // get the attributes of the header cell we are going to add
                 mAttr.putAll(headers.get(currentCells.size()).attr);
             }
-            String[] sAttrs = attributes.split(";");
+            String[] sAttrs = Strings.splitStringToArray(attributes, ';');
             for (String sAttr : sAttrs) {
                 if (sAttr.length() == 0) {
                     continue;

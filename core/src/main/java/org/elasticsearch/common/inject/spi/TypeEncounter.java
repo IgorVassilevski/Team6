@@ -30,7 +30,6 @@ import org.elasticsearch.common.inject.TypeLiteral;
  * @param <I> the injectable type encountered
  * @since 2.0
  */
-@SuppressWarnings("overloads")
 public interface TypeEncounter<I> {
 
     /**

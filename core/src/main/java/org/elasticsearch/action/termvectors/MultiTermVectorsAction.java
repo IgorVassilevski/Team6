@@ -20,6 +20,7 @@
 package org.elasticsearch.action.termvectors;
 
 import org.elasticsearch.action.Action;
+import org.elasticsearch.client.Client;
 import org.elasticsearch.client.ElasticsearchClient;
 
 /**

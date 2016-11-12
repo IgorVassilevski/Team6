@@ -18,10 +18,14 @@
  */
 package org.elasticsearch.search.suggest;
 
+import com.google.common.collect.ImmutableMap;
+import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.component.AbstractComponent;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.search.SearchParseElement;
 import org.elasticsearch.search.SearchPhase;
 import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.search.suggest.Suggest.Suggestion;
@@ -38,8 +42,23 @@ import java.util.Map;
  */
 public class SuggestPhase extends AbstractComponent implements SearchPhase {
 
-    public SuggestPhase(Settings settings) {
+    private final SuggestParseElement parseElement;
+
+    @Inject
+    public SuggestPhase(Settings settings, SuggestParseElement suggestParseElement) {
         super(settings);
+        this.parseElement = suggestParseElement;
+    }
+
+    @Override
+    public Map<String, ? extends SearchParseElement> parseElements() {
+        ImmutableMap.Builder<String, SearchParseElement> parseElements = ImmutableMap.builder();
+        parseElements.put("suggest", parseElement);
+        return parseElements.build();
+    }
+
+    public SuggestParseElement parseElement() {
+        return parseElement;
     }
 
     @Override
@@ -52,6 +71,10 @@ public class SuggestPhase extends AbstractComponent implements SearchPhase {
         if (suggest == null) {
             return;
         }
+        context.queryResult().suggest(execute(suggest, context.searcher()));
+    }
+
+    public Suggest execute(SuggestionSearchContext suggest, IndexSearcher searcher) {
         try {
             CharsRefBuilder spare = new CharsRefBuilder();
             final List<Suggestion<? extends Entry<? extends Option>>> suggestions = new ArrayList<>(suggest.suggestions().size());
@@ -59,14 +82,14 @@ public class SuggestPhase extends AbstractComponent implements SearchPhase {
             for (Map.Entry<String, SuggestionSearchContext.SuggestionContext> entry : suggest.suggestions().entrySet()) {
                 SuggestionSearchContext.SuggestionContext suggestion = entry.getValue();
                 Suggester<SuggestionContext> suggester = suggestion.getSuggester();
-                Suggestion<? extends Entry<? extends Option>> result =
-                    suggester.execute(entry.getKey(), suggestion, context.searcher(), spare);
+                Suggestion<? extends Entry<? extends Option>> result = suggester.execute(entry.getKey(), suggestion, searcher, spare);
                 if (result != null) {
                     assert entry.getKey().equals(result.name);
                     suggestions.add(result);
                 }
             }
-            context.queryResult().suggest(new Suggest(suggestions));
+
+            return new Suggest(Suggest.Fields.SUGGEST, suggestions);
         } catch (IOException e) {
             throw new ElasticsearchException("I/O exception during suggest phase", e);
         }

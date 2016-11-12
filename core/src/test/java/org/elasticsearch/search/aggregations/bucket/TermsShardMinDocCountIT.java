@@ -21,11 +21,15 @@ package org.elasticsearch.search.aggregations.bucket;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.filter.InternalFilter;
 import org.elasticsearch.search.aggregations.bucket.significant.SignificantTerms;
 import org.elasticsearch.search.aggregations.bucket.significant.SignificantTermsAggregatorFactory;
+import org.elasticsearch.search.aggregations.bucket.significant.SignificantTermsBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsBuilder;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,9 +38,6 @@ import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_NUMBER_OF
 import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_NUMBER_OF_SHARDS;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertSearchResponse;
-import static org.elasticsearch.search.aggregations.AggregationBuilders.filter;
-import static org.elasticsearch.search.aggregations.AggregationBuilders.significantTerms;
-import static org.elasticsearch.search.aggregations.AggregationBuilders.terms;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -49,16 +50,16 @@ public class TermsShardMinDocCountIT extends ESIntegTestCase {
         return randomBoolean() ? null : randomFrom(SignificantTermsAggregatorFactory.ExecutionMode.values()).toString();
     }
 
-    // see https://github.com/elastic/elasticsearch/issues/5998
-    public void testShardMinDocCountSignificantTermsTest() throws Exception {
-        String textMappings;
+    // see https://github.com/elasticsearch/elasticsearch/issues/5998
+    @Test
+    public void shardMinDocCountSignificantTermsTest() throws Exception {
+
+        String termtype = "string";
         if (randomBoolean()) {
-            textMappings = "type=long";
-        } else {
-            textMappings = "type=text,fielddata=true";
+            termtype = "long";
         }
-        assertAcked(prepareCreate(index).setSettings(SETTING_NUMBER_OF_SHARDS, 1, SETTING_NUMBER_OF_REPLICAS, 0)
-                .addMapping(type, "text", textMappings));
+        assertAcked(prepareCreate(index).setSettings(SETTING_NUMBER_OF_SHARDS, 1, SETTING_NUMBER_OF_REPLICAS, 0).addMapping(type, "{\"properties\":{\"text\": {\"type\": \"" + termtype + "\"}}}"));
+        ensureYellow(index);
         List<IndexRequestBuilder> indexBuilders = new ArrayList<>();
 
         addTermsDocs("1", 1, 0, indexBuilders);//high score but low doc freq
@@ -73,8 +74,8 @@ public class TermsShardMinDocCountIT extends ESIntegTestCase {
         // first, check that indeed when not setting the shardMinDocCount parameter 0 terms are returned
         SearchResponse response = client().prepareSearch(index)
                 .addAggregation(
-                        (filter("inclass", QueryBuilders.termQuery("class", true)))
-                                .subAggregation(significantTerms("mySignificantTerms").field("text").minDocCount(2).size(2).executionHint(randomExecutionHint()))
+                        (new FilterAggregationBuilder("inclass").filter(QueryBuilders.termQuery("class", true)))
+                                .subAggregation(new SignificantTermsBuilder("mySignificantTerms").field("text").minDocCount(2).size(2).executionHint(randomExecutionHint()))
                 )
                 .execute()
                 .actionGet();
@@ -86,8 +87,8 @@ public class TermsShardMinDocCountIT extends ESIntegTestCase {
 
         response = client().prepareSearch(index)
                 .addAggregation(
-                        (filter("inclass", QueryBuilders.termQuery("class", true)))
-                                .subAggregation(significantTerms("mySignificantTerms").field("text").minDocCount(2).shardMinDocCount(2).size(2).executionHint(randomExecutionHint()))
+                        (new FilterAggregationBuilder("inclass").filter(QueryBuilders.termQuery("class", true)))
+                                .subAggregation(new SignificantTermsBuilder("mySignificantTerms").field("text").minDocCount(2).shardMinDocCount(2).size(2).executionHint(randomExecutionHint()))
                 )
                 .execute()
                 .actionGet();
@@ -109,15 +110,14 @@ public class TermsShardMinDocCountIT extends ESIntegTestCase {
         }
     }
 
-    // see https://github.com/elastic/elasticsearch/issues/5998
-    public void testShardMinDocCountTermsTest() throws Exception {
-        final String [] termTypes = {"text", "long", "integer", "float", "double"};
+    // see https://github.com/elasticsearch/elasticsearch/issues/5998
+    @Test
+    public void shardMinDocCountTermsTest() throws Exception {
+        final String [] termTypes = {"string", "long", "integer", "float", "double"};
         String termtype = termTypes[randomInt(termTypes.length - 1)];
-        String termMappings = "type=" + termtype;
-        if (termtype.equals("text")) {
-            termMappings += ",fielddata=true";
-        }
-        assertAcked(prepareCreate(index).setSettings(SETTING_NUMBER_OF_SHARDS, 1, SETTING_NUMBER_OF_REPLICAS, 0).addMapping(type, "text", termMappings));
+
+        assertAcked(prepareCreate(index).setSettings(SETTING_NUMBER_OF_SHARDS, 1, SETTING_NUMBER_OF_REPLICAS, 0).addMapping(type, "{\"properties\":{\"text\": {\"type\": \"" + termtype + "\"}}}"));
+        ensureYellow(index);
         List<IndexRequestBuilder> indexBuilders = new ArrayList<>();
 
         addTermsDocs("1", 1, indexBuilders);//low doc freq but high score
@@ -131,7 +131,7 @@ public class TermsShardMinDocCountIT extends ESIntegTestCase {
         // first, check that indeed when not setting the shardMinDocCount parameter 0 terms are returned
         SearchResponse response = client().prepareSearch(index)
                 .addAggregation(
-                        terms("myTerms").field("text").minDocCount(2).size(2).executionHint(randomExecutionHint()).order(Terms.Order.term(true))
+                        new TermsBuilder("myTerms").field("text").minDocCount(2).size(2).executionHint(randomExecutionHint()).order(Terms.Order.term(true))
                 )
                 .execute()
                 .actionGet();
@@ -142,7 +142,7 @@ public class TermsShardMinDocCountIT extends ESIntegTestCase {
 
         response = client().prepareSearch(index)
                 .addAggregation(
-                        terms("myTerms").field("text").minDocCount(2).shardMinDocCount(2).size(2).executionHint(randomExecutionHint()).order(Terms.Order.term(true))
+                        new TermsBuilder("myTerms").field("text").minDocCount(2).shardMinDocCount(2).size(2).executionHint(randomExecutionHint()).order(Terms.Order.term(true))
                 )
                 .execute()
                 .actionGet();

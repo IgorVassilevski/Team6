@@ -21,9 +21,12 @@ package org.elasticsearch.index.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.TypeTokenFilter;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -32,20 +35,22 @@ import java.util.Set;
 /**
  * A {@link TokenFilterFactory} for {@link TypeTokenFilter}. This filter only
  * keep tokens that are contained in the set configured via
- * {@value #KEEP_TYPES_KEY} setting.
+ * {@value #KEEP_TYPES_KEY} setting. 
  * <p>
  * Configuration options:
  * <ul>
  * <li>{@value #KEEP_TYPES_KEY} the array of words / tokens to keep.</li>
  * </ul>
  */
+@AnalysisSettingsRequired
 public class KeepTypesFilterFactory extends AbstractTokenFilterFactory {
     private final Set<String> keepTypes;
     private static final String KEEP_TYPES_KEY = "types";
 
-    public KeepTypesFilterFactory(IndexSettings indexSettings,
-                                 Environment env, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public KeepTypesFilterFactory(Index index, IndexSettingsService indexSettingsService,
+                                 Environment env, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
 
         final String[] arrayKeepTypes = settings.getAsArray(KEEP_TYPES_KEY, null);
         if ((arrayKeepTypes == null)) {

@@ -19,6 +19,8 @@
 
 package org.elasticsearch.action.search;
 
+import java.util.Map;
+
 /**
  *
  */
@@ -28,16 +30,21 @@ class ParsedScrollId {
 
     public static final String QUERY_AND_FETCH_TYPE = "queryAndFetch";
 
+    public static final String SCAN = "scan";
+
     private final String source;
 
     private final String type;
 
     private final ScrollIdForNode[] context;
 
-    public ParsedScrollId(String source, String type, ScrollIdForNode[] context) {
+    private final Map<String, String> attributes;
+
+    public ParsedScrollId(String source, String type, ScrollIdForNode[] context, Map<String, String> attributes) {
         this.source = source;
         this.type = type;
         this.context = context;
+        this.attributes = attributes;
     }
 
     public String getSource() {
@@ -50,5 +57,9 @@ class ParsedScrollId {
 
     public ScrollIdForNode[] getContext() {
         return context;
+    }
+
+    public Map<String, String> getAttributes() {
+        return this.attributes;
     }
 }

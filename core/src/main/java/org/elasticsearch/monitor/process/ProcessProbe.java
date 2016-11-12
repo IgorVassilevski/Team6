@@ -47,7 +47,7 @@ public class ProcessProbe {
     }
 
     private static class ProcessProbeHolder {
-        private static final ProcessProbe INSTANCE = new ProcessProbe();
+        private final static ProcessProbe INSTANCE = new ProcessProbe();
     }
 
     public static ProcessProbe getInstance() {
@@ -66,7 +66,7 @@ public class ProcessProbe {
         }
         try {
             return (Long) getMaxFileDescriptorCountField.invoke(osMxBean);
-        } catch (Exception t) {
+        } catch (Throwable t) {
             return -1;
         }
     }
@@ -80,7 +80,7 @@ public class ProcessProbe {
         }
         try {
             return (Long) getOpenFileDescriptorCountField.invoke(osMxBean);
-        } catch (Exception t) {
+        } catch (Throwable t) {
             return -1;
         }
     }
@@ -102,7 +102,7 @@ public class ProcessProbe {
                 if (time >= 0) {
                     return (time / 1_000_000L);
                 }
-            } catch (Exception t) {
+            } catch (Throwable t) {
                 return -1;
             }
         }
@@ -119,7 +119,7 @@ public class ProcessProbe {
                 if (virtual >= 0) {
                     return virtual;
                 }
-            } catch (Exception t) {
+            } catch (Throwable t) {
                 return -1;
             }
         }
@@ -155,12 +155,12 @@ public class ProcessProbe {
     private static Method getMethod(String methodName) {
         try {
             return Class.forName("com.sun.management.OperatingSystemMXBean").getMethod(methodName);
-        } catch (Exception t) {
+        } catch (Throwable t) {
             // not available
             return null;
         }
     }
-
+    
     /**
      * Returns a given method of the UnixOperatingSystemMXBean,
      * or null if the method is not found or unavailable.
@@ -168,7 +168,7 @@ public class ProcessProbe {
     private static Method getUnixMethod(String methodName) {
         try {
             return Class.forName("com.sun.management.UnixOperatingSystemMXBean").getMethod(methodName);
-        } catch (Exception t) {
+        } catch (Throwable t) {
             // not available
             return null;
         }

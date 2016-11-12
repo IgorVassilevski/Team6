@@ -20,6 +20,7 @@
 package org.elasticsearch.indices.recovery;
 
 import org.apache.lucene.util.Version;
+import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -75,6 +76,7 @@ public final class RecoveryFileChunkRequest extends TransportRequest {
         return position;
     }
 
+    @Nullable
     public String checksum() {
         return metaData.checksum();
     }
@@ -103,10 +105,11 @@ public final class RecoveryFileChunkRequest extends TransportRequest {
         String name = in.readString();
         position = in.readVLong();
         long length = in.readVLong();
-        String checksum = in.readString();
+        String checksum = in.readOptionalString();
         content = in.readBytesReference();
-        Version writtenBy = Lucene.parseVersionLenient(in.readString(), null);
-        assert writtenBy != null;
+        Version writtenBy = null;
+        String versionString = in.readOptionalString();
+        writtenBy = Lucene.parseVersionLenient(versionString, null);
         metaData = new StoreFileMetaData(name, length, checksum, writtenBy);
         lastChunk = in.readBoolean();
         totalTranslogOps = in.readVInt();
@@ -121,9 +124,9 @@ public final class RecoveryFileChunkRequest extends TransportRequest {
         out.writeString(metaData.name());
         out.writeVLong(position);
         out.writeVLong(metaData.length());
-        out.writeString(metaData.checksum());
+        out.writeOptionalString(metaData.checksum());
         out.writeBytesReference(content);
-        out.writeString(metaData.writtenBy().toString());
+        out.writeOptionalString(metaData.writtenBy() == null ? null : metaData.writtenBy().toString());
         out.writeBoolean(lastChunk);
         out.writeVInt(totalTranslogOps);
         out.writeLong(sourceThrottleTimeInNanos);

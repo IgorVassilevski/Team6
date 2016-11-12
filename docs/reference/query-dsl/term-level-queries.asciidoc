@@ -30,6 +30,11 @@ The queries in this group are:
 
     Find documents where the field specified contains any non-null value.
 
+<<query-dsl-missing-query,`missing` query>>::
+
+    Find documents where the field specified does is missing or contains only
+    `null` values.
+
 <<query-dsl-prefix-query,`prefix` query>>::
 
     Find documents where the field specified contains terms which begin with
@@ -70,6 +75,8 @@ include::range-query.asciidoc[]
 
 include::exists-query.asciidoc[]
 
+include::missing-query.asciidoc[]
+
 include::prefix-query.asciidoc[]
 
 include::wildcard-query.asciidoc[]
@@ -81,3 +88,6 @@ include::fuzzy-query.asciidoc[]
 include::type-query.asciidoc[]
 
 include::ids-query.asciidoc[]
+
+
+

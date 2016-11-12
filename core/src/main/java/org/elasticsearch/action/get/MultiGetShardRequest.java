@@ -33,7 +33,7 @@ public class MultiGetShardRequest extends SingleShardRequest<MultiGetShardReques
 
     private int shardId;
     private String preference;
-    boolean realtime = true;
+    Boolean realtime;
     boolean refresh;
     boolean ignoreErrorsOnGeneratedFields = false;
 
@@ -45,7 +45,7 @@ public class MultiGetShardRequest extends SingleShardRequest<MultiGetShardReques
     }
 
     MultiGetShardRequest(MultiGetRequest multiGetRequest, String index, int shardId) {
-        super(index);
+        super(multiGetRequest, index);
         this.shardId = shardId;
         locations = new IntArrayList();
         items = new ArrayList<>();
@@ -79,10 +79,10 @@ public class MultiGetShardRequest extends SingleShardRequest<MultiGetShardReques
     }
 
     public boolean realtime() {
-        return this.realtime;
+        return this.realtime == null ? true : this.realtime;
     }
 
-    public MultiGetShardRequest realtime(boolean realtime) {
+    public MultiGetShardRequest realtime(Boolean realtime) {
         this.realtime = realtime;
         return this;
     }
@@ -129,7 +129,12 @@ public class MultiGetShardRequest extends SingleShardRequest<MultiGetShardReques
 
         preference = in.readOptionalString();
         refresh = in.readBoolean();
-        realtime = in.readBoolean();
+        byte realtime = in.readByte();
+        if (realtime == 0) {
+            this.realtime = false;
+        } else if (realtime == 1) {
+            this.realtime = true;
+        }
         ignoreErrorsOnGeneratedFields = in.readBoolean();
     }
 
@@ -145,7 +150,13 @@ public class MultiGetShardRequest extends SingleShardRequest<MultiGetShardReques
 
         out.writeOptionalString(preference);
         out.writeBoolean(refresh);
-        out.writeBoolean(realtime);
+        if (realtime == null) {
+            out.writeByte((byte) -1);
+        } else if (!realtime) {
+            out.writeByte((byte) 0);
+        } else {
+            out.writeByte((byte) 1);
+        }
         out.writeBoolean(ignoreErrorsOnGeneratedFields);
 
     }

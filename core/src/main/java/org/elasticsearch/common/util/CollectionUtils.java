@@ -19,26 +19,37 @@
 
 package org.elasticsearch.common.util;
 
-import java.util.AbstractList;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Objects;
-import java.util.RandomAccess;
-
+import com.carrotsearch.hppc.DoubleArrayList;
+import com.carrotsearch.hppc.FloatArrayList;
+import com.carrotsearch.hppc.LongArrayList;
 import com.carrotsearch.hppc.ObjectArrayList;
+import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterators;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefArray;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.apache.lucene.util.InPlaceMergeSorter;
 import org.apache.lucene.util.IntroSorter;
 
+import java.util.AbstractList;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.RandomAccess;
+
 /** Collections-related utility methods. */
-public class CollectionUtils {
+public enum CollectionUtils {
+    CollectionUtils;
+
+    public static void sort(LongArrayList list) {
+        sort(list.buffer, list.size());
+    }
 
     public static void sort(final long[] array, int len) {
         new IntroSorter() {
@@ -68,6 +79,29 @@ public class CollectionUtils {
             }
 
         }.sort(0, len);
+    }
+
+    public static void sortAndDedup(LongArrayList list) {
+        list.elementsCount = sortAndDedup(list.buffer, list.elementsCount);
+    }
+
+    /** Sort and deduplicate values in-place, then return the unique element count. */
+    public static int sortAndDedup(long[] array, int len) {
+        if (len <= 1) {
+            return len;
+        }
+        sort(array, len);
+        int uniqueCount = 1;
+        for (int i = 1; i < len; ++i) {
+            if (array[i] != array[i - 1]) {
+                array[uniqueCount++] = array[i];
+            }
+        }
+        return uniqueCount;
+    }
+
+    public static void sort(FloatArrayList list) {
+        sort(list.buffer, list.size());
     }
 
     public static void sort(final float[] array, int len) {
@@ -100,6 +134,29 @@ public class CollectionUtils {
         }.sort(0, len);
     }
 
+    public static void sortAndDedup(FloatArrayList list) {
+        list.elementsCount = sortAndDedup(list.buffer, list.elementsCount);
+    }
+
+    /** Sort and deduplicate values in-place, then return the unique element count. */
+    public static int sortAndDedup(float[] array, int len) {
+        if (len <= 1) {
+            return len;
+        }
+        sort(array, len);
+        int uniqueCount = 1;
+        for (int i = 1; i < len; ++i) {
+            if (Float.compare(array[i], array[i - 1]) != 0) {
+                array[uniqueCount++] = array[i];
+            }
+        }
+        return uniqueCount;
+    }
+
+    public static void sort(DoubleArrayList list) {
+        sort(list.buffer, list.size());
+    }
+
     public static void sort(final double[] array, int len) {
         new IntroSorter() {
 
@@ -128,6 +185,25 @@ public class CollectionUtils {
             }
 
         }.sort(0, len);
+    }
+
+    public static void sortAndDedup(DoubleArrayList list) {
+        list.elementsCount = sortAndDedup(list.buffer, list.elementsCount);
+    }
+
+    /** Sort and deduplicate values in-place, then return the unique element count. */
+    public static int sortAndDedup(double[] array, int len) {
+        if (len <= 1) {
+            return len;
+        }
+        sort(array, len);
+        int uniqueCount = 1;
+        for (int i = 1; i < len; ++i) {
+            if (Double.compare(array[i], array[i - 1]) != 0) {
+                array[uniqueCount++] = array[i];
+            }
+        }
+        return uniqueCount;
     }
 
     /**
@@ -216,23 +292,14 @@ public class CollectionUtils {
         }.sort(0, array.size());
     }
 
-    public static int[] toArray(Collection<Integer> ints) {
-        Objects.requireNonNull(ints);
-        return ints.stream().mapToInt(s -> s).toArray();
-    }
-
     private static class RotatedList<T> extends AbstractList<T> implements RandomAccess {
 
         private final List<T> in;
         private final int distance;
 
         public RotatedList(List<T> list, int distance) {
-            if (distance < 0 || distance >= list.size()) {
-                throw new IllegalArgumentException();
-            }
-            if (!(list instanceof RandomAccess)) {
-                throw new IllegalArgumentException();
-            }
+            Preconditions.checkArgument(distance >= 0 && distance < list.size());
+            Preconditions.checkArgument(list instanceof RandomAccess);
             this.in = list;
             this.distance = distance;
         }
@@ -262,7 +329,7 @@ public class CollectionUtils {
         assert indices.length >= numValues;
         if (numValues > 1) {
             new InPlaceMergeSorter() {
-                final Comparator<BytesRef> comparator = Comparator.naturalOrder();
+                final Comparator<BytesRef> comparator = BytesRef.getUTF8SortedAsUnicodeComparator();
                 @Override
                 protected int compare(int i, int j) {
                     return comparator.compare(bytes.get(scratch, indices[i]), bytes.get(scratch1, indices[j]));
@@ -305,6 +372,13 @@ public class CollectionUtils {
 
     }
 
+    /**
+     * Combines multiple iterators into a single iterator.
+     */
+    public static <T> Iterator<T> concat(Iterator<? extends T>... iterators) {
+        return Iterators.<T>concat(iterators);
+    }
+
     public static <E> ArrayList<E> iterableAsArrayList(Iterable<? extends E> elements) {
         if (elements == null) {
             throw new NullPointerException("elements");
@@ -318,6 +392,20 @@ public class CollectionUtils {
             }
             return list;
         }
+    }
+
+    public static <E, T> List<T> eagerTransform(List<E> list, Function<E, T> transform) {
+        if (list == null) {
+            throw new NullPointerException("list");
+        }
+        if (transform == null) {
+            throw new NullPointerException("transform");
+        }
+        List<T> result = new ArrayList<>(list.size());
+        for (E element : list) {
+            result.add(transform.apply(element));
+        }
+        return result;
     }
 
     public static <E> ArrayList<E> arrayAsArrayList(E... elements) {

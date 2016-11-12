@@ -26,6 +26,6 @@ import org.elasticsearch.common.lease.Releasable;
 public interface BigArray extends Releasable, Accountable {
 
     /** Return the length of this array. */
-    long size();
+    public long size();
 
 }

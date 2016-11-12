@@ -19,21 +19,21 @@
 
 package org.elasticsearch.action.support.master;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionListenerResponseHandler;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.ActionRunnable;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
+import org.elasticsearch.action.support.ThreadedActionListener;
+import org.elasticsearch.cluster.ClusterChangedEvent;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ClusterStateObserver;
-import org.elasticsearch.cluster.MasterNodeChangePredicate;
 import org.elasticsearch.cluster.NotMasterException;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.discovery.Discovery;
@@ -45,12 +45,24 @@ import org.elasticsearch.transport.ConnectTransportException;
 import org.elasticsearch.transport.TransportException;
 import org.elasticsearch.transport.TransportService;
 
-import java.util.function.Supplier;
-
 /**
  * A base class for operations that needs to be performed on the master node.
  */
-public abstract class TransportMasterNodeAction<Request extends MasterNodeRequest<Request>, Response extends ActionResponse> extends HandledTransportAction<Request, Response> {
+public abstract class TransportMasterNodeAction<Request extends MasterNodeRequest, Response extends ActionResponse> extends HandledTransportAction<Request, Response> {
+    private static final ClusterStateObserver.ChangePredicate masterNodeChangedPredicate = new ClusterStateObserver.ChangePredicate() {
+        @Override
+        public boolean apply(ClusterState previousState, ClusterState.ClusterStateStatus previousStatus,
+                             ClusterState newState, ClusterState.ClusterStateStatus newStatus) {
+            // The condition !newState.nodes().masterNodeId().equals(previousState.nodes().masterNodeId()) is not sufficient as the same master node might get reelected after a disruption.
+            return newState.nodes().masterNodeId() != null && newState != previousState;
+        }
+
+        @Override
+        public boolean apply(ClusterChangedEvent event) {
+            return event.nodesDelta().masterNodeChanged();
+        }
+    };
+
     protected final TransportService transportService;
     protected final ClusterService clusterService;
 
@@ -58,16 +70,8 @@ public abstract class TransportMasterNodeAction<Request extends MasterNodeReques
 
     protected TransportMasterNodeAction(Settings settings, String actionName, TransportService transportService,
                                         ClusterService clusterService, ThreadPool threadPool, ActionFilters actionFilters,
-                                        IndexNameExpressionResolver indexNameExpressionResolver, Supplier<Request> request) {
-        this(settings, actionName, true, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, request);
-    }
-
-    protected TransportMasterNodeAction(Settings settings, String actionName, boolean canTripCircuitBreaker,
-                                        TransportService transportService, ClusterService clusterService, ThreadPool threadPool,
-                                        ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver,
-                                        Supplier<Request> request) {
-        super(settings, actionName, canTripCircuitBreaker, threadPool, transportService, actionFilters, indexNameExpressionResolver,
-            request);
+                                        IndexNameExpressionResolver indexNameExpressionResolver, Class<Request> request) {
+        super(settings, actionName, threadPool, transportService, actionFilters, indexNameExpressionResolver, request);
         this.transportService = transportService;
         this.clusterService = clusterService;
         this.executor = executor();
@@ -124,18 +128,22 @@ public abstract class TransportMasterNodeAction<Request extends MasterNodeReques
             if (task != null) {
                 request.setParentTask(clusterService.localNode().getId(), task.getId());
             }
+            // TODO do we really need to wrap it in a listener? the handlers should be cheap
+            if ((listener instanceof ThreadedActionListener) == false) {
+                listener = new ThreadedActionListener<>(logger, threadPool, ThreadPool.Names.LISTENER, listener);
+            }
             this.listener = listener;
         }
 
         public void start() {
-            this.observer = new ClusterStateObserver(clusterService, request.masterNodeTimeout(), logger, threadPool.getThreadContext());
+            this.observer = new ClusterStateObserver(clusterService, request.masterNodeTimeout(), logger);
             doStart();
         }
 
         protected void doStart() {
             final ClusterState clusterState = observer.observedState();
             final DiscoveryNodes nodes = clusterState.nodes();
-            if (nodes.isLocalNodeElectedMaster() || localExecute(request)) {
+            if (nodes.localNodeMaster() || localExecute(request)) {
                 // check for block, if blocked, retry, else, execute locally
                 final ClusterBlockException blockException = checkBlock(request, clusterState);
                 if (blockException != null) {
@@ -146,18 +154,17 @@ public abstract class TransportMasterNodeAction<Request extends MasterNodeReques
                         retry(blockException, retryableOrNoBlockPredicate);
                     }
                 } else {
-                    ActionListener<Response> delegate = new ActionListener<Response>() {
+                    final ActionListener<Response> delegate = new ActionListener<Response>() {
                         @Override
                         public void onResponse(Response response) {
                             listener.onResponse(response);
                         }
 
                         @Override
-                        public void onFailure(Exception t) {
-                            if (t instanceof Discovery.FailedToCommitClusterStateException
-                                    || (t instanceof NotMasterException)) {
-                                logger.debug((org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("master could not publish cluster state or stepped down before publishing action [{}], scheduling a retry", actionName), t);
-                                retry(t, MasterNodeChangePredicate.INSTANCE);
+                        public void onFailure(Throwable t) {
+                            if (t instanceof NotMasterException) {
+                                logger.debug("master could not publish cluster state or stepped down before publishing action [{}], scheduling a retry", t, actionName);
+                                retry(t, masterNodeChangedPredicate);
                             } else {
                                 listener.onFailure(t);
                             }
@@ -172,20 +179,25 @@ public abstract class TransportMasterNodeAction<Request extends MasterNodeReques
                     });
                 }
             } else {
-                if (nodes.getMasterNode() == null) {
+                if (nodes.masterNode() == null) {
                     logger.debug("no known master node, scheduling a retry");
-                    retry(null, MasterNodeChangePredicate.INSTANCE);
+                    retry(null, masterNodeChangedPredicate);
                 } else {
-                    taskManager.registerChildTask(task, nodes.getMasterNode().getId());
-                    transportService.sendRequest(nodes.getMasterNode(), actionName, request, new ActionListenerResponseHandler<Response>(listener, TransportMasterNodeAction.this::newResponse) {
+                    taskManager.registerChildTask(task, nodes.masterNode().getId());
+                    transportService.sendRequest(nodes.masterNode(), actionName, request, new ActionListenerResponseHandler<Response>(listener) {
+                        @Override
+                        public Response newInstance() {
+                            return newResponse();
+                        }
+
                         @Override
                         public void handleException(final TransportException exp) {
                             Throwable cause = exp.unwrapCause();
                             if (cause instanceof ConnectTransportException) {
                                 // we want to retry here a bit to see if a new master is elected
                                 logger.debug("connection exception while trying to forward request with action name [{}] to master node [{}], scheduling a retry. Error: [{}]",
-                                        actionName, nodes.getMasterNode(), exp.getDetailedMessage());
-                                retry(cause, MasterNodeChangePredicate.INSTANCE);
+                                        actionName, nodes.masterNode(), exp.getDetailedMessage());
+                                retry(cause, masterNodeChangedPredicate);
                             } else {
                                 listener.onFailure(exp);
                             }
@@ -210,7 +222,7 @@ public abstract class TransportMasterNodeAction<Request extends MasterNodeReques
 
                     @Override
                     public void onTimeout(TimeValue timeout) {
-                        logger.debug((org.apache.logging.log4j.util.Supplier<?>) () -> new ParameterizedMessage("timed out while retrying [{}] after failure (timeout [{}])", actionName, timeout), failure);
+                        logger.debug("timed out while retrying [{}] after failure (timeout [{}])", failure, actionName, timeout);
                         listener.onFailure(new MasterNotDiscoveredException(failure));
                     }
                 }, changePredicate

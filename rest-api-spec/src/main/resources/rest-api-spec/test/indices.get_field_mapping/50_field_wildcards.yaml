@@ -8,17 +8,17 @@ setup:
                 test_type:
                   properties:
                     t1:
-                      type:     text
+                      type:     string
                     t2:
-                      type:     text
+                      type:     string
                     obj:
                       properties:
                         t1:
-                          type:   text
+                          type:   string
                         i_t1:
-                          type:   text
+                          type:   string
                         i_t3:
-                          type:   text
+                          type:   string
 
   - do:
         indices.create:
@@ -28,17 +28,21 @@ setup:
                 test_type_2:
                   properties:
                     t1:
-                      type:     text
+                      type:     string
                     t2:
-                      type:     text
+                      type:     string
                     obj:
                       properties:
                         t1:
-                          type:   text
+                          type:   string
                         i_t1:
-                          type:   text
+                          type:   string
                         i_t3:
-                          type:   text
+                          type:   string
+
+  - do:
+      cluster.health:
+          wait_for_status: yellow
 
 ---
 "Get field mapping with * for fields":

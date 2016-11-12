@@ -18,13 +18,10 @@
  */
 package org.elasticsearch.action.termvectors;
 
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
+import com.google.common.util.concurrent.AtomicLongMap;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.TermStatistics;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.Nullable;
@@ -57,7 +54,7 @@ public class TermVectorsFilter {
     private final Set<String> selectedFields;
     private AggregatedDfs dfs;
     private Map<Term, ScoreTerm> scoreTerms;
-    private Map<String, Integer> sizes = new HashMap<>();
+    private AtomicLongMap<String> sizes;
     private TFIDFSimilarity similarity;
 
     public TermVectorsFilter(Fields termVectorsByField, Fields topLevelFields, Set<String> selectedFields, @Nullable AggregatedDfs dfs) {
@@ -67,7 +64,8 @@ public class TermVectorsFilter {
 
         this.dfs = dfs;
         this.scoreTerms = new HashMap<>();
-        this.similarity = new ClassicSimilarity();
+        this.sizes = AtomicLongMap.create();
+        this.similarity = new DefaultSimilarity();
     }
 
     public void setSettings(TermVectorsRequest.FilterSettings settings) {
@@ -208,21 +206,21 @@ public class TermVectorsFilter {
                 BytesRef termBytesRef = termsEnum.term();
                 boolean foundTerm = topLevelTermsEnum.seekExact(termBytesRef);
                 assert foundTerm : "Term: " + termBytesRef.utf8ToString() + " not found!";
-
+                
                 Term term = new Term(fieldName, termBytesRef);
-
+                
                 // remove noise words
                 int freq = getTermFreq(termsEnum, docsEnum);
                 if (isNoise(term.bytes().utf8ToString(), freq)) {
                     continue;
                 }
-
+                
                 // now call on docFreq
                 long docFreq = getTermStatistics(topLevelTermsEnum, term).docFreq();
                 if (!isAccepted(docFreq)) {
                     continue;
                 }
-
+                
                 // filter based on score
                 float score = computeScore(docFreq, freq, numDocs);
                 queue.addOrUpdate(new ScoreTerm(term.field(), term.bytes().utf8ToString(), score));
@@ -230,12 +228,10 @@ public class TermVectorsFilter {
 
             // retain the best terms for quick lookups
             ScoreTerm scoreTerm;
-            int count = 0;
             while ((scoreTerm = queue.pop()) != null) {
                 scoreTerms.put(new Term(scoreTerm.field, scoreTerm.word), scoreTerm);
-                count++;
+                sizes.incrementAndGet(scoreTerm.field);
             }
-            sizes.put(fieldName, count);
         }
     }
 

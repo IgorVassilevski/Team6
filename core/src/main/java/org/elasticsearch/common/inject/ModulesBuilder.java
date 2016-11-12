@@ -23,6 +23,9 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ *
+ */
 public class ModulesBuilder implements Iterable<Module> {
 
     private final List<Module> modules = new ArrayList<>();
@@ -41,10 +44,19 @@ public class ModulesBuilder implements Iterable<Module> {
 
     public Injector createInjector() {
         Injector injector = Guice.createInjector(modules);
-        ((InjectorImpl) injector).clearCache();
+        Injectors.cleanCaches(injector);
         // in ES, we always create all instances as if they are eager singletons
         // this allows for considerable memory savings (no need to store construction info) as well as cycles
         ((InjectorImpl) injector).readOnlyAllSingletons();
         return injector;
+    }
+
+    public Injector createChildInjector(Injector injector) {
+        Injector childInjector = injector.createChildInjector(modules);
+        Injectors.cleanCaches(childInjector);
+        // in ES, we always create all instances as if they are eager singletons
+        // this allows for considerable memory savings (no need to store construction info) as well as cycles
+        ((InjectorImpl) childInjector).readOnlyAllSingletons();
+        return childInjector;
     }
 }

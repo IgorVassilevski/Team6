@@ -24,9 +24,9 @@ import org.elasticsearch.common.lease.Releasables;
 import org.elasticsearch.common.util.LongHash;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
+import org.elasticsearch.search.aggregations.LeafBucketCollectorBase;
 import org.elasticsearch.search.aggregations.InternalAggregations;
 import org.elasticsearch.search.aggregations.LeafBucketCollector;
-import org.elasticsearch.search.aggregations.LeafBucketCollectorBase;
 import org.elasticsearch.search.aggregations.bucket.BucketsAggregator;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
@@ -46,10 +46,10 @@ public class GeoHashGridAggregator extends BucketsAggregator {
 
     private final int requiredSize;
     private final int shardSize;
-    private final GeoGridAggregationBuilder.CellIdSource valuesSource;
+    private final GeoHashGridParser.GeoGridFactory.CellIdSource valuesSource;
     private final LongHash bucketOrds;
 
-    public GeoHashGridAggregator(String name, AggregatorFactories factories, GeoGridAggregationBuilder.CellIdSource valuesSource,
+    public GeoHashGridAggregator(String name, AggregatorFactories factories, GeoHashGridParser.GeoGridFactory.CellIdSource valuesSource,
             int requiredSize, int shardSize, AggregationContext aggregationContext, Aggregator parent, List<PipelineAggregator> pipelineAggregators,
             Map<String, Object> metaData) throws IOException {
         super(name, factories, aggregationContext, parent, pipelineAggregators, metaData);

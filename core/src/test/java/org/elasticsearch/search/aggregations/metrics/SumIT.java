@@ -21,14 +21,13 @@ package org.elasticsearch.search.aggregations.metrics;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Scorer;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.plugins.ScriptPlugin;
 import org.elasticsearch.script.CompiledScript;
 import org.elasticsearch.script.ExecutableScript;
 import org.elasticsearch.script.LeafSearchScript;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.script.ScriptEngineService;
+import org.elasticsearch.script.ScriptModule;
 import org.elasticsearch.script.ScriptService.ScriptType;
 import org.elasticsearch.script.SearchScript;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
@@ -68,16 +67,16 @@ public class SumIT extends AbstractNumericTestCase {
     protected Collection<Class<? extends Plugin>> nodePlugins() {
         return Arrays.asList(ExtractFieldScriptPlugin.class, FieldValueScriptPlugin.class);
     }
-
+    
     @Override
     public void testEmptyAggregation() throws Exception {
 
         SearchResponse searchResponse = client().prepareSearch("empty_bucket_idx")
                 .setQuery(matchAllQuery())
-                .addAggregation(histogram("histo").field("value").interval(1L).minDocCount(0).subAggregation(sum("sum").field("value")))
+                .addAggregation(histogram("histo").field("value").interval(1l).minDocCount(0).subAggregation(sum("sum")))
                 .execute().actionGet();
 
-        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2L));
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2l));
         Histogram histo = searchResponse.getAggregations().get("histo");
         assertThat(histo, notNullValue());
         Histogram.Bucket bucket = histo.getBuckets().get(1);
@@ -96,7 +95,7 @@ public class SumIT extends AbstractNumericTestCase {
                 .addAggregation(sum("sum").field("value"))
                 .execute().actionGet();
 
-        assertThat(searchResponse.getHits().getTotalHits(), equalTo(0L));
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(0l));
 
         Sum sum = searchResponse.getAggregations().get("sum");
         assertThat(sum, notNullValue());
@@ -119,7 +118,7 @@ public class SumIT extends AbstractNumericTestCase {
         assertThat(sum.getValue(), equalTo((double) 1+2+3+4+5+6+7+8+9+10));
     }
 
-    public void testSingleValuedFieldWithFormatter() throws Exception {
+    public void testSingleValuedField_WithFormatter() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx").setQuery(matchAllQuery())
                 .addAggregation(sum("sum").format("0000.0").field("value")).execute().actionGet();
 
@@ -133,7 +132,7 @@ public class SumIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testSingleValuedFieldGetProperty() throws Exception {
+    public void testSingleValuedField_getProperty() throws Exception {
 
         SearchResponse searchResponse = client().prepareSearch("idx").setQuery(matchAllQuery())
                 .addAggregation(global("global").subAggregation(sum("sum").field("value"))).execute().actionGet();
@@ -143,7 +142,7 @@ public class SumIT extends AbstractNumericTestCase {
         Global global = searchResponse.getAggregations().get("global");
         assertThat(global, notNullValue());
         assertThat(global.getName(), equalTo("global"));
-        assertThat(global.getDocCount(), equalTo(10L));
+        assertThat(global.getDocCount(), equalTo(10l));
         assertThat(global.getAggregations(), notNullValue());
         assertThat(global.getAggregations().asMap().size(), equalTo(1));
 
@@ -158,7 +157,7 @@ public class SumIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testSingleValuedFieldPartiallyUnmapped() throws Exception {
+    public void testSingleValuedField_PartiallyUnmapped() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx", "idx_unmapped")
                 .setQuery(matchAllQuery())
                 .addAggregation(sum("sum").field("value"))
@@ -173,7 +172,7 @@ public class SumIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testSingleValuedFieldWithValueScript() throws Exception {
+    public void testSingleValuedField_WithValueScript() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(sum("sum").field("value").script(new Script("", ScriptType.INLINE, FieldValueScriptEngine.NAME, null)))
@@ -188,7 +187,7 @@ public class SumIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testSingleValuedFieldWithValueScriptWithParams() throws Exception {
+    public void testSingleValuedField_WithValueScript_WithParams() throws Exception {
         Map<String, Object> params = new HashMap<>();
         params.put("increment", 1);
         SearchResponse searchResponse = client().prepareSearch("idx")
@@ -205,7 +204,7 @@ public class SumIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testScriptSingleValued() throws Exception {
+    public void testScript_SingleValued() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(sum("sum").script(new Script("value", ScriptType.INLINE, ExtractFieldScriptEngine.NAME, null)))
@@ -220,7 +219,7 @@ public class SumIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testScriptSingleValuedWithParams() throws Exception {
+    public void testScript_SingleValued_WithParams() throws Exception {
         Map<String, Object> params = new HashMap<>();
         params.put("inc", 1);
         SearchResponse searchResponse = client().prepareSearch("idx")
@@ -286,7 +285,7 @@ public class SumIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testMultiValuedFieldWithValueScript() throws Exception {
+    public void testMultiValuedField_WithValueScript() throws Exception {
 
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
@@ -302,7 +301,7 @@ public class SumIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testMultiValuedFieldWithValueScriptWithParams() throws Exception {
+    public void testMultiValuedField_WithValueScript_WithParams() throws Exception {
         Map<String, Object> params = new HashMap<>();
         params.put("increment", 1);
         SearchResponse searchResponse = client().prepareSearch("idx").setQuery(matchAllQuery())
@@ -321,7 +320,7 @@ public class SumIT extends AbstractNumericTestCase {
     public void testOrderByEmptyAggregation() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx").setQuery(matchAllQuery())
                 .addAggregation(terms("terms").field("value").order(Order.compound(Order.aggregation("filter>sum", true)))
-                        .subAggregation(filter("filter", termQuery("value", 100)).subAggregation(sum("sum").field("value"))))
+                        .subAggregation(filter("filter").filter(termQuery("value", 100)).subAggregation(sum("sum").field("value"))))
                 .get();
 
         assertHitCount(searchResponse, 10);
@@ -335,7 +334,7 @@ public class SumIT extends AbstractNumericTestCase {
         for (int i = 0; i < 10; i++) {
             Terms.Bucket bucket = buckets.get(i);
             assertThat(bucket, notNullValue());
-            assertThat(bucket.getKeyAsNumber(), equalTo((long) i + 1));
+            assertThat(bucket.getKeyAsNumber(), equalTo((Number) Long.valueOf(i + 1)));
             assertThat(bucket.getDocCount(), equalTo(1L));
             Filter filter = bucket.getAggregations().get("filter");
             assertThat(filter, notNullValue());
@@ -350,11 +349,22 @@ public class SumIT extends AbstractNumericTestCase {
     /**
      * Mock plugin for the {@link ExtractFieldScriptEngine}
      */
-    public static class ExtractFieldScriptPlugin extends Plugin implements ScriptPlugin {
+    public static class ExtractFieldScriptPlugin extends Plugin {
+
         @Override
-        public ScriptEngineService getScriptEngineService(Settings settings) {
-            return new ExtractFieldScriptEngine();
+        public String name() {
+            return ExtractFieldScriptEngine.NAME;
         }
+
+        @Override
+        public String description() {
+            return "Mock script engine for " + SumIT.class;
+        }
+
+        public void onModule(ScriptModule module) {
+            module.addScriptEngine(ExtractFieldScriptEngine.class);
+        }
+
     }
 
     /**
@@ -370,18 +380,23 @@ public class SumIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public String getType() {
-            return NAME;
+        public String[] types() {
+            return new String[] { NAME };
         }
 
         @Override
-        public String getExtension() {
-            return NAME;
+        public String[] extensions() {
+            return types();
         }
 
         @Override
-        public Object compile(String scriptName, String scriptSource, Map<String, String> params) {
-            return scriptSource;
+        public boolean sandboxed() {
+            return true;
+        }
+
+        @Override
+        public Object compile(String script, Map<String, String> params) {
+            return script;
         }
 
         @Override
@@ -390,7 +405,7 @@ public class SumIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public SearchScript search(CompiledScript compiledScript, SearchLookup lookup, Map<String, Object> vars) {
+        public SearchScript search(final CompiledScript compiledScript, final SearchLookup lookup, Map<String, Object> vars) {
             final long inc;
             if (vars == null || vars.containsKey("inc") == false) {
                 inc = 0;
@@ -405,6 +420,12 @@ public class SumIT extends AbstractNumericTestCase {
                     final LeafSearchLookup leafLookup = lookup.getLeafSearchLookup(context);
 
                     return new LeafSearchScript() {
+
+                        @Override
+                        public Object unwrap(Object value) {
+                            return null;
+                        }
+
                         @Override
                         public void setNextVar(String name, Object value) {
                         }
@@ -440,6 +461,11 @@ public class SumIT extends AbstractNumericTestCase {
                         }
 
                         @Override
+                        public float runAsFloat() {
+                            throw new UnsupportedOperationException();
+                        }
+
+                        @Override
                         public double runAsDouble() {
                             throw new UnsupportedOperationException();
                         }
@@ -454,19 +480,29 @@ public class SumIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public boolean isInlineScriptEnabled() {
-            return true;
+        public void scriptRemoved(CompiledScript script) {
         }
     }
 
     /**
      * Mock plugin for the {@link FieldValueScriptEngine}
      */
-    public static class FieldValueScriptPlugin extends Plugin implements ScriptPlugin {
+    public static class FieldValueScriptPlugin extends Plugin {
+
         @Override
-        public ScriptEngineService getScriptEngineService(Settings settings) {
-            return new FieldValueScriptEngine();
+        public String name() {
+            return FieldValueScriptEngine.NAME;
         }
+
+        @Override
+        public String description() {
+            return "Mock script engine for " + SumIT.class;
+        }
+
+        public void onModule(ScriptModule module) {
+            module.addScriptEngine(FieldValueScriptEngine.class);
+        }
+
     }
 
     /**
@@ -482,18 +518,23 @@ public class SumIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public String getType() {
-            return NAME;
+        public String[] types() {
+            return new String[] { NAME };
         }
 
         @Override
-        public String getExtension() {
-            return NAME;
+        public String[] extensions() {
+            return types();
         }
 
         @Override
-        public Object compile(String scriptName, String scriptSource, Map<String, String> params) {
-            return scriptSource;
+        public boolean sandboxed() {
+            return true;
+        }
+
+        @Override
+        public Object compile(String script, Map<String, String> params) {
+            return script;
         }
 
         @Override
@@ -502,7 +543,7 @@ public class SumIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public SearchScript search(CompiledScript compiledScript, SearchLookup lookup, Map<String, Object> vars) {
+        public SearchScript search(CompiledScript compiledScript, final SearchLookup lookup, Map<String, Object> vars) {
             final long inc;
             if (vars == null || vars.containsKey("inc") == false) {
                 inc = 0;
@@ -511,7 +552,7 @@ public class SumIT extends AbstractNumericTestCase {
             }
             return new SearchScript() {
 
-                private Map<String, Object> vars = new HashMap<>(2);
+                private final Map<String, Object> vars = new HashMap<>(2);
 
                 @Override
                 public LeafSearchScript getLeafSearchScript(LeafReaderContext context) throws IOException {
@@ -556,6 +597,11 @@ public class SumIT extends AbstractNumericTestCase {
                         }
 
                         @Override
+                        public float runAsFloat() {
+                            throw new UnsupportedOperationException();
+                        }
+
+                        @Override
                         public double runAsDouble() {
                             return ((Number) vars.get("_value")).doubleValue() + inc;
                         }
@@ -570,8 +616,7 @@ public class SumIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public boolean isInlineScriptEnabled() {
-            return true;
+        public void scriptRemoved(CompiledScript script) {
         }
     }
 }

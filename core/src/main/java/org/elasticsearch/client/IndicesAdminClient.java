@@ -53,21 +53,13 @@ import org.elasticsearch.action.admin.indices.exists.types.TypesExistsResponse;
 import org.elasticsearch.action.admin.indices.flush.FlushRequest;
 import org.elasticsearch.action.admin.indices.flush.FlushRequestBuilder;
 import org.elasticsearch.action.admin.indices.flush.FlushResponse;
-import org.elasticsearch.action.admin.indices.flush.SyncedFlushRequest;
-import org.elasticsearch.action.admin.indices.flush.SyncedFlushRequestBuilder;
-import org.elasticsearch.action.admin.indices.flush.SyncedFlushResponse;
 import org.elasticsearch.action.admin.indices.forcemerge.ForceMergeRequest;
 import org.elasticsearch.action.admin.indices.forcemerge.ForceMergeRequestBuilder;
 import org.elasticsearch.action.admin.indices.forcemerge.ForceMergeResponse;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
-import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsRequest;
-import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsRequestBuilder;
-import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsResponse;
-import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsRequest;
-import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsRequestBuilder;
-import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
+import org.elasticsearch.action.admin.indices.mapping.get.*;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequestBuilder;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingResponse;
@@ -80,9 +72,6 @@ import org.elasticsearch.action.admin.indices.recovery.RecoveryResponse;
 import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
 import org.elasticsearch.action.admin.indices.refresh.RefreshRequestBuilder;
 import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
-import org.elasticsearch.action.admin.indices.rollover.RolloverRequest;
-import org.elasticsearch.action.admin.indices.rollover.RolloverRequestBuilder;
-import org.elasticsearch.action.admin.indices.rollover.RolloverResponse;
 import org.elasticsearch.action.admin.indices.segments.IndicesSegmentResponse;
 import org.elasticsearch.action.admin.indices.segments.IndicesSegmentsRequest;
 import org.elasticsearch.action.admin.indices.segments.IndicesSegmentsRequestBuilder;
@@ -95,12 +84,12 @@ import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsRespons
 import org.elasticsearch.action.admin.indices.shards.IndicesShardStoreRequestBuilder;
 import org.elasticsearch.action.admin.indices.shards.IndicesShardStoresRequest;
 import org.elasticsearch.action.admin.indices.shards.IndicesShardStoresResponse;
-import org.elasticsearch.action.admin.indices.shrink.ShrinkRequest;
-import org.elasticsearch.action.admin.indices.shrink.ShrinkRequestBuilder;
-import org.elasticsearch.action.admin.indices.shrink.ShrinkResponse;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequestBuilder;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
+import org.elasticsearch.action.admin.indices.flush.SyncedFlushRequest;
+import org.elasticsearch.action.admin.indices.flush.SyncedFlushRequestBuilder;
+import org.elasticsearch.action.admin.indices.flush.SyncedFlushResponse;
 import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateRequest;
 import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateRequestBuilder;
 import org.elasticsearch.action.admin.indices.template.delete.DeleteIndexTemplateResponse;
@@ -119,6 +108,15 @@ import org.elasticsearch.action.admin.indices.upgrade.post.UpgradeResponse;
 import org.elasticsearch.action.admin.indices.validate.query.ValidateQueryRequest;
 import org.elasticsearch.action.admin.indices.validate.query.ValidateQueryRequestBuilder;
 import org.elasticsearch.action.admin.indices.validate.query.ValidateQueryResponse;
+import org.elasticsearch.action.admin.indices.warmer.delete.DeleteWarmerRequest;
+import org.elasticsearch.action.admin.indices.warmer.delete.DeleteWarmerRequestBuilder;
+import org.elasticsearch.action.admin.indices.warmer.delete.DeleteWarmerResponse;
+import org.elasticsearch.action.admin.indices.warmer.get.GetWarmersRequest;
+import org.elasticsearch.action.admin.indices.warmer.get.GetWarmersRequestBuilder;
+import org.elasticsearch.action.admin.indices.warmer.get.GetWarmersResponse;
+import org.elasticsearch.action.admin.indices.warmer.put.PutWarmerRequest;
+import org.elasticsearch.action.admin.indices.warmer.put.PutWarmerRequestBuilder;
+import org.elasticsearch.action.admin.indices.warmer.put.PutWarmerResponse;
 import org.elasticsearch.common.Nullable;
 
 /**
@@ -752,6 +750,7 @@ public interface IndicesAdminClient extends ElasticsearchClient {
      *
      * @param request The count request
      * @return The result future
+     * @see Requests#countRequest(String...)
      */
     ActionFuture<ValidateQueryResponse> validateQuery(ValidateQueryRequest request);
 
@@ -760,6 +759,7 @@ public interface IndicesAdminClient extends ElasticsearchClient {
      *
      * @param request  The count request
      * @param listener A listener to be notified of the result
+     * @see Requests#countRequest(String...)
      */
     void validateQuery(ValidateQueryRequest request, ActionListener<ValidateQueryResponse> listener);
 
@@ -767,6 +767,51 @@ public interface IndicesAdminClient extends ElasticsearchClient {
      * Validate a query for correctness.
      */
     ValidateQueryRequestBuilder prepareValidateQuery(String... indices);
+
+    /**
+     * Puts an index search warmer to be applies when applicable.
+     */
+    ActionFuture<PutWarmerResponse> putWarmer(PutWarmerRequest request);
+
+    /**
+     * Puts an index search warmer to be applies when applicable.
+     */
+    void putWarmer(PutWarmerRequest request, ActionListener<PutWarmerResponse> listener);
+
+    /**
+     * Puts an index search warmer to be applies when applicable.
+     */
+    PutWarmerRequestBuilder preparePutWarmer(String name);
+
+    /**
+     * Deletes an index warmer.
+     */
+    ActionFuture<DeleteWarmerResponse> deleteWarmer(DeleteWarmerRequest request);
+
+    /**
+     * Deletes an index warmer.
+     */
+    void deleteWarmer(DeleteWarmerRequest request, ActionListener<DeleteWarmerResponse> listener);
+
+    /**
+     * Deletes an index warmer.
+     */
+    DeleteWarmerRequestBuilder prepareDeleteWarmer();
+
+    /**
+     * Returns a map of index warmers for the given get request.
+     */
+    void getWarmers(GetWarmersRequest request, ActionListener<GetWarmersResponse> listener);
+
+    /**
+     * Returns a map of index warmers for the given get request.
+     */
+    ActionFuture<GetWarmersResponse> getWarmers(GetWarmersRequest request);
+
+    /**
+     * Returns a new builder to fetch index warmer metadata for the given indices.
+     */
+    GetWarmersRequestBuilder prepareGetWarmers(String... indices);
 
     /**
      * Executed a per index settings get request and returns the settings for the indices specified.
@@ -787,35 +832,5 @@ public interface IndicesAdminClient extends ElasticsearchClient {
      * @see #getSettings(org.elasticsearch.action.admin.indices.settings.get.GetSettingsRequest)
      */
     GetSettingsRequestBuilder prepareGetSettings(String... indices);
-
-    /**
-     * Shrinks an index using an explicit request allowing to specify the settings, mappings and aliases of the target index of the index.
-     */
-    ShrinkRequestBuilder prepareShrinkIndex(String sourceIndex, String targetIndex);
-
-    /**
-     * Shrinks an index using an explicit request allowing to specify the settings, mappings and aliases of the target index of the index.
-     */
-    ActionFuture<ShrinkResponse> shrinkIndex(ShrinkRequest request);
-
-    /**
-     * Shrinks an index using an explicit request allowing to specify the settings, mappings and aliases of the target index of the index.
-     */
-    void shrinkIndex(ShrinkRequest request, ActionListener<ShrinkResponse> listener);
-
-    /**
-     * Swaps the index pointed to by an alias given all provided conditions are satisfied
-     */
-    RolloverRequestBuilder prepareRolloverIndex(String sourceAlias);
-
-    /**
-     * Swaps the index pointed to by an alias given all provided conditions are satisfied
-     */
-    ActionFuture<RolloverResponse> rolloversIndex(RolloverRequest request);
-
-    /**
-     * Swaps the index pointed to by an alias given all provided conditions are satisfied
-     */
-    void rolloverIndex(RolloverRequest request, ActionListener<RolloverResponse> listener);
 
 }

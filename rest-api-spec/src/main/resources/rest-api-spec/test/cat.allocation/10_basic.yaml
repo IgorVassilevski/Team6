@@ -34,7 +34,7 @@
                 (\d+                   \s+)?  #no value from client nodes
                 [-\w.]+                \s+
                 \d+(\.\d+){3}          \s+
-                [-\w]+
+                \w.*
                 \n
               )+
             $/
@@ -45,6 +45,10 @@
   - do:
         indices.create:
             index: test
+
+  - do:
+        cluster.health:
+            wait_for_status: yellow
 
   - do:
         cat.allocation: {}
@@ -61,13 +65,13 @@
                 (\d+                  \s+)  #always should return value since we filter out non data nodes by default
                 [-\w.]+                \s+
                 \d+(\.\d+){3}          \s+
-                [-\w]+
+                \w.*
                 \n
               )+
               (
                 \s*                          #allow leading spaces to account for right-justified text
                 \d+                    \s+
-                UNASSIGNED
+                UNASSIGNED             \s+
                 \n
               )?
             $/
@@ -90,7 +94,7 @@
                 (\d+                  \s+)?  #no value from client nodes
                 [-\w.]+                \s+
                 \d+(\.\d+){3}          \s+
-                [-\w]+
+                \w.*
                 \n
               )
             $/
@@ -124,13 +128,13 @@
                  (\d+                  \s+)?  #no value from client nodes
                  [-\w.]+                \s+
                  \d+(\.\d+){3}          \s+
-                 [-\w]+
+                 \w.*
                  \n
                )+
                (
                  \s*                          #allow leading spaces to account for right-justified text
                  \d+                    \s+
-                 UNASSIGNED
+                 UNASSIGNED             \s+
                  \n
                )?
              $/
@@ -152,7 +156,7 @@
                disk.percent            \s+
                host                    \s+
                ip                      \s+
-               node
+               node                    \s+
                \n
 
               ( \s*                          #allow leading spaces to account for right-justified text
@@ -164,7 +168,7 @@
                 (\d+                  \s+)  #always should return value since we filter out non data nodes by default
                 [-\w.]+                \s+
                 \d+(\.\d+){3}          \s+
-                [-\w]+
+                \w.*
                 \n
               )+
             $/
@@ -181,7 +185,7 @@
       $body: |
             /^
               ( \d*                 \s+
-                [-\w]+
+                \w.*
                 \n
               )+
             $/
@@ -195,11 +199,11 @@
       $body: |
             /^
               disk.percent          \s+
-              node
+              node                  \s+
               \n
               (
                 \s+\d*           \s+
-                [-\w]+
+                \w.*
                 \n
               )+
             $/
@@ -211,7 +215,7 @@
 
   - do:
       cat.allocation:
-        bytes: gb
+        bytes: g
 
   - match:
       $body: |
@@ -224,7 +228,7 @@
                 (\d+                 \s+)  #always should return value since we filter out non data nodes by default
                 [-\w.]+             \s+
                 \d+(\.\d+){3}       \s+
-                [-\w]+
+                \w.*
                 \n
               )+
             $/

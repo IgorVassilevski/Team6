@@ -21,7 +21,8 @@ import org.elasticsearch.common.inject.internal.Errors;
 import org.elasticsearch.common.inject.spi.ScopeBinding;
 
 import java.lang.annotation.Annotation;
-import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Handles {@link Binder#bindScope} commands.
@@ -51,11 +52,11 @@ class ScopeBindingProcessor extends AbstractProcessor {
             // Go ahead and bind anyway so we don't get collateral errors.
         }
 
-        Scope existing = injector.state.getScope(Objects.requireNonNull(annotationType, "annotation type"));
+        Scope existing = injector.state.getScope(checkNotNull(annotationType, "annotation type"));
         if (existing != null) {
             errors.duplicateScopes(existing, annotationType, scope);
         } else {
-            injector.state.putAnnotation(annotationType, Objects.requireNonNull(scope, "scope"));
+            injector.state.putAnnotation(annotationType, checkNotNull(scope, "scope"));
         }
 
         return true;

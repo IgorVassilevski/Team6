@@ -16,12 +16,9 @@
 
 package org.elasticsearch.common.inject.multibindings;
 
-import org.elasticsearch.common.inject.Binder;
-import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.inject.Key;
-import org.elasticsearch.common.inject.Module;
-import org.elasticsearch.common.inject.Provider;
-import org.elasticsearch.common.inject.TypeLiteral;
+import com.google.common.collect.ImmutableSet;
+
+import org.elasticsearch.common.inject.*;
 import org.elasticsearch.common.inject.binder.LinkedBindingBuilder;
 import org.elasticsearch.common.inject.multibindings.Multibinder.RealMultibinder;
 import org.elasticsearch.common.inject.spi.Dependency;
@@ -35,7 +32,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import static java.util.Collections.singleton;
 import static org.elasticsearch.common.inject.util.Types.newParameterizedType;
 import static org.elasticsearch.common.inject.util.Types.newParameterizedTypeWithOwner;
 
@@ -265,15 +261,15 @@ public abstract class MapBinder<K, V> {
                     binder.getProvider(valueKey)));
             return binder.bind(valueKey);
         }
-
+        
         public static class MapBinderProviderWithDependencies<K,V> implements ProviderWithDependencies<Map<K, Provider<V>>> {
             private Map<K, Provider<V>> providerMap;
-
+            
             @SuppressWarnings("rawtypes") // code is silly stupid with generics
             private final RealMapBinder binder;
             private final Set<Dependency<?>> dependencies;
             private final Provider<Set<Entry<K, Provider<V>>>> provider;
-
+            
             @SuppressWarnings("rawtypes") // code is silly stupid with generics
             MapBinderProviderWithDependencies(RealMapBinder binder, Set<Dependency<?>> dependencies, Provider<Set<Entry<K, Provider<V>>>> provider) {
                 this.binder = binder;
@@ -310,7 +306,8 @@ public abstract class MapBinder<K, V> {
         public void configure(Binder binder) {
             Multibinder.checkConfiguration(!isInitialized(), "MapBinder was already initialized");
 
-            final Set<Dependency<?>> dependencies = singleton(Dependency.get(entrySetBinder.getSetKey()));
+            final ImmutableSet<Dependency<?>> dependencies
+                    = ImmutableSet.<Dependency<?>>of(Dependency.get(entrySetBinder.getSetKey()));
 
             // binds a Map<K, Provider<V>> from a collection of Map<Entry<K, Provider<V>>
             final Provider<Set<Entry<K, Provider<V>>>> entrySetProvider = binder

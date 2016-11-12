@@ -19,19 +19,21 @@
 
 package org.elasticsearch.index.analysis;
 
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-
-import org.apache.lucene.analysis.TokenStream;
-import org.elasticsearch.common.io.Streams;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
-
 import com.ibm.icu.text.Collator;
 import com.ibm.icu.text.RuleBasedCollator;
 import com.ibm.icu.util.ULocale;
+import org.apache.lucene.analysis.TokenStream;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
+import org.elasticsearch.common.io.Streams;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.env.Environment;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
+
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
 
 /**
  * An ICU based collation token filter. There are two ways to configure collation:
@@ -46,8 +48,9 @@ public class IcuCollationTokenFilterFactory extends AbstractTokenFilterFactory {
 
     private final Collator collator;
 
-    public IcuCollationTokenFilterFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public IcuCollationTokenFilterFactory(Index index, IndexSettingsService indexSettingsService, Environment environment, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
 
         Collator collator;
         String rules = settings.get("rules");

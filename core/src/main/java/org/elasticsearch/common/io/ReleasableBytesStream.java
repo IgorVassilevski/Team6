@@ -28,5 +28,4 @@ public interface ReleasableBytesStream extends BytesStream {
 
     @Override
     ReleasablePagedBytesReference bytes();
-
 }

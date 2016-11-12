@@ -19,19 +19,14 @@
 
 package org.elasticsearch.common.collect;
 
-import com.carrotsearch.hppc.IntCollection;
-import com.carrotsearch.hppc.IntContainer;
-import com.carrotsearch.hppc.IntLookupContainer;
-import com.carrotsearch.hppc.IntObjectAssociativeContainer;
-import com.carrotsearch.hppc.IntObjectHashMap;
-import com.carrotsearch.hppc.IntObjectMap;
-import com.carrotsearch.hppc.ObjectContainer;
+import com.carrotsearch.hppc.*;
 import com.carrotsearch.hppc.cursors.IntCursor;
 import com.carrotsearch.hppc.cursors.IntObjectCursor;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.carrotsearch.hppc.predicates.IntObjectPredicate;
 import com.carrotsearch.hppc.predicates.IntPredicate;
 import com.carrotsearch.hppc.procedures.IntObjectProcedure;
+import com.google.common.collect.UnmodifiableIterator;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -118,9 +113,9 @@ public final class ImmutableOpenIntMap<VType> implements Iterable<IntObjectCurso
     /**
      * Returns a direct iterator over the keys.
      */
-    public Iterator<Integer> keysIt() {
+    public UnmodifiableIterator<Integer> keysIt() {
         final Iterator<IntCursor> iterator = map.keys().iterator();
-        return new Iterator<Integer>() {
+        return new UnmodifiableIterator<Integer>() {
             @Override
             public boolean hasNext() {
                 return iterator.hasNext();
@@ -129,11 +124,6 @@ public final class ImmutableOpenIntMap<VType> implements Iterable<IntObjectCurso
             @Override
             public Integer next() {
                 return iterator.next().value;
-            }
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException();
             }
         };
     }
@@ -148,9 +138,9 @@ public final class ImmutableOpenIntMap<VType> implements Iterable<IntObjectCurso
     /**
      * Returns a direct iterator over the keys.
      */
-    public Iterator<VType> valuesIt() {
+    public UnmodifiableIterator<VType> valuesIt() {
         final Iterator<ObjectCursor<VType>> iterator = map.values().iterator();
-        return new Iterator<VType>() {
+        return new UnmodifiableIterator<VType>() {
             @Override
             public boolean hasNext() {
                 return iterator.hasNext();
@@ -159,11 +149,6 @@ public final class ImmutableOpenIntMap<VType> implements Iterable<IntObjectCurso
             @Override
             public VType next() {
                 return iterator.next().value;
-            }
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException();
             }
         };
     }

@@ -19,6 +19,9 @@
 
 package org.elasticsearch.action.admin.indices.stats;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.broadcast.BroadcastResponse;
 import org.elasticsearch.cluster.routing.ShardRouting;
@@ -26,17 +29,15 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.index.engine.CommitStats;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static java.util.Collections.unmodifiableMap;
 
 /**
  */
@@ -44,7 +45,7 @@ public class IndicesStatsResponse extends BroadcastResponse implements ToXConten
 
     private ShardStats[] shards;
 
-    private Map<ShardRouting, ShardStats> shardStatsMap;
+    private ImmutableMap<ShardRouting, ShardStats> shardStatsMap;
 
     IndicesStatsResponse() {
 
@@ -55,15 +56,16 @@ public class IndicesStatsResponse extends BroadcastResponse implements ToXConten
         this.shards = shards;
     }
 
-    public Map<ShardRouting, ShardStats> asMap() {
-        if (this.shardStatsMap == null) {
-            Map<ShardRouting, ShardStats> shardStatsMap = new HashMap<>();
+    public ImmutableMap<ShardRouting, ShardStats> asMap() {
+        if (shardStatsMap == null) {
+            ImmutableMap.Builder<ShardRouting, ShardStats> mb = ImmutableMap.builder();
             for (ShardStats ss : shards) {
-                shardStatsMap.put(ss.getShardRouting(), ss);
+                mb.put(ss.getShardRouting(), ss);
             }
-            this.shardStatsMap = unmodifiableMap(shardStatsMap);
+
+            shardStatsMap = mb.build();
         }
-        return this.shardStatsMap;
+        return shardStatsMap;
     }
 
     public ShardStats[] getShards() {
@@ -84,21 +86,21 @@ public class IndicesStatsResponse extends BroadcastResponse implements ToXConten
         if (indicesStats != null) {
             return indicesStats;
         }
-        Map<String, IndexStats> indicesStats = new HashMap<>();
+        Map<String, IndexStats> indicesStats = Maps.newHashMap();
 
-        Set<String> indices = new HashSet<>();
+        Set<String> indices = Sets.newHashSet();
         for (ShardStats shard : shards) {
-            indices.add(shard.getShardRouting().getIndexName());
+            indices.add(shard.getShardRouting().getIndex());
         }
 
-        for (String indexName : indices) {
+        for (String index : indices) {
             List<ShardStats> shards = new ArrayList<>();
             for (ShardStats shard : this.shards) {
-                if (shard.getShardRouting().getIndexName().equals(indexName)) {
+                if (shard.getShardRouting().index().equals(index)) {
                     shards.add(shard);
                 }
             }
-            indicesStats.put(indexName, new IndexStats(indexName, shards.toArray(new ShardStats[shards.size()])));
+            indicesStats.put(index, new IndexStats(index, shards.toArray(new ShardStats[shards.size()])));
         }
         this.indicesStats = indicesStats;
         return indicesStats;
@@ -175,7 +177,7 @@ public class IndicesStatsResponse extends BroadcastResponse implements ToXConten
         if ("indices".equalsIgnoreCase(level) || "shards".equalsIgnoreCase(level)) {
             builder.startObject(Fields.INDICES);
             for (IndexStats indexStats : getIndices().values()) {
-                builder.startObject(indexStats.getIndex());
+                builder.startObject(indexStats.getIndex(), XContentBuilder.FieldCaseConversion.NONE);
 
                 builder.startObject("primaries");
                 indexStats.getPrimaries().toXContent(builder, params);
@@ -207,8 +209,8 @@ public class IndicesStatsResponse extends BroadcastResponse implements ToXConten
     }
 
     static final class Fields {
-        static final String INDICES = "indices";
-        static final String SHARDS = "shards";
+        static final XContentBuilderString INDICES = new XContentBuilderString("indices");
+        static final XContentBuilderString SHARDS = new XContentBuilderString("shards");
     }
 
     @Override

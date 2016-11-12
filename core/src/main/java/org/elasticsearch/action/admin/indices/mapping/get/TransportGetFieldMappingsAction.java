@@ -19,23 +19,21 @@
 
 package org.elasticsearch.action.admin.indices.mapping.get;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
+import org.elasticsearch.common.collect.MapBuilder;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-
-import static java.util.Collections.unmodifiableMap;
 
 /**
  */
@@ -48,7 +46,7 @@ public class TransportGetFieldMappingsAction extends HandledTransportAction<GetF
     public TransportGetFieldMappingsAction(Settings settings, TransportService transportService, ClusterService clusterService,
                                            ThreadPool threadPool, TransportGetFieldMappingsIndexAction shardAction,
                                            ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, GetFieldMappingsAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver, GetFieldMappingsRequest::new);
+        super(settings, GetFieldMappingsAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver, GetFieldMappingsRequest.class);
         this.clusterService = clusterService;
         this.shardAction = shardAction;
     }
@@ -56,7 +54,7 @@ public class TransportGetFieldMappingsAction extends HandledTransportAction<GetF
     @Override
     protected void doExecute(GetFieldMappingsRequest request, final ActionListener<GetFieldMappingsResponse> listener) {
         ClusterState clusterState = clusterService.state();
-        String[] concreteIndices = indexNameExpressionResolver.concreteIndexNames(clusterState, request);
+        String[] concreteIndices = indexNameExpressionResolver.concreteIndices(clusterState, request);
         final AtomicInteger indexCounter = new AtomicInteger();
         final AtomicInteger completionCounter = new AtomicInteger(concreteIndices.length);
         final AtomicReferenceArray<Object> indexResponses = new AtomicReferenceArray<>(concreteIndices.length);
@@ -77,7 +75,7 @@ public class TransportGetFieldMappingsAction extends HandledTransportAction<GetF
                     }
 
                     @Override
-                    public void onFailure(Exception e) {
+                    public void onFailure(Throwable e) {
                         int index = indexCounter.getAndIncrement();
                         indexResponses.set(index, e);
                         if (completionCounter.decrementAndGet() == 0) {
@@ -90,7 +88,7 @@ public class TransportGetFieldMappingsAction extends HandledTransportAction<GetF
     }
 
     private GetFieldMappingsResponse merge(AtomicReferenceArray<Object> indexResponses) {
-        Map<String, Map<String, Map<String, GetFieldMappingsResponse.FieldMappingMetaData>>> mergedResponses = new HashMap<>();
+        MapBuilder<String, ImmutableMap<String, ImmutableMap<String, GetFieldMappingsResponse.FieldMappingMetaData>>> mergedResponses = MapBuilder.newMapBuilder();
         for (int i = 0; i < indexResponses.length(); i++) {
             Object element = indexResponses.get(i);
             if (element instanceof GetFieldMappingsResponse) {
@@ -98,6 +96,6 @@ public class TransportGetFieldMappingsAction extends HandledTransportAction<GetF
                 mergedResponses.putAll(response.mappings());
             }
         }
-        return new GetFieldMappingsResponse(unmodifiableMap(mergedResponses));
+        return new GetFieldMappingsResponse(mergedResponses.immutableMap());
     }
 }

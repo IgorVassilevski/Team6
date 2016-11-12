@@ -20,29 +20,16 @@
 package org.elasticsearch.common.joda;
 
 import org.elasticsearch.common.Strings;
-import org.joda.time.Chronology;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeField;
-import org.joda.time.DateTimeFieldType;
-import org.joda.time.DateTimeZone;
-import org.joda.time.DurationField;
-import org.joda.time.DurationFieldType;
-import org.joda.time.ReadablePartial;
+import org.joda.time.*;
 import org.joda.time.field.DividedDateTimeField;
 import org.joda.time.field.OffsetDateTimeField;
 import org.joda.time.field.ScaledDurationField;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
-import org.joda.time.format.DateTimeFormatterBuilder;
-import org.joda.time.format.DateTimeParser;
-import org.joda.time.format.DateTimeParserBucket;
-import org.joda.time.format.DateTimePrinter;
-import org.joda.time.format.ISODateTimeFormat;
-import org.joda.time.format.StrictISODateTimeFormat;
+import org.joda.time.format.*;
 
 import java.io.IOException;
 import java.io.Writer;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  *
@@ -295,6 +282,8 @@ public class Joda {
 
 
     public static final DurationFieldType Quarters = new DurationFieldType("quarters") {
+        private static final long serialVersionUID = -8167713675442491871L;
+
         @Override
         public DurationField getField(Chronology chronology) {
             return new ScaledDurationField(chronology.months(), Quarters, 3);
@@ -302,6 +291,8 @@ public class Joda {
     };
 
     public static final DateTimeFieldType QuarterOfYear = new DateTimeFieldType("quarterOfYear") {
+        private static final long serialVersionUID = -5677872459807379123L;
+
         @Override
         public DurationFieldType getDurationType() {
             return Quarters;
@@ -320,15 +311,20 @@ public class Joda {
 
     public static class EpochTimeParser implements DateTimeParser {
 
+        private static final Pattern MILLI_SECOND_PRECISION_PATTERN = Pattern.compile("^-?\\d{1,13}$");
+        private static final Pattern SECOND_PRECISION_PATTERN = Pattern.compile("^-?\\d{1,10}$");
+
         private final boolean hasMilliSecondPrecision;
+        private final Pattern pattern;
 
         public EpochTimeParser(boolean hasMilliSecondPrecision) {
             this.hasMilliSecondPrecision = hasMilliSecondPrecision;
+            this.pattern = hasMilliSecondPrecision ? MILLI_SECOND_PRECISION_PATTERN : SECOND_PRECISION_PATTERN;
         }
 
         @Override
         public int estimateParsedLength() {
-            return hasMilliSecondPrecision ? 19 : 16;
+            return hasMilliSecondPrecision ? 13 : 10;
         }
 
         @Override
@@ -338,7 +334,8 @@ public class Joda {
 
             if ((isPositive && isTooLong) ||
                 // timestamps have to have UTC timezone
-                bucket.getZone() != DateTimeZone.UTC) {
+                bucket.getZone() != DateTimeZone.UTC ||
+                pattern.matcher(text).matches() == false) {
                 return -1;
             }
 
@@ -371,33 +368,24 @@ public class Joda {
 
         @Override
         public int estimatePrintedLength() {
-            return hasMilliSecondPrecision ? 19 : 16;
+            return hasMilliSecondPrecision ? 13 : 10;
         }
 
-
-        /**
-         * We adjust the instant by displayOffset to adjust for the offset that might have been added in
-         * {@link DateTimeFormatter#printTo(Appendable, long, Chronology)} when using a time zone.
-         */
         @Override
         public void printTo(StringBuffer buf, long instant, Chronology chrono, int displayOffset, DateTimeZone displayZone, Locale locale) {
             if (hasMilliSecondPrecision) {
-                buf.append(instant - displayOffset);
+                buf.append(instant);
             } else {
-                buf.append((instant  - displayOffset) / 1000);
+                buf.append(instant / 1000);
             }
         }
 
-        /**
-         * We adjust the instant by displayOffset to adjust for the offset that might have been added in
-         * {@link DateTimeFormatter#printTo(Appendable, long, Chronology)} when using a time zone.
-         */
         @Override
         public void printTo(Writer out, long instant, Chronology chrono, int displayOffset, DateTimeZone displayZone, Locale locale) throws IOException {
             if (hasMilliSecondPrecision) {
-                out.write(String.valueOf(instant - displayOffset));
+                out.write(String.valueOf(instant));
             } else {
-                out.append(String.valueOf((instant - displayOffset) / 1000));
+                out.append(String.valueOf(instant / 1000));
             }
         }
 

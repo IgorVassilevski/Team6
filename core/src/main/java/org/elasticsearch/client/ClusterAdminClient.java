@@ -19,11 +19,7 @@
 
 package org.elasticsearch.client;
 
-import org.elasticsearch.action.ActionFuture;
-import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.admin.cluster.allocation.ClusterAllocationExplainRequest;
-import org.elasticsearch.action.admin.cluster.allocation.ClusterAllocationExplainRequestBuilder;
-import org.elasticsearch.action.admin.cluster.allocation.ClusterAllocationExplainResponse;
+import org.elasticsearch.action.*;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequestBuilder;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -39,9 +35,6 @@ import org.elasticsearch.action.admin.cluster.node.stats.NodesStatsResponse;
 import org.elasticsearch.action.admin.cluster.node.tasks.cancel.CancelTasksRequest;
 import org.elasticsearch.action.admin.cluster.node.tasks.cancel.CancelTasksRequestBuilder;
 import org.elasticsearch.action.admin.cluster.node.tasks.cancel.CancelTasksResponse;
-import org.elasticsearch.action.admin.cluster.node.tasks.get.GetTaskRequest;
-import org.elasticsearch.action.admin.cluster.node.tasks.get.GetTaskRequestBuilder;
-import org.elasticsearch.action.admin.cluster.node.tasks.get.GetTaskResponse;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksRequest;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksRequestBuilder;
 import org.elasticsearch.action.admin.cluster.node.tasks.list.ListTasksResponse;
@@ -87,32 +80,12 @@ import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
 import org.elasticsearch.action.admin.cluster.stats.ClusterStatsRequest;
 import org.elasticsearch.action.admin.cluster.stats.ClusterStatsRequestBuilder;
 import org.elasticsearch.action.admin.cluster.stats.ClusterStatsResponse;
-import org.elasticsearch.action.admin.cluster.storedscripts.DeleteStoredScriptRequest;
-import org.elasticsearch.action.admin.cluster.storedscripts.DeleteStoredScriptRequestBuilder;
-import org.elasticsearch.action.admin.cluster.storedscripts.DeleteStoredScriptResponse;
-import org.elasticsearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
-import org.elasticsearch.action.admin.cluster.storedscripts.GetStoredScriptRequestBuilder;
-import org.elasticsearch.action.admin.cluster.storedscripts.GetStoredScriptResponse;
-import org.elasticsearch.action.admin.cluster.storedscripts.PutStoredScriptRequest;
-import org.elasticsearch.action.admin.cluster.storedscripts.PutStoredScriptRequestBuilder;
-import org.elasticsearch.action.admin.cluster.storedscripts.PutStoredScriptResponse;
 import org.elasticsearch.action.admin.cluster.tasks.PendingClusterTasksRequest;
 import org.elasticsearch.action.admin.cluster.tasks.PendingClusterTasksRequestBuilder;
 import org.elasticsearch.action.admin.cluster.tasks.PendingClusterTasksResponse;
-import org.elasticsearch.action.ingest.DeletePipelineRequest;
-import org.elasticsearch.action.ingest.DeletePipelineRequestBuilder;
-import org.elasticsearch.action.ingest.GetPipelineRequest;
-import org.elasticsearch.action.ingest.GetPipelineRequestBuilder;
-import org.elasticsearch.action.ingest.GetPipelineResponse;
-import org.elasticsearch.action.ingest.PutPipelineRequest;
-import org.elasticsearch.action.ingest.PutPipelineRequestBuilder;
-import org.elasticsearch.action.ingest.SimulatePipelineRequest;
-import org.elasticsearch.action.ingest.SimulatePipelineRequestBuilder;
-import org.elasticsearch.action.ingest.SimulatePipelineResponse;
-import org.elasticsearch.action.ingest.WritePipelineResponse;
-import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.tasks.TaskId;
+import org.elasticsearch.action.admin.cluster.validate.template.RenderSearchTemplateRequest;
+import org.elasticsearch.action.admin.cluster.validate.template.RenderSearchTemplateRequestBuilder;
+import org.elasticsearch.action.admin.cluster.validate.template.RenderSearchTemplateResponse;
 
 /**
  * Administrative actions/operations against indices.
@@ -303,34 +276,6 @@ public interface ClusterAdminClient extends ElasticsearchClient {
      * List active tasks
      */
     ListTasksRequestBuilder prepareListTasks(String... nodesIds);
-
-    /**
-     * Get a task.
-     *
-     * @param request the request
-     * @return the result future
-     * @see org.elasticsearch.client.Requests#getTaskRequest()
-     */
-    ActionFuture<GetTaskResponse> getTask(GetTaskRequest request);
-
-    /**
-     * Get a task.
-     *
-     * @param request the request
-     * @param listener A listener to be notified with the result
-     * @see org.elasticsearch.client.Requests#getTaskRequest()
-     */
-    void getTask(GetTaskRequest request, ActionListener<GetTaskResponse> listener);
-
-    /**
-     * Fetch a task by id.
-     */
-    GetTaskRequestBuilder prepareGetTask(String taskId);
-
-    /**
-     * Fetch a task by id.
-     */
-    GetTaskRequestBuilder prepareGetTask(TaskId taskId);
 
     /**
      * Cancel tasks
@@ -533,133 +478,25 @@ public interface ClusterAdminClient extends ElasticsearchClient {
      */
     SnapshotsStatusRequestBuilder prepareSnapshotStatus();
 
-    /**
-     * Stores an ingest pipeline
-     */
-    void putPipeline(PutPipelineRequest request, ActionListener<WritePipelineResponse> listener);
 
     /**
-     * Stores an ingest pipeline
+     * Return the rendered search request for a given search template.
+     *
+     * @param request The request
+     * @return The result future
      */
-    ActionFuture<WritePipelineResponse> putPipeline(PutPipelineRequest request);
+    ActionFuture<RenderSearchTemplateResponse> renderSearchTemplate(RenderSearchTemplateRequest request);
 
     /**
-     * Stores an ingest pipeline
+     * Return the rendered search request for a given search template.
+     *
+     * @param request  The request
+     * @param listener A listener to be notified of the result
      */
-    PutPipelineRequestBuilder preparePutPipeline(String id, BytesReference source);
+    void renderSearchTemplate(RenderSearchTemplateRequest request, ActionListener<RenderSearchTemplateResponse> listener);
 
     /**
-     * Deletes a stored ingest pipeline
+     * Return the rendered search request for a given search template.
      */
-    void deletePipeline(DeletePipelineRequest request, ActionListener<WritePipelineResponse> listener);
-
-    /**
-     * Deletes a stored ingest pipeline
-     */
-    ActionFuture<WritePipelineResponse> deletePipeline(DeletePipelineRequest request);
-
-    /**
-     * Deletes a stored ingest pipeline
-     */
-    DeletePipelineRequestBuilder prepareDeletePipeline();
-
-    /**
-     * Returns a stored ingest pipeline
-     */
-    void getPipeline(GetPipelineRequest request, ActionListener<GetPipelineResponse> listener);
-
-    /**
-     * Returns a stored ingest pipeline
-     */
-    ActionFuture<GetPipelineResponse> getPipeline(GetPipelineRequest request);
-
-    /**
-     * Returns a stored ingest pipeline
-     */
-    GetPipelineRequestBuilder prepareGetPipeline(String... ids);
-
-    /**
-     * Simulates an ingest pipeline
-     */
-    void simulatePipeline(SimulatePipelineRequest request, ActionListener<SimulatePipelineResponse> listener);
-
-    /**
-     * Simulates an ingest pipeline
-     */
-    ActionFuture<SimulatePipelineResponse> simulatePipeline(SimulatePipelineRequest request);
-
-    /**
-     * Simulates an ingest pipeline
-     */
-    SimulatePipelineRequestBuilder prepareSimulatePipeline(BytesReference source);
-
-    /**
-     * Explain the allocation of a shard
-     */
-    void allocationExplain(ClusterAllocationExplainRequest request, ActionListener<ClusterAllocationExplainResponse> listener);
-
-    /**
-     * Explain the allocation of a shard
-     */
-    ActionFuture<ClusterAllocationExplainResponse> allocationExplain(ClusterAllocationExplainRequest request);
-
-    /**
-     * Explain the allocation of a shard
-     */
-    ClusterAllocationExplainRequestBuilder prepareAllocationExplain();
-
-    /**
-     * Store a script in the cluster state
-     */
-    PutStoredScriptRequestBuilder preparePutStoredScript();
-
-    /**
-     * Delete a script from the cluster state
-     */
-    void deleteStoredScript(DeleteStoredScriptRequest request, ActionListener<DeleteStoredScriptResponse> listener);
-
-    /**
-     * Delete a script from the cluster state
-     */
-    ActionFuture<DeleteStoredScriptResponse> deleteStoredScript(DeleteStoredScriptRequest request);
-
-    /**
-     * Delete a script from the cluster state
-     */
-    DeleteStoredScriptRequestBuilder prepareDeleteStoredScript();
-
-    /**
-     * Delete a script from the cluster state
-     */
-    DeleteStoredScriptRequestBuilder prepareDeleteStoredScript(String scriptLang, String id);
-
-    /**
-     * Store a script in the cluster state
-     */
-    void putStoredScript(PutStoredScriptRequest request, ActionListener<PutStoredScriptResponse> listener);
-
-    /**
-     * Store a script in the cluster state
-     */
-    ActionFuture<PutStoredScriptResponse> putStoredScript(PutStoredScriptRequest request);
-
-    /**
-     * Get a script from the cluster state
-     */
-    GetStoredScriptRequestBuilder prepareGetStoredScript();
-
-    /**
-     * Get a script from the cluster state
-     */
-    GetStoredScriptRequestBuilder prepareGetStoredScript(@Nullable String scriptLang, String id);
-
-    /**
-     * Get a script from the cluster state
-     */
-    void getStoredScript(GetStoredScriptRequest request, ActionListener<GetStoredScriptResponse> listener);
-
-    /**
-     * Get a script from the cluster state
-     */
-    ActionFuture<GetStoredScriptResponse> getStoredScript(GetStoredScriptRequest request);
+    RenderSearchTemplateRequestBuilder prepareRenderSearchTemplate();
 }

@@ -19,6 +19,7 @@
 
 package org.elasticsearch.index.get;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.compress.CompressorFactory;
@@ -27,18 +28,18 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.search.lookup.SourceLookup;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Collections.emptyMap;
+import static com.google.common.collect.Maps.newHashMapWithExpectedSize;
 import static org.elasticsearch.index.get.GetField.readGetField;
 
 /**
@@ -67,7 +68,7 @@ public class GetResult implements Streamable, Iterable<GetField>, ToXContent {
         this.source = source;
         this.fields = fields;
         if (this.fields == null) {
-            this.fields = emptyMap();
+            this.fields = ImmutableMap.of();
         }
     }
 
@@ -116,7 +117,7 @@ public class GetResult implements Streamable, Iterable<GetField>, ToXContent {
         if (sourceAsBytes != null) {
             return sourceAsBytes;
         }
-        this.sourceAsBytes = BytesReference.toBytes(sourceRef());
+        this.sourceAsBytes = sourceRef().toBytes();
         return this.sourceAsBytes;
     }
 
@@ -198,12 +199,12 @@ public class GetResult implements Streamable, Iterable<GetField>, ToXContent {
     }
 
     static final class Fields {
-        static final String _INDEX = "_index";
-        static final String _TYPE = "_type";
-        static final String _ID = "_id";
-        static final String _VERSION = "_version";
-        static final String FOUND = "found";
-        static final String FIELDS = "fields";
+        static final XContentBuilderString _INDEX = new XContentBuilderString("_index");
+        static final XContentBuilderString _TYPE = new XContentBuilderString("_type");
+        static final XContentBuilderString _ID = new XContentBuilderString("_id");
+        static final XContentBuilderString _VERSION = new XContentBuilderString("_version");
+        static final XContentBuilderString FOUND = new XContentBuilderString("found");
+        static final XContentBuilderString FIELDS = new XContentBuilderString("fields");
     }
 
     public XContentBuilder toXContentEmbedded(XContentBuilder builder, Params params) throws IOException {
@@ -285,9 +286,9 @@ public class GetResult implements Streamable, Iterable<GetField>, ToXContent {
             }
             int size = in.readVInt();
             if (size == 0) {
-                fields = emptyMap();
+                fields = ImmutableMap.of();
             } else {
-                fields = new HashMap<>(size);
+                fields = newHashMapWithExpectedSize(size);
                 for (int i = 0; i < size; i++) {
                     GetField field = readGetField(in);
                     fields.put(field.getName(), field);

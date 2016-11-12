@@ -21,6 +21,7 @@ package org.elasticsearch.index.mapper;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.analysis.NamedAnalyzer;
+import org.elasticsearch.index.fielddata.FieldDataType;
 import org.elasticsearch.index.similarity.BM25SimilarityProvider;
 import org.elasticsearch.test.ESTestCase;
 
@@ -32,15 +33,18 @@ import java.util.List;
 public abstract class FieldTypeTestCase extends ESTestCase {
 
     /** Abstraction for mutating a property of a MappedFieldType */
-    public abstract static class Modifier {
+    public static abstract class Modifier {
         /** The name of the property that is being modified. Used in test failure messages. */
         public final String property;
         /** true if this modifier only makes types incompatible in strict mode, false otherwise */
         public final boolean strictOnly;
+        /** true if reversing the order of checkCompatibility arguments should result in the same conflicts, false otherwise **/
+        public final boolean symmetric;
 
-        public Modifier(String property, boolean strictOnly) {
+        public Modifier(String property, boolean strictOnly, boolean symmetric) {
             this.property = property;
             this.strictOnly = strictOnly;
+            this.symmetric = symmetric;
         }
 
         /** Modifies the property */
@@ -53,25 +57,25 @@ public abstract class FieldTypeTestCase extends ESTestCase {
     }
 
     private final List<Modifier> modifiers = new ArrayList<>(Arrays.asList(
-        new Modifier("boost", true) {
+        new Modifier("boost", true, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setBoost(1.1f);
             }
         },
-        new Modifier("doc_values", false) {
+        new Modifier("doc_values", false, false) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setHasDocValues(ft.hasDocValues() == false);
             }
         },
-        new Modifier("analyzer", false) {
+        new Modifier("analyzer", false, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setIndexAnalyzer(new NamedAnalyzer("bar", new StandardAnalyzer()));
             }
         },
-        new Modifier("analyzer", false) {
+        new Modifier("analyzer", false, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setIndexAnalyzer(new NamedAnalyzer("bar", new StandardAnalyzer()));
@@ -81,13 +85,13 @@ public abstract class FieldTypeTestCase extends ESTestCase {
                 other.setIndexAnalyzer(new NamedAnalyzer("foo", new StandardAnalyzer()));
             }
         },
-        new Modifier("search_analyzer", true) {
+        new Modifier("search_analyzer", true, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setSearchAnalyzer(new NamedAnalyzer("bar", new StandardAnalyzer()));
             }
         },
-        new Modifier("search_analyzer", true) {
+        new Modifier("search_analyzer", true, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setSearchAnalyzer(new NamedAnalyzer("bar", new StandardAnalyzer()));
@@ -97,13 +101,13 @@ public abstract class FieldTypeTestCase extends ESTestCase {
                 other.setSearchAnalyzer(new NamedAnalyzer("foo", new StandardAnalyzer()));
             }
         },
-        new Modifier("search_quote_analyzer", true) {
+        new Modifier("search_quote_analyzer", true, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setSearchQuoteAnalyzer(new NamedAnalyzer("bar", new StandardAnalyzer()));
             }
         },
-        new Modifier("search_quote_analyzer", true) {
+        new Modifier("search_quote_analyzer", true, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setSearchQuoteAnalyzer(new NamedAnalyzer("bar", new StandardAnalyzer()));
@@ -113,13 +117,13 @@ public abstract class FieldTypeTestCase extends ESTestCase {
                 other.setSearchQuoteAnalyzer(new NamedAnalyzer("foo", new StandardAnalyzer()));
             }
         },
-        new Modifier("similarity", false) {
+        new Modifier("similarity", false, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setSimilarity(new BM25SimilarityProvider("foo", Settings.EMPTY));
             }
         },
-        new Modifier("similarity", false) {
+        new Modifier("similarity", false, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setSimilarity(new BM25SimilarityProvider("foo", Settings.EMPTY));
@@ -129,13 +133,19 @@ public abstract class FieldTypeTestCase extends ESTestCase {
                 other.setSimilarity(new BM25SimilarityProvider("bar", Settings.EMPTY));
             }
         },
-        new Modifier("eager_global_ordinals", true) {
+        new Modifier("norms.loading", true, true) {
             @Override
             public void modify(MappedFieldType ft) {
-                ft.setEagerGlobalOrdinals(ft.eagerGlobalOrdinals() == false);
+                ft.setNormsLoading(MappedFieldType.Loading.LAZY);
             }
         },
-        new Modifier("null_value", true) {
+        new Modifier("fielddata", true, true) {
+            @Override
+            public void modify(MappedFieldType ft) {
+                ft.setFieldDataType(new FieldDataType("foo", Settings.builder().put("loading", "eager").build()));
+            }
+        },
+        new Modifier("null_value", true, true) {
             @Override
             public void modify(MappedFieldType ft) {
                 ft.setNullValue(dummyNullValue);
@@ -163,7 +173,7 @@ public abstract class FieldTypeTestCase extends ESTestCase {
 
     MappedFieldType createNamedDefaultFieldType() {
         MappedFieldType fieldType = createDefaultFieldType();
-        fieldType.setName("foo");
+        fieldType.setNames(new MappedFieldType.Names("foo"));
         return fieldType;
     }
 
@@ -203,14 +213,15 @@ public abstract class FieldTypeTestCase extends ESTestCase {
 
     protected String toString(MappedFieldType ft) {
         return "MappedFieldType{" +
-            "name=" + ft.name() +
+            "names=" + ft.names() +
             ", boost=" + ft.boost() +
             ", docValues=" + ft.hasDocValues() +
             ", indexAnalyzer=" + ft.indexAnalyzer() +
             ", searchAnalyzer=" + ft.searchAnalyzer() +
             ", searchQuoteAnalyzer=" + ft.searchQuoteAnalyzer() +
             ", similarity=" + ft.similarity() +
-            ", eagerGlobalOrdinals=" + ft.eagerGlobalOrdinals() +
+            ", normsLoading=" + ft.normsLoading() +
+            ", fieldDataType=" + ft.fieldDataType() +
             ", nullValue=" + ft.nullValue() +
             ", nullValueAsString='" + ft.nullValueAsString() + "'" +
             "} " + super.toString();
@@ -273,7 +284,7 @@ public abstract class FieldTypeTestCase extends ESTestCase {
         fieldType.checkCompatibility(fieldType, conflicts, random().nextBoolean()); // no exception
         assertTrue(conflicts.toString(), conflicts.isEmpty());
 
-        MappedFieldType bogus = new TermBasedFieldType() {
+        MappedFieldType bogus = new MappedFieldType() {
             @Override
             public MappedFieldType clone() {return null;}
             @Override
@@ -287,7 +298,7 @@ public abstract class FieldTypeTestCase extends ESTestCase {
         }
         assertTrue(conflicts.toString(), conflicts.isEmpty());
 
-        MappedFieldType other = new TermBasedFieldType() {
+        MappedFieldType other = new MappedFieldType() {
             @Override
             public MappedFieldType clone() {return null;}
             @Override
@@ -323,14 +334,23 @@ public abstract class FieldTypeTestCase extends ESTestCase {
                 assertCompatible(modifier.property, ft1, ft2, false);
                 assertNotCompatible(modifier.property, ft1, ft2, true, conflicts);
                 assertCompatible(modifier.property, ft2, ft1, false); // always symmetric when not strict
-                assertNotCompatible(modifier.property, ft2, ft1, true, conflicts);
+                if (modifier.symmetric) {
+                    assertNotCompatible(modifier.property, ft2, ft1, true, conflicts);
+                } else {
+                    assertCompatible(modifier.property, ft2, ft1, true);
+                }
             } else {
                 // not compatible whether strict or not
                 String conflict = "different [" + modifier.property + "]";
                 assertNotCompatible(modifier.property, ft1, ft2, true, conflict);
                 assertNotCompatible(modifier.property, ft1, ft2, false, conflict);
-                assertNotCompatible(modifier.property, ft2, ft1, true, conflict);
-                assertNotCompatible(modifier.property, ft2, ft1, false, conflict);
+                if (modifier.symmetric) {
+                    assertNotCompatible(modifier.property, ft2, ft1, true, conflict);
+                    assertNotCompatible(modifier.property, ft2, ft1, false, conflict);
+                } else {
+                    assertCompatible(modifier.property, ft2, ft1, true);
+                    assertCompatible(modifier.property, ft2, ft1, false);
+                }
             }
         }
     }

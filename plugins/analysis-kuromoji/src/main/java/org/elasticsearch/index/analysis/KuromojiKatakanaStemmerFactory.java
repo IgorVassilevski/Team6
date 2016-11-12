@@ -21,16 +21,19 @@ package org.elasticsearch.index.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.ja.JapaneseKatakanaStemFilter;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 public class KuromojiKatakanaStemmerFactory extends AbstractTokenFilterFactory {
 
     private final int minimumLength;
 
-    public KuromojiKatakanaStemmerFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public KuromojiKatakanaStemmerFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         minimumLength = settings.getAsInt("minimum_length", JapaneseKatakanaStemFilter.DEFAULT_MINIMUM_LENGTH);
     }
 

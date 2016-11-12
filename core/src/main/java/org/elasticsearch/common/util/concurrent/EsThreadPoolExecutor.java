@@ -24,14 +24,12 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 /**
  * An extension to thread pool executor, allowing (in the future) to add specific additional stats to it.
  */
 public class EsThreadPoolExecutor extends ThreadPoolExecutor {
 
-    private final ThreadContext contextHolder;
     private volatile ShutdownListener listener;
 
     private final Object monitor = new Object();
@@ -40,17 +38,13 @@ public class EsThreadPoolExecutor extends ThreadPoolExecutor {
      */
     private final String name;
 
-    EsThreadPoolExecutor(String name, int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit,
-            BlockingQueue<Runnable> workQueue, ThreadFactory threadFactory, ThreadContext contextHolder) {
-        this(name, corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, threadFactory, new EsAbortPolicy(), contextHolder);
+    EsThreadPoolExecutor(String name, int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue, ThreadFactory threadFactory) {
+        this(name, corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, threadFactory, new EsAbortPolicy());
     }
 
-    EsThreadPoolExecutor(String name, int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit,
-            BlockingQueue<Runnable> workQueue, ThreadFactory threadFactory, XRejectedExecutionHandler handler,
-            ThreadContext contextHolder) {
+    EsThreadPoolExecutor(String name, int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue, ThreadFactory threadFactory, XRejectedExecutionHandler handler) {
         super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue, threadFactory, handler);
         this.name = name;
-        this.contextHolder = contextHolder;
     }
 
     public void shutdown(ShutdownListener listener) {
@@ -86,11 +80,7 @@ public class EsThreadPoolExecutor extends ThreadPoolExecutor {
     }
 
     @Override
-    public void execute(final Runnable command) {
-        doExecute(wrapRunnable(command));
-    }
-
-    protected void doExecute(final Runnable command) {
+    public void execute(Runnable command) {
         try {
             super.execute(command);
         } catch (EsRejectedExecutionException ex) {
@@ -109,14 +99,6 @@ public class EsThreadPoolExecutor extends ThreadPoolExecutor {
         }
     }
 
-    /**
-     * Returns a stream of all pending tasks. This is similar to {@link #getQueue()} but will expose the originally submitted
-     * {@link Runnable} instances rather than potentially wrapped ones.
-     */
-    public Stream<Runnable> getTasks() {
-        return this.getQueue().stream().map(this::unwrap);
-    }
-
     @Override
     public String toString() {
         StringBuilder b = new StringBuilder();
@@ -133,13 +115,5 @@ public class EsThreadPoolExecutor extends ThreadPoolExecutor {
          */
         b.append(super.toString()).append(']');
         return b.toString();
-    }
-
-    protected Runnable wrapRunnable(Runnable command) {
-        return contextHolder.preserveContext(command);
-    }
-
-    protected Runnable unwrap(Runnable runnable) {
-        return contextHolder.unwrap(runnable);
     }
 }

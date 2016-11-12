@@ -24,24 +24,17 @@ import org.apache.tika.metadata.Metadata;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.compress.CompressedXContent;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.MapperTestUtils;
 import org.elasticsearch.index.mapper.DocumentMapper;
 import org.elasticsearch.index.mapper.DocumentMapperParser;
 import org.elasticsearch.index.mapper.ParseContext;
+import org.elasticsearch.index.mapper.core.MapperTestUtils;
 import org.junit.Before;
 
 import java.io.IOException;
 import java.io.InputStream;
 
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
-import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.AUTHOR;
-import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.CONTENT_LENGTH;
-import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.CONTENT_TYPE;
-import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.DATE;
-import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.KEYWORDS;
-import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.LANGUAGE;
-import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.NAME;
-import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.TITLE;
+import static org.elasticsearch.mapper.attachments.AttachmentMapper.FieldNames.*;
 import static org.elasticsearch.test.StreamsUtils.copyToBytesFromClasspath;
 import static org.elasticsearch.test.StreamsUtils.copyToStringFromClasspath;
 import static org.hamcrest.Matchers.isEmptyOrNullString;
@@ -63,7 +56,7 @@ public class VariousDocTests extends AttachmentUnitTestCase {
     }
 
     /**
-     * Test for https://github.com/elastic/elasticsearch-mapper-attachments/issues/104
+     * Test for https://github.com/elasticsearch/elasticsearch-mapper-attachments/issues/104
      */
     public void testWordDocxDocument104() throws Exception {
         assertParseable("issue-104.docx");
@@ -75,6 +68,8 @@ public class VariousDocTests extends AttachmentUnitTestCase {
      */
     public void testEncryptedPDFDocument() throws Exception {
         assertException("encrypted.pdf", "is encrypted");
+        // TODO Remove when this will be fixed in Tika. See https://issues.apache.org/jira/browse/TIKA-1548
+        System.clearProperty("sun.font.fontmanager");
         testMapper("encrypted.pdf", true);
     }
 
@@ -112,7 +107,7 @@ public class VariousDocTests extends AttachmentUnitTestCase {
 
     /**
      * Test for ASCIIDOC
-     * Not yet supported by Tika: https://github.com/elastic/elasticsearch-mapper-attachments/issues/29
+     * Not yet supported by Tika: https://github.com/elasticsearch/elasticsearch-mapper-attachments/issues/29
      */
     public void testAsciidocDocument() throws Exception {
         assertParseable("asciidoc.asciidoc");
@@ -156,8 +151,8 @@ public class VariousDocTests extends AttachmentUnitTestCase {
 
         ParseContext.Document doc =  docMapper.parse("person", "person", "1", json).rootDoc();
         if (!errorExpected) {
-            assertThat(doc.get(docMapper.mappers().getMapper("file.content").fieldType().name()), not(isEmptyOrNullString()));
-            logger.debug("-> extracted content: {}", doc.get(docMapper.mappers().getMapper("file").fieldType().name()));
+            assertThat(doc.get(docMapper.mappers().getMapper("file.content").fieldType().names().indexName()), not(isEmptyOrNullString()));
+            logger.debug("-> extracted content: {}", doc.get(docMapper.mappers().getMapper("file").fieldType().names().indexName()));
             logger.debug("-> extracted metadata:");
             printMetadataContent(doc, AUTHOR);
             printMetadataContent(doc, CONTENT_LENGTH);
@@ -171,6 +166,6 @@ public class VariousDocTests extends AttachmentUnitTestCase {
     }
 
     private void printMetadataContent(ParseContext.Document doc, String field) {
-        logger.debug("- [{}]: [{}]", field, doc.get(docMapper.mappers().getMapper("file." + field).fieldType().name()));
+        logger.debug("- [{}]: [{}]", field, doc.get(docMapper.mappers().getMapper("file." + field).fieldType().names().indexName()));
     }
 }

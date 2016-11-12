@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # CONF_FILE setting was removed
 if [ ! -z "$CONF_FILE" ]; then

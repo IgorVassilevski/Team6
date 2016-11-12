@@ -71,47 +71,14 @@ Once your changes and tests are ready to submit for review:
 
 Then sit back and wait. There will probably be discussion about the pull request and, if any changes are needed, we would love to work with you to get your pull request merged into Elasticsearch.
 
-Please adhere to the general guideline that you should never force push
-to a publicly shared branch. Once you have opened your pull request, you
-should consider your branch publicly shared. Instead of force pushing
-you can just add incremental commits; this is generally easier on your
-reviewers. If you need to pick up changes from master, you can merge
-master into your branch. A reviewer might ask you to rebase a
-long-running pull request in which case force pushing is okay for that
-request. Note that squashing at the end of the review process should
-also not be done, that can be done when the pull request is [integrated
-via GitHub](https://github.com/blog/2141-squash-your-commits).
-
 Contributing to the Elasticsearch codebase
 ------------------------------------------
 
 **Repository:** [https://github.com/elastic/elasticsearch](https://github.com/elastic/elasticsearch)
 
-Make sure you have [Gradle](http://gradle.org) installed, as
-Elasticsearch uses it as its build system.
+Make sure you have [Maven](http://maven.apache.org) installed, as Elasticsearch uses it as its build system. Integration with IntelliJ and Eclipse should work out of the box. Eclipse users can automatically configure their IDE by running `mvn eclipse:eclipse` and then importing the project into their workspace: `File > Import > Existing project into workspace` and make sure to select `Search for nested projects...` option as Elasticsearch is a multi-module maven project. Additionally you will want to ensure that Eclipse is using 2048m of heap by modifying `eclipse.ini` accordingly to avoid GC overhead errors. Please make sure the [m2e-connector](http://marketplace.eclipse.org/content/m2e-connector-maven-dependency-plugin) is not installed in your Eclipse distribution as it will interfere with setup performed by `mvn eclipse:eclipse`.
 
-Eclipse users can automatically configure their IDE: `gradle eclipse`
-then `File: Import: Existing Projects into Workspace`. Select the
-option `Search for nested projects`. Additionally you will want to
-ensure that Eclipse is using 2048m of heap by modifying `eclipse.ini`
-accordingly to avoid GC overhead errors.
-
-IntelliJ users can automatically configure their IDE: `gradle idea`
-then `File->New Project From Existing Sources`. Point to the root of
-the source directory, select
-`Import project from external model->Gradle`, enable
-`Use auto-import`.
-
-The Elasticsearch codebase makes heavy use of Java `assert`s and the
-test runner requires that assertions be enabled within the JVM. This
-can be accomplished by passing the flag `-ea` to the JVM on startup.
-
-For IntelliJ, go to
-`Run->Edit Configurations...->Defaults->JUnit->VM options` and input
-`-ea`.
-
-For Eclipse, go to `Preferences->Java->Installed JREs` and add `-ea` to
-`VM Arguments`.
+Elasticsearch also works perfectly with Eclipse's [m2e](http://www.eclipse.org/m2e/).  Once you've installed m2e you can import Elasticsearch as an `Existing Maven Project`.
 
 Please follow these formatting guidelines:
 
@@ -119,21 +86,66 @@ Please follow these formatting guidelines:
 * Line width is 140 characters
 * The rest is left to Java coding standards
 * Disable “auto-format on save” to prevent unnecessary format changes. This makes reviews much harder as it generates unnecessary formatting changes. If your IDE supports formatting only modified chunks that is fine to do.
-* Wildcard imports (`import foo.bar.baz.*`) are forbidden and will cause the build to fail. Please attempt to tame your IDE so it doesn't make them and please send a PR against this document with instructions for your IDE if it doesn't contain them.
- * Eclipse: Preferences->Java->Code Style->Organize Imports. There are two boxes labeled "`Number of (static )? imports needed for .*`". Set their values to 99999 or some other absurdly high value.
-* Don't worry too much about import order. Try not to change it but don't worry about fighting your IDE to stop it from doing so.
+* Don't worry too much about imports.  Try not to change the order but don't worry about fighting your IDE to stop it from switching from * imports to specific imports or from specific to * imports.
 
 To create a distribution from the source, simply run:
 
 ```sh
 cd elasticsearch/
-gradle assemble
+mvn clean package -DskipTests
 ```
 
-You will find the newly built packages under: `./distribution/(deb|rpm|tar|zip)/build/distributions/`.
+You will find the newly built packages under: `./target/releases/`.
 
 Before submitting your changes, run the test suite to make sure that nothing is broken, with:
 
 ```sh
-gradle check
+mvn clean test -Dtests.slow=true
+```
+
+Source: [Contributing to elasticsearch](https://www.elastic.co/contributing-to-elasticsearch/)
+
+Building the rpm
+----------------
+Right now the zip, tar, and deb distributions are built with dependencies fetched by maven and should work on any systems.
+The rpm requires that you have some dependencies installed and it's skipped if you don't have them. Building the rpm is
+optional during development but if you want or need to build it then you'll need to install some dependencies:
+
+For CentOS/RHEL/Fedora:
+```shell
+sudo yum install rpm-build expect gpg2
+```
+
+Fedora will need:
+```shell
+sudo dnf install rpm-build expect gpg2 rpm-sign
+```
+
+Even then our rpm building plugin has had some issues signing the rpm on Fedora, so feel free to skip that by adding
+`-DskipSign` to the `mvn` invocation. Sorry for the trouble. The vagrant tests won't pass for you without that but it
+is better than the build not working at all.
+
+For Debian/Ubuntu:
+```shell
+sudo apt-get install rpm gnupg2 expect
+```
+
+For OSX:
+```shell
+brew install rpm gpg2
+```
+
+The RPMs that you build will be signed by a dummy certificate and can be tested by the Vagrant/bats
+tests. See TESTING.asciidoc's "Testing scripts" section for more.
+
+Right now rpm-maven-plugin doesn't properly sign the rpm on OSX so that process isn't tested on OSX. Even if the
+rpm-maven-plugin mere fixed, OSX has problems and needs some macro fixes:
+```shell
+cat - > ~/.rpmmacros
+%__gpg_check_password_cmd       %{__gpg} \
+        gpg --homedir %{_gpg_path} --batch --no-verbose --passphrase-fd 3 -u %{_gpg_name} -so -
+%__gpg_sign_cmd                 %{__gpg} \
+        gpg --homedir %{_gpg_path} --batch --no-verbose --no-armor --passphrase-fd 3 --no-secmem-warning \
+        -u %{_gpg_name} -sbo %{__signature_filename} %{__plaintext_filename}
+^D
 ```

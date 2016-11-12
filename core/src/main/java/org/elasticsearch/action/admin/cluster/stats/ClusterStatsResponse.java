@@ -19,19 +19,20 @@
 
 package org.elasticsearch.action.admin.cluster.stats;
 
-import org.elasticsearch.action.FailedNodeException;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.action.support.nodes.BaseNodesResponse;
 import org.elasticsearch.cluster.ClusterName;
-import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.common.xcontent.XContentFactory;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  *
@@ -48,9 +49,8 @@ public class ClusterStatsResponse extends BaseNodesResponse<ClusterStatsNodeResp
     ClusterStatsResponse() {
     }
 
-    public ClusterStatsResponse(long timestamp, ClusterName clusterName, String clusterUUID,
-                                List<ClusterStatsNodeResponse> nodes, List<FailedNodeException> failures) {
-        super(clusterName, nodes, failures);
+    public ClusterStatsResponse(long timestamp, ClusterName clusterName, String clusterUUID, ClusterStatsNodeResponse[] nodes) {
+        super(clusterName, null);
         this.timestamp = timestamp;
         this.clusterUUID = clusterUUID;
         nodesStats = new ClusterStatsNodes(nodes);
@@ -81,52 +81,76 @@ public class ClusterStatsResponse extends BaseNodesResponse<ClusterStatsNodeResp
     }
 
     @Override
+    public ClusterStatsNodeResponse[] getNodes() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Map<String, ClusterStatsNodeResponse> getNodesMap() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ClusterStatsNodeResponse getAt(int position) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Iterator<ClusterStatsNodeResponse> iterator() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         timestamp = in.readVLong();
+        status = null;
+        if (in.readBoolean()) {
+            // it may be that the master switched on us while doing the operation. In this case the status may be null.
+            status = ClusterHealthStatus.fromValue(in.readByte());
+        }
         clusterUUID = in.readString();
-        // it may be that the master switched on us while doing the operation. In this case the status may be null.
-        status = in.readOptionalWriteable(ClusterHealthStatus::readFrom);
+        nodesStats = ClusterStatsNodes.readNodeStats(in);
+        indicesStats = ClusterStatsIndices.readIndicesStats(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeVLong(timestamp);
+        if (status == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            out.writeByte(status.value());
+        }
         out.writeString(clusterUUID);
-        out.writeOptionalWriteable(status);
+        nodesStats.writeTo(out);
+        indicesStats.writeTo(out);
     }
 
-    @Override
-    protected List<ClusterStatsNodeResponse> readNodesFrom(StreamInput in) throws IOException {
-        List<ClusterStatsNodeResponse> nodes = in.readList(ClusterStatsNodeResponse::readNodeResponse);
-
-        // built from nodes rather than from the stream directly
-        nodesStats = new ClusterStatsNodes(nodes);
-        indicesStats = new ClusterStatsIndices(nodes);
-
-        return nodes;
-    }
-
-    @Override
-    protected void writeNodesTo(StreamOutput out, List<ClusterStatsNodeResponse> nodes) throws IOException {
-        // nodeStats and indicesStats are rebuilt from nodes
-        out.writeStreamableList(nodes);
+    static final class Fields {
+        static final XContentBuilderString NODES = new XContentBuilderString("nodes");
+        static final XContentBuilderString INDICES = new XContentBuilderString("indices");
+        static final XContentBuilderString UUID = new XContentBuilderString("uuid");
+        static final XContentBuilderString CLUSTER_NAME = new XContentBuilderString("cluster_name");
+        static final XContentBuilderString STATUS = new XContentBuilderString("status");
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.field("timestamp", getTimestamp());
+        builder.field(Fields.CLUSTER_NAME, getClusterName().value());
         if (params.paramAsBoolean("output_uuid", false)) {
-            builder.field("uuid", clusterUUID);
+            builder.field(Fields.UUID, clusterUUID);
         }
         if (status != null) {
-            builder.field("status", status.name().toLowerCase(Locale.ROOT));
+            builder.field(Fields.STATUS, status.name().toLowerCase(Locale.ROOT));
         }
-        builder.startObject("indices");
+        builder.startObject(Fields.INDICES);
         indicesStats.toXContent(builder, params);
         builder.endObject();
-        builder.startObject("nodes");
+        builder.startObject(Fields.NODES);
         nodesStats.toXContent(builder, params);
         builder.endObject();
         return builder;

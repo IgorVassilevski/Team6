@@ -42,10 +42,9 @@ import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.search.similarities.Similarity.SimScorer;
 import org.apache.lucene.search.similarities.Similarity.SimWeight;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.SmallFloat;
+import org.apache.lucene.util.ToStringUtils;
 
 import java.io.IOException;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -65,23 +64,9 @@ public final class AllTermQuery extends Query {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (sameClassAs(obj) == false) {
-            return false;
-        }
-        return Objects.equals(term, ((AllTermQuery) obj).term);
-    }
-
-    @Override
-    public int hashCode() {
-        return 31 * classHash() + term.hashCode();
-    }
-
-    @Override
     public Query rewrite(IndexReader reader) throws IOException {
-        Query rewritten = super.rewrite(reader);
-        if (rewritten != this) {
-            return rewritten;
+        if (getBoost() != 1f) {
+            return super.rewrite(reader);
         }
         boolean fieldExists = false;
         boolean hasPayloads = false;
@@ -96,10 +81,14 @@ public final class AllTermQuery extends Query {
             }
         }
         if (fieldExists == false) {
-            return new MatchNoDocsQuery();
+            Query rewritten = new MatchNoDocsQuery();
+            rewritten.setBoost(getBoost());
+            return rewritten;
         }
         if (hasPayloads == false) {
-            return new TermQuery(term);
+            TermQuery rewritten = new TermQuery(term);
+            rewritten.setBoost(getBoost());
+            return rewritten;
         }
         return this;
     }
@@ -117,12 +106,12 @@ public final class AllTermQuery extends Query {
         return new Weight(this) {
 
             @Override
-            public float getValueForNormalization() throws IOException {
+            public final float getValueForNormalization() throws IOException {
                 return stats.getValueForNormalization();
             }
 
             @Override
-            public void normalize(float norm, float topLevelBoost) {
+            public final void normalize(float norm, float topLevelBoost) {
                 stats.normalize(norm, topLevelBoost);
             }
 
@@ -142,8 +131,7 @@ public final class AllTermQuery extends Query {
                         SimScorer docScorer = similarity.simScorer(stats, context);
                         Explanation freqExplanation = Explanation.match(freq, "termFreq=" + freq);
                         Explanation termScoreExplanation = docScorer.explain(doc, freqExplanation);
-                        Explanation payloadBoostExplanation =
-                            Explanation.match(scorer.payloadBoost(), "payloadBoost=" + scorer.payloadBoost());
+                        Explanation payloadBoostExplanation = Explanation.match(scorer.payloadBoost(), "payloadBoost=" + scorer.payloadBoost());
                         return Explanation.match(
                                 score,
                                 "weight(" + getQuery() + " in " + doc + ") ["
@@ -201,14 +189,9 @@ public final class AllTermQuery extends Query {
                     float boost;
                     if (payload == null) {
                         boost = 1;
-                    } else if (payload.length == 1) {
-                        boost = SmallFloat.byte315ToFloat(payload.bytes[payload.offset]);
-                    } else if (payload.length == 4) {
-                        // TODO: for bw compat only, remove this in 6.0
-                        boost = PayloadHelper.decodeFloat(payload.bytes, payload.offset);
                     } else {
-                        throw new IllegalStateException("Payloads are expected to have a length of 1 or 4 but got: "
-                            + payload);
+                        assert payload.length == 4;
+                        boost = PayloadHelper.decodeFloat(payload.bytes, payload.offset);
                     }
                     payloadBoost += boost;
                 }
@@ -241,7 +224,20 @@ public final class AllTermQuery extends Query {
 
     @Override
     public String toString(String field) {
-        return new TermQuery(term).toString(field);
+        return new TermQuery(term).toString(field) + ToStringUtils.boost(getBoost());
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (super.equals(obj) == false) {
+            return false;
+        }
+        AllTermQuery that = (AllTermQuery) obj;
+        return term.equals(that.term);
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * super.hashCode() + term.hashCode();
+    }
 }

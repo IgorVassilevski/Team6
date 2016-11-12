@@ -29,9 +29,9 @@ public class ShapesAvailability {
     static {
         boolean xSPATIAL4J_AVAILABLE;
         try {
-            Class.forName("org.locationtech.spatial4j.shape.impl.PointImpl");
+            Class.forName("com.spatial4j.core.shape.impl.PointImpl");
             xSPATIAL4J_AVAILABLE = true;
-        } catch (ClassNotFoundException ignored) {
+        } catch (Throwable t) {
             xSPATIAL4J_AVAILABLE = false;
         }
         SPATIAL4J_AVAILABLE = xSPATIAL4J_AVAILABLE;
@@ -40,7 +40,7 @@ public class ShapesAvailability {
         try {
             Class.forName("com.vividsolutions.jts.geom.GeometryFactory");
             xJTS_AVAILABLE = true;
-        } catch (ClassNotFoundException ignored) {
+        } catch (Throwable t) {
             xJTS_AVAILABLE = false;
         }
         JTS_AVAILABLE = xJTS_AVAILABLE;

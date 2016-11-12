@@ -19,6 +19,7 @@
 package org.elasticsearch.search.aggregations.support;
 
 import org.elasticsearch.index.fielddata.IndexFieldData;
+import org.elasticsearch.index.mapper.FieldMapper;
 import org.elasticsearch.index.mapper.MappedFieldType;
 
 /**

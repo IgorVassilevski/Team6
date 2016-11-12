@@ -1,7 +1,6 @@
 = Groovy API
-:ref:  http://www.elastic.co/guide/en/elasticsearch/reference/current
-:java: http://www.elastic.co/guide/en/elasticsearch/client/java-api/current
-:version: 5.0.0-alpha5
+:ref:  http://www.elastic.co/guide/en/elasticsearch/reference/2.3
+:java: http://www.elastic.co/guide/en/elasticsearch/client/java-api/2.3
 
 [preface]
 == Preface
@@ -27,12 +26,12 @@ Central].
 
 For example, you can define the latest version in your `pom.xml` file:
 
-["source","xml",subs="attributes"]
+[source,xml]
 --------------------------------------------------
 <dependency>
     <groupId>org.elasticsearch</groupId>
     <artifactId>elasticsearch-groovy</artifactId>
-    <version>{version}</version>
+    <version>${es.version}</version>
 </dependency>
 --------------------------------------------------
 
@@ -47,3 +46,5 @@ include::get.asciidoc[]
 include::delete.asciidoc[]
 
 include::search.asciidoc[]
+
+include::count.asciidoc[]

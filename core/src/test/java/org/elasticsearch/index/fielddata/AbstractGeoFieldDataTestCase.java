@@ -22,39 +22,41 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.spatial.geopoint.document.GeoPointField;
+import org.apache.lucene.spatial.util.GeoUtils;
 import org.elasticsearch.Version;
+import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.geo.GeoUtils;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.test.VersionUtils;
+import org.junit.Test;
 
 import static org.elasticsearch.test.geo.RandomShapeGenerator.randomPoint;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.*;
 
 /**
  *
  */
 public abstract class AbstractGeoFieldDataTestCase extends AbstractFieldDataImplTestCase {
     @Override
-    protected abstract String getFieldDataType();
+    protected abstract FieldDataType getFieldDataType();
 
     protected Field randomGeoPointField(String fieldName, Field.Store store) {
         GeoPoint point = randomPoint(random());
-        if (indexService.getIndexSettings().getIndexVersionCreated().before(Version.V_2_2_0)) {
+        if (indexService.indexSettings().getAsVersion(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT).before(Version.V_2_2_0)) {
             return new StringField(fieldName, point.lat()+","+point.lon(), store);
         }
         final GeoPointField.TermEncoding termEncoding;
-        termEncoding = indexService.getIndexSettings().getIndexVersionCreated().onOrAfter(Version.V_2_3_0) ?
+        termEncoding = indexService.indexSettings()
+            .getAsVersion(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT).onOrAfter(Version.V_2_3_0) ?
             GeoPointField.TermEncoding.PREFIX : GeoPointField.TermEncoding.NUMERIC;
-        return new GeoPointField(fieldName, point.lat(), point.lon(), termEncoding, store);
+        return new GeoPointField(fieldName, point.lon(), point.lat(), termEncoding, store);
     }
 
     @Override
     protected boolean hasDocValues() {
         // prior to 22 docValues were not required
-        if (indexService.getIndexSettings().getIndexVersionCreated().before(Version.V_2_2_0)) {
+        if (indexService.indexSettings()
+            .getAsVersion(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT).before(Version.V_2_2_0)) {
             return false;
         }
         return true;
@@ -62,7 +64,8 @@ public abstract class AbstractGeoFieldDataTestCase extends AbstractFieldDataImpl
 
     @Override
     protected long minRamBytesUsed() {
-        if (indexService.getIndexSettings().getIndexVersionCreated().before(Version.V_2_2_0)) {
+        if (indexService.indexSettings()
+            .getAsVersion(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT).before(Version.V_2_2_0)) {
             return super.minRamBytesUsed();
         }
         return 0;
@@ -84,6 +87,7 @@ public abstract class AbstractGeoFieldDataTestCase extends AbstractFieldDataImpl
     }
 
     @Override
+    @Test
     public void testSortMultiValuesFields() {
         assumeFalse("Only test on non geo_point fields", getFieldDataType().equals("geo_point"));
     }
@@ -105,8 +109,8 @@ public abstract class AbstractGeoFieldDataTestCase extends AbstractFieldDataImpl
             assertThat(docCount, greaterThan(0));
             for (int i = 0; i < docCount; ++i) {
                 final GeoPoint point = values.valueAt(i);
-                assertThat(point.lat(), allOf(greaterThanOrEqualTo(GeoUtils.MIN_LAT), lessThanOrEqualTo(GeoUtils.MAX_LAT)));
-                assertThat(point.lon(), allOf(greaterThanOrEqualTo(GeoUtils.MIN_LON), lessThanOrEqualTo(GeoUtils.MAX_LON)));
+                assertThat(point.lat(), allOf(greaterThanOrEqualTo(GeoUtils.MIN_LAT_INCL), lessThanOrEqualTo(GeoUtils.MAX_LAT_INCL)));
+                assertThat(point.lon(), allOf(greaterThanOrEqualTo(GeoUtils.MIN_LON_INCL), lessThanOrEqualTo(GeoUtils.MAX_LON_INCL)));
             }
         }
     }

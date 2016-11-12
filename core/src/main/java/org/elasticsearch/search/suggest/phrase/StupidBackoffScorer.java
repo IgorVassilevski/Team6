@@ -21,11 +21,19 @@ package org.elasticsearch.search.suggest.phrase;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.search.suggest.SuggestUtils;
 import org.elasticsearch.search.suggest.phrase.DirectCandidateGenerator.Candidate;
 
 import java.io.IOException;
 
-class StupidBackoffScorer extends WordScorer {
+public class StupidBackoffScorer extends WordScorer {
+    public static final WordScorerFactory FACTORY = new WordScorer.WordScorerFactory() {
+        @Override
+        public WordScorer newScorer(IndexReader reader, Terms terms, String field, double realWordLikelyhood, BytesRef separator) throws IOException {
+            return new StupidBackoffScorer(reader, terms, field, realWordLikelyhood, separator, 0.4f);
+        }
+    };
+
     private final double discount;
 
     public StupidBackoffScorer(IndexReader reader, Terms terms,String field, double realWordLikelyhood, BytesRef separator, double discount)
@@ -34,13 +42,9 @@ class StupidBackoffScorer extends WordScorer {
         this.discount = discount;
     }
 
-    double discount() {
-        return this.discount;
-    }
-
     @Override
     protected double scoreBigram(Candidate word, Candidate w_1) throws IOException {
-        join(separator, spare, w_1.term, word.term);
+        SuggestUtils.join(separator, spare, w_1.term, word.term);
         final long count = frequency(spare.get());
         if (count < 1) {
             return discount * scoreUnigram(word);
@@ -52,12 +56,12 @@ class StupidBackoffScorer extends WordScorer {
     protected double scoreTrigram(Candidate w, Candidate w_1, Candidate w_2) throws IOException {
         // First see if there are bigrams.  If there aren't then skip looking up the trigram.  This saves lookups
         // when the bigrams and trigrams are rare and we need both anyway.
-        join(separator, spare, w_1.term, w.term);
+        SuggestUtils.join(separator, spare, w_1.term, w.term);
         long bigramCount = frequency(spare.get());
         if (bigramCount < 1) {
             return discount * scoreUnigram(w);
         }
-        join(separator, spare, w_2.term, w_1.term, w.term);
+        SuggestUtils.join(separator, spare, w_2.term, w_1.term, w.term);
         long trigramCount = frequency(spare.get());
         if (trigramCount < 1) {
             return discount * (bigramCount / (w_1.frequency + 0.00000000001d));

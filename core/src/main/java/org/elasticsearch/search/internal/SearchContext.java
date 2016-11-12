@@ -18,95 +18,85 @@
  */
 package org.elasticsearch.search.internal;
 
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.MultimapBuilder;
 
 import org.apache.lucene.search.Collector;
-import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.store.AlreadyClosedException;
+import org.apache.lucene.search.Sort;
 import org.apache.lucene.util.Counter;
-import org.apache.lucene.util.RefCount;
 import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.cache.recycler.PageCacheRecycler;
+import org.elasticsearch.common.DelegatingHasContextAndHeaders;
+import org.elasticsearch.common.HasContextAndHeaders;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.ParseFieldMatcher;
 import org.elasticsearch.common.lease.Releasable;
 import org.elasticsearch.common.lease.Releasables;
-import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.BigArrays;
-import org.elasticsearch.common.util.concurrent.AbstractRefCounted;
-import org.elasticsearch.common.util.concurrent.RefCounted;
-import org.elasticsearch.common.util.iterable.Iterables;
 import org.elasticsearch.index.analysis.AnalysisService;
 import org.elasticsearch.index.cache.bitset.BitsetFilterCache;
 import org.elasticsearch.index.fielddata.IndexFieldDataService;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
-import org.elasticsearch.index.mapper.ObjectMapper;
+import org.elasticsearch.index.mapper.object.ObjectMapper;
+import org.elasticsearch.index.query.IndexQueryParserService;
 import org.elasticsearch.index.query.ParsedQuery;
-import org.elasticsearch.index.query.QueryShardContext;
-import org.elasticsearch.search.fetch.StoredFieldsContext;
+import org.elasticsearch.index.query.QueryParseContext;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.similarity.SimilarityService;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.SearchShardTarget;
 import org.elasticsearch.search.aggregations.SearchContextAggregations;
 import org.elasticsearch.search.dfs.DfsSearchResult;
-import org.elasticsearch.search.fetch.FetchPhase;
 import org.elasticsearch.search.fetch.FetchSearchResult;
 import org.elasticsearch.search.fetch.FetchSubPhase;
 import org.elasticsearch.search.fetch.FetchSubPhaseContext;
-import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
-import org.elasticsearch.search.fetch.subphase.InnerHitsContext;
-import org.elasticsearch.search.fetch.subphase.ScriptFieldsContext;
-import org.elasticsearch.search.fetch.subphase.highlight.SearchContextHighlight;
+import org.elasticsearch.search.fetch.innerhits.InnerHitsContext;
+import org.elasticsearch.search.fetch.script.ScriptFieldsContext;
+import org.elasticsearch.search.fetch.source.FetchSourceContext;
+import org.elasticsearch.search.highlight.SearchContextHighlight;
 import org.elasticsearch.search.lookup.SearchLookup;
 import org.elasticsearch.search.profile.Profilers;
 import org.elasticsearch.search.query.QuerySearchResult;
 import org.elasticsearch.search.rescore.RescoreSearchContext;
-import org.elasticsearch.search.sort.SortAndFormats;
+import org.elasticsearch.search.scan.ScanContext;
 import org.elasticsearch.search.suggest.SuggestionSearchContext;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * This class encapsulates the state needed to execute a search. It holds a reference to the
- * shards point in time snapshot (IndexReader / ContextIndexSearcher) and allows passing on
- * state from one query / fetch phase to another.
- *
- * This class also implements {@link RefCounted} since in some situations like in {@link org.elasticsearch.search.SearchService}
- * a SearchContext can be closed concurrently due to independent events ie. when an index gets removed. To prevent accessing closed
- * IndexReader / IndexSearcher instances the SearchContext can be guarded by a reference count and fail if it's been closed by
- * an external event.
- */
-// For reference why we use RefCounted here see #20095
-public abstract class SearchContext extends AbstractRefCounted implements Releasable {
+public abstract class SearchContext extends DelegatingHasContextAndHeaders implements Releasable {
 
     private static ThreadLocal<SearchContext> current = new ThreadLocal<>();
-    public static final int DEFAULT_TERMINATE_AFTER = 0;
+    public final static int DEFAULT_TERMINATE_AFTER = 0;
 
     public static void setCurrent(SearchContext value) {
         current.set(value);
+        QueryParseContext.setTypes(value.types());
     }
 
     public static void removeCurrent() {
         current.remove();
+        QueryParseContext.removeTypes();
     }
 
     public static SearchContext current() {
         return current.get();
     }
 
-    private Map<Lifetime, List<Releasable>> clearables = null;
+    private Multimap<Lifetime, Releasable> clearables = null;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private InnerHitsContext innerHitsContext;
 
     protected final ParseFieldMatcher parseFieldMatcher;
 
-    protected SearchContext(ParseFieldMatcher parseFieldMatcher) {
-        super("search_context");
+    protected SearchContext(ParseFieldMatcher parseFieldMatcher, HasContextAndHeaders contextHeaders) {
+        super(contextHeaders);
         this.parseFieldMatcher = parseFieldMatcher;
     }
 
@@ -116,26 +106,16 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
 
     @Override
     public final void close() {
-        if (closed.compareAndSet(false, true)) { // prevent double closing
-            decRef();
+        if (closed.compareAndSet(false, true)) { // prevent double release
+            try {
+                clearReleasables(Lifetime.CONTEXT);
+            } finally {
+                doClose();
+            }
         }
     }
 
     private boolean nowInMillisUsed;
-
-    @Override
-    protected final void closeInternal() {
-        try {
-            clearReleasables(Lifetime.CONTEXT);
-        } finally {
-            doClose();
-        }
-    }
-
-    @Override
-    protected void alreadyClosed() {
-        throw new IllegalStateException("search context is already closed can't increment refCount current count [" + refCount() + "]");
-    }
 
     protected abstract void doClose();
 
@@ -154,9 +134,15 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
 
     public abstract SearchType searchType();
 
+    public abstract SearchContext searchType(SearchType searchType);
+
     public abstract SearchShardTarget shardTarget();
 
     public abstract int numberOfShards();
+
+    public abstract boolean hasTypes();
+
+    public abstract String[] types();
 
     public abstract float queryBoost();
 
@@ -171,10 +157,6 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
 
     public final boolean nowInMillisUsed() {
         return nowInMillisUsed;
-    }
-
-    public final void resetNowInMillisUsed() {
-        this.nowInMillisUsed = false;
     }
 
     protected abstract long nowInMillisImpl();
@@ -234,9 +216,13 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
 
     public abstract AnalysisService analysisService();
 
+    public abstract IndexQueryParserService queryParserService();
+
     public abstract SimilarityService similarityService();
 
     public abstract ScriptService scriptService();
+
+    public abstract PageCacheRecycler pageCacheRecycler();
 
     public abstract BigArrays bigArrays();
 
@@ -244,9 +230,9 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
 
     public abstract IndexFieldDataService fieldData();
 
-    public abstract TimeValue timeout();
+    public abstract long timeoutInMillis();
 
-    public abstract void timeout(TimeValue timeout);
+    public abstract void timeoutInMillis(long timeoutInMillis);
 
     public abstract int terminateAfter();
 
@@ -256,17 +242,13 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
 
     public abstract Float minimumScore();
 
-    public abstract SearchContext sort(SortAndFormats sort);
+    public abstract SearchContext sort(Sort sort);
 
-    public abstract SortAndFormats sort();
+    public abstract Sort sort();
 
     public abstract SearchContext trackScores(boolean trackScores);
 
     public abstract boolean trackScores();
-
-    public abstract SearchContext searchAfter(FieldDoc searchAfter);
-
-    public abstract FieldDoc searchAfter();
 
     public abstract SearchContext parsedPostFilter(ParsedQuery postFilter);
 
@@ -291,18 +273,11 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
 
     public abstract SearchContext size(int size);
 
-    public abstract boolean hasStoredFields();
+    public abstract boolean hasFieldNames();
 
-    public abstract boolean hasStoredFieldsContext();
+    public abstract List<String> fieldNames();
 
-    /**
-     * A shortcut function to see whether there is a storedFieldsContext and it says the fields are requested.
-     */
-    public abstract boolean storedFieldsRequested();
-
-    public abstract StoredFieldsContext storedFieldsContext();
-
-    public abstract SearchContext storedFieldsContext(StoredFieldsContext storedFieldsContext);
+    public abstract void emptyFieldNames();
 
     public abstract boolean explain();
 
@@ -339,8 +314,6 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
 
     public abstract QuerySearchResult queryResult();
 
-    public abstract FetchPhase fetchPhase();
-
     public abstract FetchSearchResult fetchResult();
 
     /**
@@ -354,44 +327,32 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
      */
     public void addReleasable(Releasable releasable, Lifetime lifetime) {
         if (clearables == null) {
-            clearables = new HashMap<>();
+            clearables = MultimapBuilder.enumKeys(Lifetime.class).arrayListValues().build();
         }
-        List<Releasable> releasables = clearables.get(lifetime);
-        if (releasables == null) {
-            releasables = new ArrayList<>();
-            clearables.put(lifetime, releasables);
-        }
-        releasables.add(releasable);
+        clearables.put(lifetime, releasable);
     }
 
     public void clearReleasables(Lifetime lifetime) {
         if (clearables != null) {
-            List<List<Releasable>>releasables = new ArrayList<>();
+            List<Collection<Releasable>> releasables = new ArrayList<>();
             for (Lifetime lc : Lifetime.values()) {
                 if (lc.compareTo(lifetime) > 0) {
                     break;
                 }
-                List<Releasable> remove = clearables.remove(lc);
-                if (remove != null) {
-                    releasables.add(remove);
-                }
+                releasables.add(clearables.removeAll(lc));
             }
-            Releasables.close(Iterables.flatten(releasables));
+            Releasables.close(Iterables.concat(releasables));
         }
     }
 
-    /**
-     * @return true if the request contains only suggest
-     */
-    public final boolean hasOnlySuggest() {
-        return request().source() != null
-            && request().source().isSuggestOnly();
-    }
+    public abstract ScanContext scanContext();
+
+    public abstract MappedFieldType smartNameFieldType(String name);
 
     /**
      * Looks up the given field, but does not restrict to fields in the types set on this context.
      */
-    public abstract MappedFieldType smartNameFieldType(String name);
+    public abstract MappedFieldType smartNameFieldTypeFromAnyType(String name);
 
     public abstract ObjectMapper getObjectMapper(String name);
 
@@ -416,20 +377,5 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
          * This life time is for objects that need to live until the search context they are attached to is destroyed.
          */
         CONTEXT
-    }
-
-    public abstract QueryShardContext getQueryShardContext();
-
-    @Override
-    public String toString() {
-        StringBuilder result = new StringBuilder().append(shardTarget());
-        if (searchType() != SearchType.DEFAULT) {
-            result.append("searchType=[").append(searchType()).append("]");
-        }
-        if (scrollContext() != null) {
-            result.append("scroll=[").append(scrollContext().scroll.keepAlive()).append("]");
-        }
-        result.append(" query=[").append(query()).append("]");
-        return result.toString();
     }
 }

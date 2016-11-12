@@ -19,13 +19,13 @@
 
 package org.elasticsearch.script.javascript.support;
 
+import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.Wrapper;
+
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-
-import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.Wrapper;
 
 /**
  * Implementation of a Scriptable Map. This is the best choice where you want values to be
@@ -37,8 +37,8 @@ import org.mozilla.javascript.Wrapper;
  *
  *
  */
-public class ScriptableWrappedMap implements ScriptableMap<Object, Object>, Wrapper {
-    private Map<Object, Object> map;
+public class ScriptableWrappedMap implements ScriptableMap, Wrapper {
+    private Map map;
     private Scriptable parentScope;
     private Scriptable prototype;
 
@@ -54,29 +54,38 @@ public class ScriptableWrappedMap implements ScriptableMap<Object, Object>, Wrap
     /**
      * Construct
      */
-    public ScriptableWrappedMap(Map<Object, Object> map) {
+    public ScriptableWrappedMap(Map map) {
         this.map = map;
     }
 
     /**
      * Construct
      */
-    public ScriptableWrappedMap(Scriptable scope, Map<Object, Object> map) {
+    public ScriptableWrappedMap(Scriptable scope, Map map) {
         this.parentScope = scope;
         this.map = map;
     }
 
-    @Override
+    /* (non-Javadoc)
+    * @see org.mozilla.javascript.Wrapper#unwrap()
+    */
+
     public Object unwrap() {
         return map;
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#getClassName()
+     */
+
     public String getClassName() {
         return "ScriptableWrappedMap";
     }
 
-    @Override
+    /* (non-Javadoc)
+    * @see org.mozilla.javascript.Scriptable#get(java.lang.String, org.mozilla.javascript.Scriptable)
+    */
+
     public Object get(String name, Scriptable start) {
         // get the property from the underlying QName map
         if ("length".equals(name)) {
@@ -86,47 +95,69 @@ public class ScriptableWrappedMap implements ScriptableMap<Object, Object>, Wrap
         }
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#get(int, org.mozilla.javascript.Scriptable)
+     */
+
     public Object get(int index, Scriptable start) {
         Object value = null;
         int i = 0;
-        Iterator<Object> itrValues = map.values().iterator();
+        Iterator itrValues = map.values().iterator();
         while (i++ <= index && itrValues.hasNext()) {
             value = itrValues.next();
         }
         return ScriptValueConverter.wrapValue(this.parentScope != null ? this.parentScope : start, value);
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#has(java.lang.String, org.mozilla.javascript.Scriptable)
+     */
+
     public boolean has(String name, Scriptable start) {
         // locate the property in the underlying map
         return map.containsKey(name);
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#has(int, org.mozilla.javascript.Scriptable)
+     */
+
     public boolean has(int index, Scriptable start) {
         return (index >= 0 && map.values().size() > index);
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#put(java.lang.String, org.mozilla.javascript.Scriptable, java.lang.Object)
+     */
+
+    @SuppressWarnings("unchecked")
     public void put(String name, Scriptable start, Object value) {
         map.put(name, ScriptValueConverter.unwrapValue(value));
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#put(int, org.mozilla.javascript.Scriptable, java.lang.Object)
+     */
+
     public void put(int index, Scriptable start, Object value) {
         // TODO: implement?
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#delete(java.lang.String)
+     */
+
     public void delete(String name) {
         map.remove(name);
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#delete(int)
+     */
+
     public void delete(int index) {
         int i = 0;
-        Iterator<Object> itrKeys = map.keySet().iterator();
+        Iterator itrKeys = map.keySet().iterator();
         while (i <= index && itrKeys.hasNext()) {
             Object key = itrKeys.next();
             if (i == index) {
@@ -136,37 +167,58 @@ public class ScriptableWrappedMap implements ScriptableMap<Object, Object>, Wrap
         }
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#getPrototype()
+     */
+
     public Scriptable getPrototype() {
         return this.prototype;
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#setPrototype(org.mozilla.javascript.Scriptable)
+     */
+
     public void setPrototype(Scriptable prototype) {
         this.prototype = prototype;
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#getParentScope()
+     */
+
     public Scriptable getParentScope() {
         return this.parentScope;
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#setParentScope(org.mozilla.javascript.Scriptable)
+     */
+
     public void setParentScope(Scriptable parent) {
         this.parentScope = parent;
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#getIds()
+     */
+
     public Object[] getIds() {
         return map.keySet().toArray();
     }
 
-    @Override
-    public Object getDefaultValue(Class<?> hint) {
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#getDefaultValue(java.lang.Class)
+     */
+
+    public Object getDefaultValue(Class hint) {
         return null;
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see org.mozilla.javascript.Scriptable#hasInstance(org.mozilla.javascript.Scriptable)
+     */
+
     public boolean hasInstance(Scriptable value) {
         if (!(value instanceof Wrapper))
             return false;
@@ -174,65 +226,105 @@ public class ScriptableWrappedMap implements ScriptableMap<Object, Object>, Wrap
         return Map.class.isInstance(instance);
     }
 
-    @Override
+    /* (non-Javadoc)
+    * @see java.util.Map#clear()
+    */
+
     public void clear() {
         this.map.clear();
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see java.util.Map#containsKey(java.lang.Object)
+     */
+
     public boolean containsKey(Object key) {
         return this.map.containsKey(key);
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see java.util.Map#containsValue(java.lang.Object)
+     */
+
     public boolean containsValue(Object value) {
         return this.map.containsValue(value);
     }
 
-    @Override
-    public Set<Map.Entry<Object, Object>> entrySet() {
+    /* (non-Javadoc)
+     * @see java.util.Map#entrySet()
+     */
+
+    public Set entrySet() {
         return this.map.entrySet();
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see java.util.Map#get(java.lang.Object)
+     */
+
     public Object get(Object key) {
         return this.map.get(key);
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see java.util.Map#isEmpty()
+     */
+
     public boolean isEmpty() {
         return (this.map.size() == 0);
     }
 
-    @Override
-    public Set<Object> keySet() {
+    /* (non-Javadoc)
+     * @see java.util.Map#keySet()
+     */
+
+    public Set keySet() {
         return this.map.keySet();
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see java.util.Map#put(java.lang.Object, java.lang.Object)
+     */
+
     public Object put(Object key, Object value) {
         return this.map.put(key, value);
     }
 
-    @Override
-    public void putAll(Map<? extends Object, ? extends Object> t) {
+    /* (non-Javadoc)
+     * @see java.util.Map#putAll(java.util.Map)
+     */
+
+    public void putAll(Map t) {
         this.map.putAll(t);
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see java.util.Map#remove(java.lang.Object)
+     */
+
     public Object remove(Object key) {
         return this.map.remove(key);
     }
 
-    @Override
+    /* (non-Javadoc)
+     * @see java.util.Map#size()
+     */
+
     public int size() {
         return this.map.size();
     }
 
-    @Override
-    public Collection<Object> values() {
+    /* (non-Javadoc)
+     * @see java.util.Map#values()
+     */
+
+    public Collection values() {
         return this.map.values();
     }
+
+    /* (non-Javadoc)
+     * @see java.lang.Object#toString()
+     */
 
     @Override
     public String toString() {

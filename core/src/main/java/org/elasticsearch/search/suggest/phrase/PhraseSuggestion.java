@@ -22,6 +22,7 @@ package org.elasticsearch.search.suggest.phrase;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.text.Text;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.search.suggest.Suggest;
 import org.elasticsearch.search.suggest.Suggest.Suggestion;
 
@@ -52,7 +53,7 @@ public class PhraseSuggestion extends Suggest.Suggestion<PhraseSuggestion.Entry>
 
     public static class Entry extends Suggestion.Entry<Suggestion.Entry.Option> {
         static class Fields {
-            static final String CUTOFF_SCORE = "cutoff_score";
+            static final XContentBuilderString CUTOFF_SCORE = new XContentBuilderString("cutoff_score");
         }
 
         protected double cutoffScore = Double.MIN_VALUE;

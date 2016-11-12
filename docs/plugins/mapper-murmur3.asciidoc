@@ -13,9 +13,8 @@ This plugin can be installed using the plugin manager:
 
 [source,sh]
 ----------------------------------------------------------------
-sudo bin/elasticsearch-plugin install mapper-murmur3
+sudo bin/plugin install mapper-murmur3
 ----------------------------------------------------------------
-// NOTCONSOLE
 
 The plugin must be installed on every node in the cluster, and each node must
 be restarted after installation.
@@ -28,9 +27,8 @@ The plugin can be removed with the following command:
 
 [source,sh]
 ----------------------------------------------------------------
-sudo bin/elasticsearch-plugin remove mapper-murmur3
+sudo bin/plugin remove mapper-murmur3
 ----------------------------------------------------------------
-// NOTCONSOLE
 
 The node must be stopped before removing the plugin.
 
@@ -48,7 +46,7 @@ PUT my_index
     "my_type": {
       "properties": {
         "my_field": {
-          "type": "keyword",
+          "type": "string",
           "fields": {
             "hash": {
               "type": "murmur3"
@@ -60,7 +58,7 @@ PUT my_index
   }
 }
 --------------------------
-// CONSOLE
+// AUTOSENSE
 
 Such a mapping would allow to refer to `my_field.hash` in order to get hashes
 of the values of the `my_field` field. This is only useful in order to run
@@ -90,7 +88,7 @@ GET my_index/_search
   }
 }
 --------------------------
-// CONSOLE
+// AUTOSENSE
 
 <1> Counting unique values on the `my_field.hash` field
 

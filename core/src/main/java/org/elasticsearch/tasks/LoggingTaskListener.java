@@ -19,9 +19,7 @@
 
 package org.elasticsearch.tasks;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 
 /**
@@ -29,10 +27,10 @@ import org.elasticsearch.common.logging.Loggers;
  * need a listener but aren't returning the result to the user.
  */
 public final class LoggingTaskListener<Response> implements TaskListener<Response> {
-    private static final Logger logger = Loggers.getLogger(LoggingTaskListener.class);
+    private final static ESLogger logger = Loggers.getLogger(LoggingTaskListener.class);
 
     /**
-     * Get the instance of NoopActionListener cast appropriately.
+     * Get the instance of {@linkplain LoggingActionListener} cast appropriately.
      */
     @SuppressWarnings("unchecked") // Safe because we only toString the response
     public static <Response> TaskListener<Response> instance() {
@@ -51,6 +49,6 @@ public final class LoggingTaskListener<Response> implements TaskListener<Respons
 
     @Override
     public void onFailure(Task task, Throwable e) {
-        logger.warn((Supplier<?>) () -> new ParameterizedMessage("{} failed with exception", task.getId()), e);
+        logger.warn("{} failed with exception", e, task.getId());
     }
 }

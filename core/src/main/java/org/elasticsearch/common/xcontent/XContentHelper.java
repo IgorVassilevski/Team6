@@ -19,8 +19,11 @@
 
 package org.elasticsearch.common.xcontent;
 
+import com.google.common.base.Charsets;
+import com.google.common.collect.Maps;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchParseException;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.compress.Compressor;
@@ -31,7 +34,6 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -91,11 +93,35 @@ public class XContentHelper {
     }
 
     public static String convertToJson(BytesReference bytes, boolean reformatJson, boolean prettyPrint) throws IOException {
+        if (bytes.hasArray()) {
+            return convertToJson(bytes.array(), bytes.arrayOffset(), bytes.length(), reformatJson, prettyPrint);
+        }
         XContentType xContentType = XContentFactory.xContentType(bytes);
         if (xContentType == XContentType.JSON && !reformatJson) {
-            return bytes.utf8ToString();
+            BytesArray bytesArray = bytes.toBytesArray();
+            return new String(bytesArray.array(), bytesArray.arrayOffset(), bytesArray.length(), Charsets.UTF_8);
         }
         try (XContentParser parser = XContentFactory.xContent(xContentType).createParser(bytes.streamInput())) {
+            parser.nextToken();
+            XContentBuilder builder = XContentFactory.jsonBuilder();
+            if (prettyPrint) {
+                builder.prettyPrint();
+            }
+            builder.copyCurrentStructure(parser);
+            return builder.string();
+        }
+    }
+
+    public static String convertToJson(byte[] data, int offset, int length, boolean reformatJson) throws IOException {
+        return convertToJson(data, offset, length, reformatJson, false);
+    }
+
+    public static String convertToJson(byte[] data, int offset, int length, boolean reformatJson, boolean prettyPrint) throws IOException {
+        XContentType xContentType = XContentFactory.xContentType(data, offset, length);
+        if (xContentType == XContentType.JSON && !reformatJson) {
+            return new String(data, offset, length, Charsets.UTF_8);
+        }
+        try (XContentParser parser = XContentFactory.xContent(xContentType).createParser(data, offset, length)) {
             parser.nextToken();
             XContentBuilder builder = XContentFactory.jsonBuilder();
             if (prettyPrint) {
@@ -211,7 +237,7 @@ public class XContentHelper {
                     List mergedList = new ArrayList();
                     if (allListValuesAreMapsOfOne(defaultList) && allListValuesAreMapsOfOne(contentList)) {
                         // all are in the form of [ {"key1" : {}}, {"key2" : {}} ], merge based on keys
-                        Map<String, Map<String, Object>> processed = new LinkedHashMap<>();
+                        Map<String, Map<String, Object>> processed = Maps.newLinkedHashMap();
                         for (Object o : contentList) {
                             Map<String, Object> map = (Map<String, Object>) o;
                             Map.Entry<String, Object> entry = map.entrySet().iterator().next();

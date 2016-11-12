@@ -76,10 +76,6 @@ public class ExtendedCommonTermsQuery extends CommonTermsQuery {
         return lowFreqMinNumShouldMatchSpec;
     }
 
-    public float getMaxTermFrequency() {
-        return this.maxTermFrequency;
-    }
-
     @Override
     protected Query newTermQuery(Term term, TermContext context) {
         if (fieldType == null) {

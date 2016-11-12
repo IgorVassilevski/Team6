@@ -32,11 +32,11 @@ Integrations are not plugins, but are external tools or modules that make it eas
 [[data-integrations]]
 === Data import/export and validation
 
-NOTE: Rivers were used to import data from external systems into Elasticsearch prior to the 2.0 release. Elasticsearch
+NOTE: Rivers were used to import data from external systems into Elasticsearch prior to the 2.0 release. Elasticsearch 
 releases 2.0 and later do not support rivers.
 
 [float]
-==== Supported by Elasticsearch:
+==== Supported by elasticsearch:
 
 * https://www.elastic.co/guide/en/logstash/current/plugins-outputs-elasticsearch.html[Logstash output to Elasticsearch]:
   The Logstash `elasticsearch` output plugin.
@@ -45,7 +45,7 @@ releases 2.0 and later do not support rivers.
 * https://www.elastic.co/guide/en/logstash/current/plugins-filters-elasticsearch.html[Elasticsearch event filtering in Logstash]
   The Logstash `elasticsearch` filter plugin.
 * https://www.elastic.co/guide/en/logstash/current/plugins-codecs-es_bulk.html[Elasticsearch bulk codec]
-  The Logstash `es_bulk` plugin decodes the Elasticsearch bulk format into individual events.
+  The Logstash `es_bulk` plugin decodes the Elasticsearch bulk format into individual events. 
 
 [float]
 ==== Supported by the community:
@@ -61,7 +61,7 @@ releases 2.0 and later do not support rivers.
 
 * https://github.com/Aconex/scrutineer[Scrutineer]:
   A high performance consistency checker to compare what you've indexed
-  with your source of truth content (e.g. DB)
+  with your source of truth content
 
 * https://github.com/salyh/elasticsearch-imap[IMAP/POP3/Mail importer]:
   The Mail importer allows to fetch data from IMAP and POP3 servers for indexing into Elasticsearch (by Hendrik Saly)
@@ -76,14 +76,19 @@ releases 2.0 and later do not support rivers.
 [float]
 ==== Supported by Elasticsearch:
 
-* https://github.com/elastic/puppet-elasticsearch[Puppet]:
+* https://github.com/elasticsearch/puppet-elasticsearch[Puppet]:
   Elasticsearch puppet module.
 
 [float]
 ==== Supported by the community:
 
-* https://github.com/elastic/cookbook-elasticsearch[Chef]:
+* http://github.com/elasticsearch/cookbook-elasticsearch[Chef]:
   Chef cookbook for Elasticsearch
+
+This project appears to have been abandoned:
+
+* https://github.com/medcl/salt-elasticsearch[SaltStack]:
+  SaltStack Module for Elasticsearch
 
 [float]
 [[framework-integrations]]
@@ -130,6 +135,23 @@ releases 2.0 and later do not support rivers.
 * https://github.com/twitter/storehaus[Twitter Storehaus]:
   Thin asynchronous Scala client for Storehaus.
 
+These projects appear to have been abandoned:
+
+* https://metacpan.org/module/Catalyst::Model::Search::Elasticsearch[Catalyst]:
+  Elasticsearch and Catalyst integration.
+
+* http://github.com/aparo/django-elasticsearch[django-elasticsearch]:
+  Django Elasticsearch Backend.
+
+* https://github.com/kzwang/elasticsearch-osem[elasticsearch-osem]:
+  A Java Object Search Engine Mapping (OSEM) for Elasticsearch
+
+* http://geeks.aretotally.in/play-framework-module-elastic-search-distributed-searching-with-json-http-rest-or-java[Play!Framework]:
+  Integrate with Play! Framework Application.
+
+* http://code.google.com/p/terrastore/wiki/Search_Integration[Terrastore Search]:
+  http://code.google.com/p/terrastore/[Terrastore] integration module with elasticsearch.
+
 
 [float]
 [[hadoop-integrations]]
@@ -141,6 +163,18 @@ releases 2.0 and later do not support rivers.
 * link:/guide/en/elasticsearch/hadoop/current/[es-hadoop]: Elasticsearch real-time
   search and analytics natively integrated with Hadoop. Supports Map/Reduce,
   Cascading, Apache Hive, Apache Pig, Apache Spark and Apache Storm.
+
+[float]
+==== Supported by the community:
+
+These projects appear to have been abandoned:
+
+* http://github.com/Aconex/elasticflume[elasticflume]:
+  http://github.com/cloudera/flume[Flume] sink implementation.
+
+
+* https://github.com/infochimps-labs/wonderdog[Wonderdog]:
+  Hadoop bulk loader into elasticsearch.
 
 
 [float]
@@ -201,4 +235,3 @@ These projects appear to have been abandoned:
   D3.
 * https://github.com/OlegKunitsyn/eslogd[eslogd]:
   Linux daemon that replicates events to a central Elasticsearch server in realtime
->>>>>>> 02602a3... Update integrations.asciidoc (#18915)

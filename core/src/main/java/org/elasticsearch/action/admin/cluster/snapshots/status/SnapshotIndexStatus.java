@@ -19,16 +19,15 @@
 
 package org.elasticsearch.action.admin.cluster.snapshots.status;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-
-import static java.util.Collections.unmodifiableMap;
 
 /**
  * Represents snapshot status of all shards in the index
@@ -46,14 +45,14 @@ public class SnapshotIndexStatus implements Iterable<SnapshotIndexShardStatus>, 
     SnapshotIndexStatus(String index, Collection<SnapshotIndexShardStatus> shards) {
         this.index = index;
 
-        Map<Integer, SnapshotIndexShardStatus> indexShards = new HashMap<>();
+        ImmutableMap.Builder<Integer, SnapshotIndexShardStatus> builder = ImmutableMap.builder();
         stats = new SnapshotStats();
         for (SnapshotIndexShardStatus shard : shards) {
-            indexShards.put(shard.getShardId().getId(), shard);
+            builder.put(shard.getShardId(), shard);
             stats.add(shard.getStats());
         }
         shardsStats = new SnapshotShardsStats(shards);
-        this.indexShards = unmodifiableMap(indexShards);
+        indexShards = builder.build();
     }
 
     /**
@@ -90,12 +89,12 @@ public class SnapshotIndexStatus implements Iterable<SnapshotIndexShardStatus>, 
     }
 
     static final class Fields {
-        static final String SHARDS = "shards";
+        static final XContentBuilderString SHARDS = new XContentBuilderString("shards");
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(getIndex());
+        builder.startObject(getIndex(), XContentBuilder.FieldCaseConversion.NONE);
         shardsStats.toXContent(builder, params);
         stats.toXContent(builder, params);
         builder.startObject(Fields.SHARDS);

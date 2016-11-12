@@ -19,12 +19,12 @@
 
 package org.elasticsearch.action.admin.indices.flush;
 
+import org.elasticsearch.action.ActionWriteResponse;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
-import org.elasticsearch.action.support.replication.ReplicationResponse;
 import org.elasticsearch.action.support.replication.TransportBroadcastReplicationAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.shard.ShardId;
@@ -36,19 +36,19 @@ import java.util.List;
 /**
  * Flush Action.
  */
-public class TransportFlushAction extends TransportBroadcastReplicationAction<FlushRequest, FlushResponse, ShardFlushRequest, ReplicationResponse> {
+public class TransportFlushAction extends TransportBroadcastReplicationAction<FlushRequest, FlushResponse, ShardFlushRequest, ActionWriteResponse> {
 
     @Inject
     public TransportFlushAction(Settings settings, ThreadPool threadPool, ClusterService clusterService,
                                 TransportService transportService, ActionFilters actionFilters,
                                 IndexNameExpressionResolver indexNameExpressionResolver,
                                 TransportShardFlushAction replicatedFlushAction) {
-        super(FlushAction.NAME, FlushRequest::new, settings, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, replicatedFlushAction);
+        super(FlushAction.NAME, FlushRequest.class, settings, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, replicatedFlushAction);
     }
 
     @Override
-    protected ReplicationResponse newShardResponse() {
-        return new ReplicationResponse();
+    protected ActionWriteResponse newShardResponse() {
+        return new ActionWriteResponse();
     }
 
     @Override

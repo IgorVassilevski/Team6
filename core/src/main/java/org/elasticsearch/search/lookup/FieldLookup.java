@@ -18,6 +18,7 @@
  */
 package org.elasticsearch.search.lookup;
 
+import org.elasticsearch.index.mapper.FieldMapper;
 import org.elasticsearch.index.mapper.MappedFieldType;
 
 import java.util.ArrayList;
@@ -85,7 +86,7 @@ public class FieldLookup {
         }
         valueLoaded = true;
         value = null;
-        List<Object> values = fields.get(fieldType.name());
+        List<Object> values = fields.get(fieldType.names().indexName());
         return values != null ? value = values.get(0) : null;
     }
 
@@ -95,6 +96,6 @@ public class FieldLookup {
         }
         valuesLoaded = true;
         values.clear();
-        return values = fields().get(fieldType.name());
+        return values = fields().get(fieldType.names().indexName());
     }
 }

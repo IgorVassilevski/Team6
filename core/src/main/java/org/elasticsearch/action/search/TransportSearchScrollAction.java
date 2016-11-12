@@ -22,17 +22,18 @@ package org.elasticsearch.action.search;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.search.action.SearchTransportService;
+import org.elasticsearch.search.action.SearchServiceTransportAction;
 import org.elasticsearch.search.controller.SearchPhaseController;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
 import static org.elasticsearch.action.search.ParsedScrollId.QUERY_AND_FETCH_TYPE;
 import static org.elasticsearch.action.search.ParsedScrollId.QUERY_THEN_FETCH_TYPE;
+import static org.elasticsearch.action.search.ParsedScrollId.SCAN;
 import static org.elasticsearch.action.search.TransportSearchHelper.parseScrollId;
 
 /**
@@ -41,18 +42,18 @@ import static org.elasticsearch.action.search.TransportSearchHelper.parseScrollI
 public class TransportSearchScrollAction extends HandledTransportAction<SearchScrollRequest, SearchResponse> {
 
     private final ClusterService clusterService;
-    private final SearchTransportService searchTransportService;
+    private final SearchServiceTransportAction searchService;
     private final SearchPhaseController searchPhaseController;
 
     @Inject
     public TransportSearchScrollAction(Settings settings, ThreadPool threadPool, TransportService transportService,
-                                       ClusterService clusterService, SearchTransportService searchTransportService,
+                                       ClusterService clusterService, SearchServiceTransportAction searchService,
                                        SearchPhaseController searchPhaseController,
                                        ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
         super(settings, SearchScrollAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver,
-                SearchScrollRequest::new);
+                SearchScrollRequest.class);
         this.clusterService = clusterService;
-        this.searchTransportService = searchTransportService;
+        this.searchService = searchService;
         this.searchPhaseController = searchPhaseController;
     }
 
@@ -63,18 +64,22 @@ public class TransportSearchScrollAction extends HandledTransportAction<SearchSc
             AbstractAsyncAction action;
             switch (scrollId.getType()) {
                 case QUERY_THEN_FETCH_TYPE:
-                    action = new SearchScrollQueryThenFetchAsyncAction(logger, clusterService, searchTransportService,
+                    action = new SearchScrollQueryThenFetchAsyncAction(logger, clusterService, searchService,
                             searchPhaseController, request, scrollId, listener);
                     break;
                 case QUERY_AND_FETCH_TYPE:
-                    action = new SearchScrollQueryAndFetchAsyncAction(logger, clusterService, searchTransportService,
+                    action = new SearchScrollQueryAndFetchAsyncAction(logger, clusterService, searchService,
                             searchPhaseController, request, scrollId, listener);
+                    break;
+                case SCAN:
+                    action = new SearchScrollScanAsyncAction(logger, clusterService, searchService, searchPhaseController,
+                            request, scrollId, listener);
                     break;
                 default:
                     throw new IllegalArgumentException("Scroll id type [" + scrollId.getType() + "] unrecognized");
             }
             action.start();
-        } catch (Exception e) {
+        } catch (Throwable e) {
             listener.onFailure(e);
         }
     }

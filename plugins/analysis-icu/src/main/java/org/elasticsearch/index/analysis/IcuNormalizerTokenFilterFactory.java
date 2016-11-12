@@ -21,10 +21,11 @@ package org.elasticsearch.index.analysis;
 
 import com.ibm.icu.text.Normalizer2;
 import org.apache.lucene.analysis.TokenStream;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
-
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 /**
  * Uses the {@link org.apache.lucene.analysis.icu.ICUNormalizer2Filter} to normalize tokens.
@@ -32,22 +33,18 @@ import org.elasticsearch.index.IndexSettings;
  *
  *
  */
-public class IcuNormalizerTokenFilterFactory extends AbstractTokenFilterFactory implements MultiTermAwareComponent {
+public class IcuNormalizerTokenFilterFactory extends AbstractTokenFilterFactory {
 
     private final String name;
 
-    public IcuNormalizerTokenFilterFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public IcuNormalizerTokenFilterFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         this.name = settings.get("name", "nfkc_cf");
     }
 
     @Override
     public TokenStream create(TokenStream tokenStream) {
         return new org.apache.lucene.analysis.icu.ICUNormalizer2Filter(tokenStream, Normalizer2.getInstance(null, name, Normalizer2.Mode.COMPOSE));
-    }
-
-    @Override
-    public Object getMultiTermComponent() {
-        return this;
     }
 }

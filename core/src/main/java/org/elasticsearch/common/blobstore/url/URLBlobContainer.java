@@ -19,15 +19,16 @@
 
 package org.elasticsearch.common.blobstore.url;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.common.blobstore.BlobMetaData;
 import org.elasticsearch.common.blobstore.BlobPath;
 import org.elasticsearch.common.blobstore.support.AbstractBlobContainer;
+import org.elasticsearch.common.bytes.BytesReference;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.Map;
 
 /**
  * URL blob implementation of {@link org.elasticsearch.common.blobstore.BlobContainer}
@@ -64,7 +65,7 @@ public class URLBlobContainer extends AbstractBlobContainer {
      * This operation is not supported by URLBlobContainer
      */
     @Override
-    public Map<String, BlobMetaData> listBlobs() throws IOException {
+    public ImmutableMap<String, BlobMetaData> listBlobs() throws IOException {
         throw new UnsupportedOperationException("URL repository doesn't support this operation");
     }
 
@@ -72,7 +73,7 @@ public class URLBlobContainer extends AbstractBlobContainer {
      * This operation is not supported by URLBlobContainer
      */
     @Override
-    public Map<String, BlobMetaData> listBlobsByPrefix(String blobNamePrefix) throws IOException {
+    public ImmutableMap<String, BlobMetaData> listBlobsByPrefix(String blobNamePrefix) throws IOException {
         throw new UnsupportedOperationException("URL repository doesn't support this operation");
     }
 
@@ -107,4 +108,8 @@ public class URLBlobContainer extends AbstractBlobContainer {
         throw new UnsupportedOperationException("URL repository doesn't support this operation");
     }
 
+    @Override
+    public void writeBlob(String blobName, BytesReference data) throws IOException {
+        throw new UnsupportedOperationException("URL repository doesn't support this operation");
+    }
 }

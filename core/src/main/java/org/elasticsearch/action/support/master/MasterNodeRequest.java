@@ -20,6 +20,7 @@
 package org.elasticsearch.action.support.master;
 
 import org.elasticsearch.action.ActionRequest;
+import org.elasticsearch.action.support.ChildTaskActionRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.unit.TimeValue;
@@ -29,28 +30,33 @@ import java.io.IOException;
 /**
  * A based request for master based operation.
  */
-public abstract class MasterNodeRequest<Request extends MasterNodeRequest<Request>> extends ActionRequest<Request> {
+public abstract class MasterNodeRequest<T extends MasterNodeRequest<T>> extends ChildTaskActionRequest<T> {
 
     public static final TimeValue DEFAULT_MASTER_NODE_TIMEOUT = TimeValue.timeValueSeconds(30);
 
     protected TimeValue masterNodeTimeout = DEFAULT_MASTER_NODE_TIMEOUT;
 
     protected MasterNodeRequest() {
+
+    }
+
+    protected MasterNodeRequest(ActionRequest request) {
+        super(request);
     }
 
     /**
      * A timeout value in case the master has not been discovered yet or disconnected.
      */
     @SuppressWarnings("unchecked")
-    public final Request masterNodeTimeout(TimeValue timeout) {
+    public final T masterNodeTimeout(TimeValue timeout) {
         this.masterNodeTimeout = timeout;
-        return (Request) this;
+        return (T) this;
     }
 
     /**
      * A timeout value in case the master has not been discovered yet or disconnected.
      */
-    public final Request masterNodeTimeout(String timeout) {
+    public final T masterNodeTimeout(String timeout) {
         return masterNodeTimeout(TimeValue.parseTimeValue(timeout, null, getClass().getSimpleName() + ".masterNodeTimeout"));
     }
 
@@ -61,7 +67,7 @@ public abstract class MasterNodeRequest<Request extends MasterNodeRequest<Reques
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
-        masterNodeTimeout = new TimeValue(in);
+        masterNodeTimeout = TimeValue.readTimeValue(in);
     }
 
     @Override

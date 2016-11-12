@@ -23,11 +23,14 @@ import org.elasticsearch.Version;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import static org.elasticsearch.test.VersionUtils.randomVersion;
 import static org.hamcrest.CoreMatchers.equalTo;
 
 public class IndicesOptionsTests extends ESTestCase {
+
+    @Test
     public void testSerialization() throws Exception {
         int iterations = randomIntBetween(5, 20);
         for (int i = 0; i < iterations; i++) {
@@ -38,7 +41,7 @@ public class IndicesOptionsTests extends ESTestCase {
             output.setVersion(outputVersion);
             indicesOptions.writeIndicesOptions(output);
 
-            StreamInput streamInput = output.bytes().streamInput();
+            StreamInput streamInput = StreamInput.wrap(output.bytes());
             streamInput.setVersion(randomVersion(random()));
             IndicesOptions indicesOptions2 = IndicesOptions.readIndicesOptions(streamInput);
 
@@ -52,6 +55,7 @@ public class IndicesOptionsTests extends ESTestCase {
         }
     }
 
+    @Test
     public void testFromOptions() {
         int iterations = randomIntBetween(5, 20);
         for (int i = 0; i < iterations; i++) {

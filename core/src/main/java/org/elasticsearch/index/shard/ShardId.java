@@ -40,22 +40,22 @@ public class ShardId implements Streamable, Comparable<ShardId> {
     private ShardId() {
     }
 
+    public ShardId(String index, int shardId) {
+        this(new Index(index), shardId);
+    }
+
     public ShardId(Index index, int shardId) {
         this.index = index;
         this.shardId = shardId;
         this.hashCode = computeHashCode();
     }
 
-    public ShardId(String index, String indexUUID, int shardId) {
-        this(new Index(index, indexUUID), shardId);
+    public Index index() {
+        return this.index;
     }
 
-    public Index getIndex() {
-        return index;
-    }
-
-    public String getIndexName() {
-        return index.getName();
+    public String getIndex() {
+        return index().name();
     }
 
     public int id() {
@@ -68,7 +68,7 @@ public class ShardId implements Streamable, Comparable<ShardId> {
 
     @Override
     public String toString() {
-        return "[" + index.getName() + "][" + shardId + "]";
+        return "[" + index.name() + "][" + shardId + "]";
     }
 
     @Override
@@ -76,7 +76,7 @@ public class ShardId implements Streamable, Comparable<ShardId> {
         if (this == o) return true;
         if (o == null) return false;
         ShardId shardId1 = (ShardId) o;
-        return shardId == shardId1.shardId && index.equals(shardId1.index);
+        return shardId == shardId1.shardId && index.name().equals(shardId1.index.name());
     }
 
     @Override
@@ -98,7 +98,7 @@ public class ShardId implements Streamable, Comparable<ShardId> {
 
     @Override
     public void readFrom(StreamInput in) throws IOException {
-        index = new Index(in);
+        index = Index.readIndexName(in);
         shardId = in.readVInt();
         hashCode = computeHashCode();
     }
@@ -112,11 +112,7 @@ public class ShardId implements Streamable, Comparable<ShardId> {
     @Override
     public int compareTo(ShardId o) {
         if (o.getId() == shardId) {
-            int compare = index.getName().compareTo(o.getIndex().getName());
-            if (compare != 0) {
-                return compare;
-            }
-            return index.getUUID().compareTo(o.getIndex().getUUID());
+            return index.name().compareTo(o.getIndex());
         }
         return Integer.compare(shardId, o.getId());
     }

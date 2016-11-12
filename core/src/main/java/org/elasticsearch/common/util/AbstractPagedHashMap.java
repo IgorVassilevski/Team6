@@ -20,6 +20,7 @@
 package org.elasticsearch.common.util;
 
 import com.carrotsearch.hppc.BitMixer;
+import com.google.common.base.Preconditions;
 import org.elasticsearch.common.lease.Releasable;
 
 /**
@@ -47,12 +48,8 @@ abstract class AbstractPagedHashMap implements Releasable {
     long mask;
 
     AbstractPagedHashMap(long capacity, float maxLoadFactor, BigArrays bigArrays) {
-        if (capacity < 0) {
-            throw new IllegalArgumentException("capacity must be >= 0");
-        }
-        if (maxLoadFactor <= 0 || maxLoadFactor >= 1) {
-            throw new IllegalArgumentException("maxLoadFactor must be > 0 and < 1");
-        }
+        Preconditions.checkArgument(capacity >= 0, "capacity must be >= 0");
+        Preconditions.checkArgument(maxLoadFactor > 0 && maxLoadFactor < 1, "maxLoadFactor must be > 0 and < 1");
         this.bigArrays = bigArrays;
         this.maxLoadFactor = maxLoadFactor;
         long buckets = 1L + (long) (capacity / maxLoadFactor);
@@ -112,7 +109,7 @@ abstract class AbstractPagedHashMap implements Releasable {
             }
         }
         // The only entries which have not been put in their final position in the previous loop are those that were stored in a slot that
-        // is < slot(key, mask). This only happens when slot(key, mask) returned a slot that was close to the end of the array and collision
+        // is < slot(key, mask). This only happens when slot(key, mask) returned a slot that was close to the end of the array and colision
         // resolution has put it back in the first slots. This time, collision resolution will have put them at the beginning of the newly
         // allocated slots. Let's re-add them to make sure they are in the right slot. This 2nd loop will typically exit very early.
         for (long i = buckets; i < newBuckets; ++i) {

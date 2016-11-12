@@ -19,7 +19,7 @@ PUT my_index/my_type/1
   "text": "Document with ID 1"
 }
 
-PUT my_index/my_type/2&refresh=true
+PUT my_index/my_type/2
 {
   "text": "Document with ID 2"
 }
@@ -33,6 +33,6 @@ GET my_index/_search
   }
 }
 --------------------------
-// CONSOLE
+// AUTOSENSE
 
 <1> Querying on the `_id` field (also see the <<query-dsl-ids-query,`ids` query>>)

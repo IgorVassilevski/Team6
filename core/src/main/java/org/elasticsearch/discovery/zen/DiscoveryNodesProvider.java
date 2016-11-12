@@ -20,6 +20,8 @@
 package org.elasticsearch.discovery.zen;
 
 import org.elasticsearch.cluster.node.DiscoveryNodes;
+import org.elasticsearch.common.Nullable;
+import org.elasticsearch.node.service.NodeService;
 
 /**
  *
@@ -28,4 +30,6 @@ public interface DiscoveryNodesProvider {
 
     DiscoveryNodes nodes();
 
+    @Nullable
+    NodeService nodeService();
 }

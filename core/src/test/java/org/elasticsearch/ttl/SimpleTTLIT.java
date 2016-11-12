@@ -19,8 +19,8 @@
 
 package org.elasticsearch.ttl;
 
-import org.elasticsearch.Version;
-import org.elasticsearch.action.DocWriteResponse;
+import com.google.common.base.Predicate;
+
 import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingResponse;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
@@ -28,26 +28,23 @@ import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.update.UpdateRequestBuilder;
 import org.elasticsearch.action.update.UpdateResponse;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.plugins.Plugin;
+import org.elasticsearch.index.get.GetField;
 import org.elasticsearch.test.ESIntegTestCase;
-import org.elasticsearch.test.InternalSettingsPlugin;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
 import org.elasticsearch.test.ESIntegTestCase.Scope;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static org.elasticsearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
+import static org.elasticsearch.common.settings.Settings.settingsBuilder;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoFailures;
 import static org.hamcrest.Matchers.both;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
@@ -57,10 +54,10 @@ import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
-@ClusterScope(scope= Scope.SUITE, supportsDedicatedMasters = false, numDataNodes = 1)
+@ClusterScope(scope= Scope.SUITE, numDataNodes = 1)
 public class SimpleTTLIT extends ESIntegTestCase {
 
-    private static final long PURGE_INTERVAL = 200;
+    static private final long PURGE_INTERVAL = 200;
 
     @Override
     protected int numberOfShards() {
@@ -68,21 +65,17 @@ public class SimpleTTLIT extends ESIntegTestCase {
     }
 
     @Override
-    protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Collections.singleton(InternalSettingsPlugin.class);
-    }
-
-    @Override
     protected Settings nodeSettings(int nodeOrdinal) {
-        return Settings.builder()
+        return settingsBuilder()
                 .put(super.nodeSettings(nodeOrdinal))
                 .put("indices.ttl.interval", PURGE_INTERVAL, TimeUnit.MILLISECONDS)
+                .put("cluster.routing.operation.use_type", false) // make sure we control the shard computation
+                .put("cluster.routing.operation.hash.type", "djb")
                 .build();
     }
 
     public void testSimpleTTL() throws Exception {
         assertAcked(prepareCreate("test")
-                .setSettings(IndexMetaData.SETTING_VERSION_CREATED, Version.V_2_3_0.id)
                 .addMapping("type1", XContentFactory.jsonBuilder()
                         .startObject()
                         .startObject("type1")
@@ -97,6 +90,7 @@ public class SimpleTTLIT extends ESIntegTestCase {
                         .startObject("_ttl").field("enabled", true).field("default", "1d").endObject()
                         .endObject()
                         .endObject()));
+        ensureYellow("test");
 
         final NumShards test = getNumShards("test");
 
@@ -105,15 +99,15 @@ public class SimpleTTLIT extends ESIntegTestCase {
         // Index one doc without routing, one doc with routing, one doc with not TTL and no default and one doc with default TTL
         long now = System.currentTimeMillis();
         IndexResponse indexResponse = client().prepareIndex("test", "type1", "1").setSource("field1", "value1")
-                .setTimestamp(String.valueOf(now)).setTTL(providedTTLValue).setRefreshPolicy(IMMEDIATE).get();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+                .setTimestamp(String.valueOf(now)).setTTL(providedTTLValue).setRefresh(true).get();
+        assertThat(indexResponse.isCreated(), is(true));
         indexResponse = client().prepareIndex("test", "type1", "with_routing").setSource("field1", "value1")
-                .setTimestamp(String.valueOf(now)).setTTL(providedTTLValue).setRouting("routing").setRefreshPolicy(IMMEDIATE).get();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+                .setTimestamp(String.valueOf(now)).setTTL(providedTTLValue).setRouting("routing").setRefresh(true).get();
+        assertThat(indexResponse.isCreated(), is(true));
         indexResponse = client().prepareIndex("test", "type1", "no_ttl").setSource("field1", "value1").get();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertThat(indexResponse.isCreated(), is(true));
         indexResponse = client().prepareIndex("test", "type2", "default_ttl").setSource("field1", "value1").get();
-        assertEquals(DocWriteResponse.Result.CREATED, indexResponse.getResult());
+        assertThat(indexResponse.isCreated(), is(true));
 
         // realtime get check
         long currentTime = System.currentTimeMillis();
@@ -123,7 +117,7 @@ public class SimpleTTLIT extends ESIntegTestCase {
             ttl0 = ((Number) getResponse.getField("_ttl").getValue()).longValue();
             assertThat(ttl0, lessThanOrEqualTo(providedTTLValue - (currentTime - now)));
         } else {
-            assertThat(providedTTLValue - (currentTime - now), lessThanOrEqualTo(0L));
+            assertThat(providedTTLValue - (currentTime - now), lessThanOrEqualTo(0l));
         }
         // verify the ttl is still decreasing when going to the replica
         currentTime = System.currentTimeMillis();
@@ -132,7 +126,7 @@ public class SimpleTTLIT extends ESIntegTestCase {
             ttl0 = ((Number) getResponse.getField("_ttl").getValue()).longValue();
             assertThat(ttl0, lessThanOrEqualTo(providedTTLValue - (currentTime - now)));
         } else {
-            assertThat(providedTTLValue - (currentTime - now), lessThanOrEqualTo(0L));
+            assertThat(providedTTLValue - (currentTime - now), lessThanOrEqualTo(0l));
         }
         // non realtime get (stored)
         currentTime = System.currentTimeMillis();
@@ -141,7 +135,7 @@ public class SimpleTTLIT extends ESIntegTestCase {
             ttl0 = ((Number) getResponse.getField("_ttl").getValue()).longValue();
             assertThat(ttl0, lessThanOrEqualTo(providedTTLValue - (currentTime - now)));
         } else {
-            assertThat(providedTTLValue - (currentTime - now), lessThanOrEqualTo(0L));
+            assertThat(providedTTLValue - (currentTime - now), lessThanOrEqualTo(0l));
         }
         // non realtime get going the replica
         currentTime = System.currentTimeMillis();
@@ -150,7 +144,7 @@ public class SimpleTTLIT extends ESIntegTestCase {
             ttl0 = ((Number) getResponse.getField("_ttl").getValue()).longValue();
             assertThat(ttl0, lessThanOrEqualTo(providedTTLValue - (currentTime - now)));
         } else {
-            assertThat(providedTTLValue - (currentTime - now), lessThanOrEqualTo(0L));
+            assertThat(providedTTLValue - (currentTime - now), lessThanOrEqualTo(0l));
         }
 
         // no TTL provided so no TTL fetched
@@ -176,18 +170,19 @@ public class SimpleTTLIT extends ESIntegTestCase {
         // But we can use index statistics' delete count to be sure that deletes have been executed, that must be incremented before
         // ttl purging has finished.
         logger.info("--> checking purger");
-        assertTrue(awaitBusy(() -> {
-                    if (rarely()) {
-                        client().admin().indices().prepareFlush("test").get();
-                    } else if (rarely()) {
-                        client().admin().indices().prepareForceMerge("test").setMaxNumSegments(1).get();
-                    }
-                    IndicesStatsResponse indicesStatsResponse = client().admin().indices().prepareStats("test").clear().setIndexing(true).get();
-                    // TTL deletes two docs, but it is indexed in the primary shard and replica shard.
-                    return indicesStatsResponse.getIndices().get("test").getTotal().getIndexing().getTotal().getDeleteCount() == 2L * test.dataCopies;
-                },
-                5, TimeUnit.SECONDS
-        ));
+        assertThat(awaitBusy(new Predicate<Object>() {
+            @Override
+            public boolean apply(Object input) {
+                if (rarely()) {
+                    client().admin().indices().prepareFlush("test").get();
+                } else if (rarely()) {
+                    client().admin().indices().prepareForceMerge("test").setMaxNumSegments(1).get();
+                }
+                IndicesStatsResponse response = client().admin().indices().prepareStats("test").clear().setIndexing(true).get();
+                // TTL deletes two docs, but it is indexed in the primary shard and replica shard.
+                return response.getIndices().get("test").getTotal().getIndexing().getTotal().getDeleteCount() == 2L * test.dataCopies;
+            }
+        }, 5, TimeUnit.SECONDS), equalTo(true));
 
         // realtime get check
         getResponse = client().prepareGet("test", "type1", "1").setFields("_ttl").setRealtime(true).execute().actionGet();
@@ -221,13 +216,13 @@ public class SimpleTTLIT extends ESIntegTestCase {
         String type = "mytype";
 
         XContentBuilder builder = jsonBuilder().startObject().startObject("_ttl").field("enabled", true).endObject().endObject();
-        assertAcked(client().admin().indices().prepareCreate(index).setSettings(IndexMetaData.SETTING_VERSION_CREATED, Version.V_2_3_0.id).addMapping(type, builder));
+        assertAcked(client().admin().indices().prepareCreate(index).addMapping(type, builder));
 
         // check mapping again
         assertTTLMappingEnabled(index, type);
 
         // update some field in the mapping
-        XContentBuilder updateMappingBuilder = jsonBuilder().startObject().startObject("properties").startObject("otherField").field("type", "text").endObject().endObject().endObject();
+        XContentBuilder updateMappingBuilder = jsonBuilder().startObject().startObject("properties").startObject("otherField").field("type", "string").endObject().endObject();
         PutMappingResponse putMappingResponse = client().admin().indices().preparePutMapping(index).setType(type).setSource(updateMappingBuilder).get();
         assertAcked(putMappingResponse);
 
@@ -244,7 +239,6 @@ public class SimpleTTLIT extends ESIntegTestCase {
      */
     public void testNoopUpdate() throws IOException {
         assertAcked(prepareCreate("test")
-                .setSettings(IndexMetaData.SETTING_VERSION_CREATED, Version.V_2_3_0.id)
                 .addMapping("type1", XContentFactory.jsonBuilder()
                         .startObject()
                         .startObject("type1")
@@ -252,14 +246,15 @@ public class SimpleTTLIT extends ESIntegTestCase {
                         .startObject("_ttl").field("enabled", true).endObject()
                         .endObject()
                         .endObject()));
+        ensureYellow("test");
 
         long aLongTime = 10000000;
         long firstTtl = aLongTime * 3;
         long secondTtl = aLongTime * 2;
         long thirdTtl = aLongTime * 1;
         IndexResponse indexResponse = client().prepareIndex("test", "type1", "1").setSource("field1", "value1")
-                .setTTL(firstTtl).setRefreshPolicy(IMMEDIATE).get();
-        assertTrue(indexResponse.getResult() == DocWriteResponse.Result.CREATED);
+                .setTTL(firstTtl).setRefresh(true).get();
+        assertTrue(indexResponse.isCreated());
         assertThat(getTtl("type1", 1), both(lessThanOrEqualTo(firstTtl)).and(greaterThan(secondTtl)));
 
         // Updating with the default detect_noop without a change to the document doesn't change the ttl.
@@ -287,7 +282,7 @@ public class SimpleTTLIT extends ESIntegTestCase {
     }
 
     private long getTtl(String type, Object id) {
-        GetResponse getResponse = client().prepareGet("test", type, id.toString()).setFields("_ttl").execute()
+        GetResponse getResponse = client().prepareGet("test", type, id.toString()).setFields("_ttl").setRealtime(true).execute()
                 .actionGet();
         return ((Number) getResponse.getField("_ttl").getValue()).longValue();
     }

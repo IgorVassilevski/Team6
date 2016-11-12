@@ -9,17 +9,26 @@ can be used instead of {ref}/modules-discovery-zen.html[Zen Discovery].
 
 The core discovery plugins are:
 
-<<discovery-ec2,EC2 discovery>>::
+<<cloud-aws,AWS Cloud>>::
 
-The EC2 discovery plugin uses the https://github.com/aws/aws-sdk-java[AWS API] for unicast discovery.
+The Amazon Web Service (AWS) Cloud plugin uses the
+https://github.com/aws/aws-sdk-java[AWS API] for unicast discovery, and adds
+support for using S3 as a repository for
+{ref}/modules-snapshots.html[Snapshot/Restore].
 
-<<discovery-azure-classic,Azure Classic discovery>>::
+<<cloud-azure,Azure Cloud>>::
 
-The Azure Classic discovery plugin uses the Azure Classic API for unicast discovery.
+The Azure Cloud plugin uses the Azure API for unicast discovery, and adds
+support for using Azure as a repository for
+{ref}/modules-snapshots.html[Snapshot/Restore].
 
-<<discovery-gce,GCE discovery>>::
+<<cloud-gce,GCE Cloud>>::
 
-The Google Compute Engine discovery plugin uses the GCE API for unicast discovery.
+The Google Compute Engine Cloud plugin uses the GCE API for unicast discovery.
+
+<<discovery-multicast,Multicast>>::
+
+The multicast plugin sends multicast messages to discover other nodes in the cluster.
 
 [float]
 ==== Community contributed discovery plugins
@@ -31,9 +40,13 @@ A number of discovery plugins have been contributed by our community:
 * https://github.com/grmblfrz/elasticsearch-zookeeper[ZooKeeper Discovery Plugin] (by Sonian Inc.)
 * https://github.com/fabric8io/elasticsearch-cloud-kubernetes[Kubernetes Discovery Plugin] (by Jimmi Dyson, http://fabric8.io[fabric8])
 
-include::discovery-ec2.asciidoc[]
+include::cloud-aws.asciidoc[]
 
-include::discovery-azure-classic.asciidoc[]
+include::cloud-azure.asciidoc[]
 
-include::discovery-gce.asciidoc[]
+include::cloud-gce.asciidoc[]
+
+include::discovery-multicast.asciidoc[]
+
+
 

@@ -24,18 +24,13 @@ import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.test.ESTestCase;
 import org.joda.time.PeriodType;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
-import static org.elasticsearch.common.unit.TimeValue.timeValueNanos;
-import static org.elasticsearch.common.unit.TimeValue.timeValueSeconds;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.lessThan;
-import static org.hamcrest.object.HasToString.hasToString;
 
 public class TimeValueTests extends ESTestCase {
 
@@ -65,7 +60,7 @@ public class TimeValueTests extends ESTestCase {
     }
 
     public void testMinusOne() {
-        assertThat(new TimeValue(-1).nanos(), lessThan(0L));
+        assertThat(new TimeValue(-1).nanos(), lessThan(0l));
     }
 
     public void testParseTimeValue() {
@@ -88,10 +83,17 @@ public class TimeValueTests extends ESTestCase {
         assertEquals(new TimeValue(10, TimeUnit.SECONDS),
                      TimeValue.parseTimeValue("10S", null, "test"));
 
+        assertEquals(new TimeValue(100, TimeUnit.MILLISECONDS),
+                    TimeValue.parseTimeValue("0.1s", null, "test"));
+
         assertEquals(new TimeValue(10, TimeUnit.MINUTES),
                      TimeValue.parseTimeValue("10 m", null, "test"));
         assertEquals(new TimeValue(10, TimeUnit.MINUTES),
                      TimeValue.parseTimeValue("10m", null, "test"));
+        assertEquals(new TimeValue(10, TimeUnit.MINUTES),
+                     TimeValue.parseTimeValue("10 M", null, "test"));
+        assertEquals(new TimeValue(10, TimeUnit.MINUTES),
+                     TimeValue.parseTimeValue("10M", null, "test"));
 
         assertEquals(new TimeValue(10, TimeUnit.HOURS),
                      TimeValue.parseTimeValue("10 h", null, "test"));
@@ -111,117 +113,44 @@ public class TimeValueTests extends ESTestCase {
         assertEquals(new TimeValue(10, TimeUnit.DAYS),
                      TimeValue.parseTimeValue("10D", null, "test"));
 
-        // Time values of months should throw an exception as months are not
-        // supported. Note that this is the only unit that is not case sensitive
-        // as `m` is the only character that is overloaded in terms of which
-        // time unit is expected between the upper and lower case versions
-        expectThrows(ElasticsearchParseException.class, () -> {
-            TimeValue.parseTimeValue("10 M", null, "test");
-        });
-        expectThrows(ElasticsearchParseException.class, () -> {
-            TimeValue.parseTimeValue("10M", null, "test");
-        });
-
-        final int length = randomIntBetween(0, 8);
-        final String zeros = new String(new char[length]).replace('\0', '0');
-        assertTrue(TimeValue.parseTimeValue("-" + zeros + "1", null, "test") == TimeValue.MINUS_ONE);
-        assertTrue(TimeValue.parseTimeValue(zeros + "0", null, "test") == TimeValue.ZERO);
+        assertEquals(new TimeValue(70, TimeUnit.DAYS),
+                     TimeValue.parseTimeValue("10 w", null, "test"));
+        assertEquals(new TimeValue(70, TimeUnit.DAYS),
+                     TimeValue.parseTimeValue("10w", null, "test"));
+        assertEquals(new TimeValue(70, TimeUnit.DAYS),
+                     TimeValue.parseTimeValue("10 W", null, "test"));
+        assertEquals(new TimeValue(70, TimeUnit.DAYS),
+                     TimeValue.parseTimeValue("10W", null, "test"));
     }
 
-    public void testRoundTrip() {
-        final String s = randomTimeValue();
-        assertThat(TimeValue.parseTimeValue(s, null, "test").getStringRep(), equalTo(s));
-        final TimeValue t = new TimeValue(randomIntBetween(1, 128), randomFrom(TimeUnit.values()));
-        assertThat(TimeValue.parseTimeValue(t.getStringRep(), null, "test"), equalTo(t));
-    }
-
-    private static final String FRACTIONAL_TIME_VALUES_ARE_NOT_SUPPORTED = "fractional time values are not supported";
-
-    public void testNonFractionalTimeValues() {
-        final String s = randomAsciiOfLength(10) + randomTimeUnit();
-        final ElasticsearchParseException e =
-            expectThrows(ElasticsearchParseException.class, () -> TimeValue.parseTimeValue(s, null, "test"));
-        assertThat(e, hasToString(containsString("failed to parse [" + s + "]")));
-        assertThat(e, not(hasToString(containsString(FRACTIONAL_TIME_VALUES_ARE_NOT_SUPPORTED))));
-        assertThat(e.getCause(), instanceOf(NumberFormatException.class));
-    }
-
-    public void testFractionalTimeValues() {
-        double value;
-        do {
-            value = randomDouble();
-        } while (value == 0);
-        final String s = Double.toString(randomIntBetween(0, 128) + value) + randomTimeUnit();
-        final ElasticsearchParseException e =
-            expectThrows(ElasticsearchParseException.class, () -> TimeValue.parseTimeValue(s, null, "test"));
-        assertThat(e, hasToString(containsString("failed to parse [" + s + "]")));
-        assertThat(e, hasToString(containsString(FRACTIONAL_TIME_VALUES_ARE_NOT_SUPPORTED)));
-        assertThat(e.getCause(), instanceOf(NumberFormatException.class));
-    }
-
-    private String randomTimeUnit() {
-        return randomFrom("nanos", "micros", "ms", "s", "m", "h", "d");
-    }
-
-    private void assertEqualityAfterSerialize(TimeValue value, int expectedSize) throws IOException {
+    private void assertEqualityAfterSerialize(TimeValue value) throws IOException {
         BytesStreamOutput out = new BytesStreamOutput();
         value.writeTo(out);
-        assertEquals(expectedSize, out.size());
 
-        StreamInput in = out.bytes().streamInput();
-        TimeValue inValue = new TimeValue(in);
+        StreamInput in = StreamInput.wrap(out.bytes());
+        TimeValue inValue = TimeValue.readTimeValue(in);
 
         assertThat(inValue, equalTo(value));
-        assertThat(inValue.duration(), equalTo(value.duration()));
-        assertThat(inValue.timeUnit(), equalTo(value.timeUnit()));
     }
 
     public void testSerialize() throws Exception {
-        assertEqualityAfterSerialize(new TimeValue(100, TimeUnit.DAYS), 3);
-        assertEqualityAfterSerialize(timeValueNanos(-1), 2);
-        assertEqualityAfterSerialize(timeValueNanos(1), 2);
-        assertEqualityAfterSerialize(timeValueSeconds(30), 2);
-
-        final TimeValue timeValue = new TimeValue(randomIntBetween(0, 1024), randomFrom(TimeUnit.values()));
-        BytesStreamOutput out = new BytesStreamOutput();
-        out.writeZLong(timeValue.duration());
-        assertEqualityAfterSerialize(timeValue, 1 + out.bytes().length());
+        assertEqualityAfterSerialize(new TimeValue(100, TimeUnit.DAYS));
+        assertEqualityAfterSerialize(new TimeValue(-1));
+        assertEqualityAfterSerialize(new TimeValue(1, TimeUnit.NANOSECONDS));
     }
 
+    @Test(expected = ElasticsearchParseException.class)
     public void testFailOnUnknownUnits() {
-        try {
-            TimeValue.parseTimeValue("23tw", null, "test");
-            fail("Expected ElasticsearchParseException");
-        } catch (ElasticsearchParseException e) {
-            assertThat(e.getMessage(), containsString("failed to parse"));
-        }
+        TimeValue.parseTimeValue("23tw", null, "test");
     }
 
+    @Test(expected = ElasticsearchParseException.class)
     public void testFailOnMissingUnits() {
-        try {
-            TimeValue.parseTimeValue("42", null, "test");
-            fail("Expected ElasticsearchParseException");
-        } catch (ElasticsearchParseException e) {
-            assertThat(e.getMessage(), containsString("failed to parse"));
-        }
+        TimeValue.parseTimeValue("42", null, "test");
     }
 
+    @Test(expected = ElasticsearchParseException.class)
     public void testNoDotsAllowed() {
-        try {
-            TimeValue.parseTimeValue("42ms.", null, "test");
-            fail("Expected ElasticsearchParseException");
-        } catch (ElasticsearchParseException e) {
-            assertThat(e.getMessage(), containsString("failed to parse"));
-        }
-    }
-
-    public void testToStringRep() {
-        assertEquals("-1", new TimeValue(-1).getStringRep());
-        assertEquals("10ms", new TimeValue(10, TimeUnit.MILLISECONDS).getStringRep());
-        assertEquals("1533ms", new TimeValue(1533, TimeUnit.MILLISECONDS).getStringRep());
-        assertEquals("90s", new TimeValue(90, TimeUnit.SECONDS).getStringRep());
-        assertEquals("90m", new TimeValue(90, TimeUnit.MINUTES).getStringRep());
-        assertEquals("36h", new TimeValue(36, TimeUnit.HOURS).getStringRep());
-        assertEquals("1000d", new TimeValue(1000, TimeUnit.DAYS).getStringRep());
+        TimeValue.parseTimeValue("42ms.", null, "test");
     }
 }

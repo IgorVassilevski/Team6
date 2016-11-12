@@ -25,6 +25,7 @@ import org.elasticsearch.action.PrimaryMissingActionException;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.broadcast.node.TransportBroadcastByNodeAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
@@ -34,7 +35,6 @@ import org.elasticsearch.cluster.routing.IndexRoutingTable;
 import org.elasticsearch.cluster.routing.RoutingTable;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardsIterator;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -46,11 +46,12 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static com.google.common.collect.Maps.newHashMap;
+import static com.google.common.collect.Sets.newHashSet;
 
 /**
  * Upgrade index/indices action.
@@ -65,18 +66,18 @@ public class TransportUpgradeAction extends TransportBroadcastByNodeAction<Upgra
     public TransportUpgradeAction(Settings settings, ThreadPool threadPool, ClusterService clusterService,
                                   TransportService transportService, IndicesService indicesService, ActionFilters actionFilters,
                                   IndexNameExpressionResolver indexNameExpressionResolver, TransportUpgradeSettingsAction upgradeSettingsAction) {
-        super(settings, UpgradeAction.NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, UpgradeRequest::new, ThreadPool.Names.FORCE_MERGE);
+        super(settings, UpgradeAction.NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, UpgradeRequest.class, ThreadPool.Names.FORCE_MERGE);
         this.indicesService = indicesService;
         this.upgradeSettingsAction = upgradeSettingsAction;
     }
 
     @Override
     protected UpgradeResponse newResponse(UpgradeRequest request, int totalShards, int successfulShards, int failedShards, List<ShardUpgradeResult> shardUpgradeResults, List<ShardOperationFailedException> shardFailures, ClusterState clusterState) {
-        Map<String, Integer> successfulPrimaryShards = new HashMap<>();
-        Map<String, Tuple<Version, org.apache.lucene.util.Version>> versions = new HashMap<>();
+        Map<String, Integer> successfulPrimaryShards = newHashMap();
+        Map<String, Tuple<Version, org.apache.lucene.util.Version>> versions = newHashMap();
         for (ShardUpgradeResult result : shardUpgradeResults) {
             successfulShards++;
-            String index = result.getShardId().getIndex().getName();
+            String index = result.getShardId().getIndex();
             if (result.primary()) {
                 Integer count = successfulPrimaryShards.get(index);
                 successfulPrimaryShards.put(index, count == null ? 1 : count + 1);
@@ -101,7 +102,7 @@ public class TransportUpgradeAction extends TransportBroadcastByNodeAction<Upgra
                 versions.put(index, new Tuple<>(version, luceneVersion));
             }
         }
-        Map<String, Tuple<org.elasticsearch.Version, String>> updatedVersions = new HashMap<>();
+        Map<String, Tuple<org.elasticsearch.Version, String>> updatedVersions = newHashMap();
         MetaData metaData = clusterState.metaData();
         for (Map.Entry<String, Tuple<Version, org.apache.lucene.util.Version>> versionEntry : versions.entrySet()) {
             String index = versionEntry.getKey();
@@ -120,7 +121,7 @@ public class TransportUpgradeAction extends TransportBroadcastByNodeAction<Upgra
 
     @Override
     protected ShardUpgradeResult shardOperation(UpgradeRequest request, ShardRouting shardRouting) throws IOException {
-        IndexShard indexShard = indicesService.indexServiceSafe(shardRouting.shardId().getIndex()).getShard(shardRouting.shardId().id());
+        IndexShard indexShard = indicesService.indexServiceSafe(shardRouting.shardId().getIndex()).shardSafe(shardRouting.shardId().id());
         org.apache.lucene.util.Version oldestLuceneSegment = indexShard.upgrade(request);
         // We are using the current version of Elasticsearch as upgrade version since we update mapping to match the current version
         return new ShardUpgradeResult(shardRouting.shardId(), indexShard.routingEntry().primary(), Version.CURRENT, oldestLuceneSegment);
@@ -158,7 +159,7 @@ public class TransportUpgradeAction extends TransportBroadcastByNodeAction<Upgra
      * Finds all indices that have not all primaries available
      */
     private Set<String> indicesWithMissingPrimaries(ClusterState clusterState, String[] concreteIndices) {
-        Set<String> indices = new HashSet<>();
+        Set<String> indices = newHashSet();
         RoutingTable routingTable = clusterState.routingTable();
         for (String index : concreteIndices) {
             IndexRoutingTable indexRoutingTable = routingTable.index(index);
@@ -190,13 +191,13 @@ public class TransportUpgradeAction extends TransportBroadcastByNodeAction<Upgra
                     } else {
                         updateSettings(upgradeResponse, listener);
                     }
-                } catch (Exception e) {
-                    listener.onFailure(e);
+                } catch (Throwable t) {
+                    listener.onFailure(t);
                 }
             }
 
             @Override
-            public void onFailure(Exception e) {
+            public void onFailure(Throwable e) {
                 listener.onFailure(e);
             }
         };
@@ -212,7 +213,7 @@ public class TransportUpgradeAction extends TransportBroadcastByNodeAction<Upgra
             }
 
             @Override
-            public void onFailure(Exception e) {
+            public void onFailure(Throwable e) {
                 listener.onFailure(e);
             }
         });

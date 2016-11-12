@@ -19,11 +19,13 @@
 
 package org.elasticsearch.action.support.single.instance;
 
+import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.UnavailableShardsException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ClusterStateObserver;
 import org.elasticsearch.cluster.block.ClusterBlockException;
@@ -33,27 +35,22 @@ import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.ShardIterator;
 import org.elasticsearch.cluster.routing.ShardRouting;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.node.NodeClosedException;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.transport.TransportResponseHandler;
-import org.elasticsearch.transport.ConnectTransportException;
-import org.elasticsearch.transport.TransportChannel;
-import org.elasticsearch.transport.TransportException;
-import org.elasticsearch.transport.TransportRequestHandler;
-import org.elasticsearch.transport.TransportRequestOptions;
-import org.elasticsearch.transport.TransportService;
+import org.elasticsearch.transport.*;
 
-import java.util.function.Supplier;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  *
  */
-public abstract class TransportInstanceSingleOperationAction<Request extends InstanceShardOperationRequest<Request>, Response extends ActionResponse>
-        extends HandledTransportAction<Request, Response> {
+public abstract class TransportInstanceSingleOperationAction<Request extends InstanceShardOperationRequest, Response extends ActionResponse> extends HandledTransportAction<Request, Response> {
+
     protected final ClusterService clusterService;
     protected final TransportService transportService;
 
@@ -62,7 +59,7 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
 
     protected TransportInstanceSingleOperationAction(Settings settings, String actionName, ThreadPool threadPool,
                                                      ClusterService clusterService, TransportService transportService,
-                                                     ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver, Supplier<Request> request) {
+                                                     ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver, Class<Request> request) {
         super(settings, actionName, threadPool, transportService, actionFilters, indexNameExpressionResolver, request);
         this.clusterService = clusterService;
         this.transportService = transportService;
@@ -95,7 +92,7 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
      */
     protected abstract void resolveRequest(ClusterState state, Request request);
 
-    protected boolean retryOnFailure(Exception e) {
+    protected boolean retryOnFailure(Throwable e) {
         return false;
     }
 
@@ -122,7 +119,7 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
         }
 
         public void start() {
-            this.observer = new ClusterStateObserver(clusterService, request.timeout(), logger, threadPool.getThreadContext());
+            this.observer = new ClusterStateObserver(clusterService, request.timeout(), logger);
             doStart();
         }
 
@@ -138,7 +135,7 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
                         throw blockException;
                     }
                 }
-                request.concreteIndex(indexNameExpressionResolver.concreteSingleIndex(observer.observedState(), request).getName());
+                request.concreteIndex(indexNameExpressionResolver.concreteSingleIndex(observer.observedState(), request));
                 resolveRequest(observer.observedState(), request);
                 blockException = checkRequestBlock(observer.observedState(), request);
                 if (blockException != null) {
@@ -150,7 +147,7 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
                     }
                 }
                 shardIt = shards(observer.observedState(), request);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 listener.onFailure(e);
                 return;
             }
@@ -172,9 +169,9 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
                 return;
             }
 
-            request.shardId = shardIt.shardId();
+            request.shardId = shardIt.shardId().id();
             DiscoveryNode node = nodes.get(shard.currentNodeId());
-            transportService.sendRequest(node, shardActionName, request, transportOptions(), new TransportResponseHandler<Response>() {
+            transportService.sendRequest(node, shardActionName, request, transportOptions(), new BaseTransportResponseHandler<Response>() {
 
                 @Override
                 public Response newInstance() {
@@ -193,11 +190,11 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
 
                 @Override
                 public void handleException(TransportException exp) {
-                    final Throwable cause = exp.unwrapCause();
+                    Throwable cause = exp.unwrapCause();
                     // if we got disconnected from the node, or the node / shard is not in the right state (being closed)
                     if (cause instanceof ConnectTransportException || cause instanceof NodeClosedException ||
                             retryOnFailure(exp)) {
-                        retry((Exception) cause);
+                        retry(cause);
                     } else {
                         listener.onFailure(exp);
                     }
@@ -205,13 +202,13 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
             });
         }
 
-        void retry(@Nullable final Exception failure) {
+        void retry(final @Nullable Throwable failure) {
             if (observer.isTimedOut()) {
                 // we running as a last attempt after a timeout has happened. don't retry
-                Exception listenFailure = failure;
+                Throwable listenFailure = failure;
                 if (listenFailure == null) {
                     if (shardIt == null) {
-                        listenFailure = new UnavailableShardsException(request.concreteIndex(), -1, "Timeout waiting for [{}], request: {}", request.timeout(), actionName);
+                        listenFailure = new UnavailableShardsException(new ShardId(request.concreteIndex(), -1), "Timeout waiting for [{}], request: {}", request.timeout(), actionName);
                     } else {
                         listenFailure = new UnavailableShardsException(shardIt.shardId(), "[{}] shardIt, [{}] active : Timeout waiting for [{}], request: {}", shardIt.size(), shardIt.sizeActive(), request.timeout(), actionName);
                     }
@@ -228,7 +225,7 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
 
                 @Override
                 public void onClusterServiceClose() {
-                    listener.onFailure(new NodeClosedException(nodes.getLocalNode()));
+                    listener.onFailure(new NodeClosedException(nodes.localNode()));
                 }
 
                 @Override
@@ -240,7 +237,7 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
         }
     }
 
-    private class ShardTransportHandler implements TransportRequestHandler<Request> {
+    private class ShardTransportHandler extends TransportRequestHandler<Request> {
 
         @Override
         public void messageReceived(final Request request, final TransportChannel channel) throws Exception {
@@ -249,18 +246,17 @@ public abstract class TransportInstanceSingleOperationAction<Request extends Ins
                 public void onResponse(Response response) {
                     try {
                         channel.sendResponse(response);
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         onFailure(e);
                     }
                 }
 
                 @Override
-                public void onFailure(Exception e) {
+                public void onFailure(Throwable e) {
                     try {
                         channel.sendResponse(e);
-                    } catch (Exception inner) {
-                        inner.addSuppressed(e);
-                        logger.warn("failed to send response for get", inner);
+                    } catch (Exception e1) {
+                        logger.warn("failed to send response for get", e1);
                     }
                 }
             });

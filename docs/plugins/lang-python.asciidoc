@@ -1,8 +1,6 @@
 [[lang-python]]
 === Python Language Plugin
 
-deprecated[5.0.0,Python will be replaced by the new scripting language <<modules-scripting-painless, `Painless`>>]
-
 The Python language plugin enables the use of Python in Elasticsearch
 scripts, via the http://www.jython.org/[Jython] Java implementation of Python.
 
@@ -14,9 +12,8 @@ This plugin can be installed using the plugin manager:
 
 [source,sh]
 ----------------------------------------------------------------
-sudo bin/elasticsearch-plugin install lang-python
+sudo bin/plugin install lang-python
 ----------------------------------------------------------------
-// NOTCONSOLE
 
 The plugin must be installed on every node in the cluster, and each node must
 be restarted after installation.
@@ -29,9 +26,8 @@ The plugin can be removed with the following command:
 
 [source,sh]
 ----------------------------------------------------------------
-sudo bin/elasticsearch-plugin remove lang-python
+sudo bin/plugin remove lang-python
 ----------------------------------------------------------------
-// NOTCONSOLE
 
 The node must be stopped before removing the plugin.
 
@@ -51,11 +47,13 @@ Scripting is available in many APIs, but we will use an example with the
 WARNING: Enabling inline scripting on an unprotected Elasticsearch cluster is dangerous.
 See <<lang-python-file>> for a safer option.
 
-If you have enabled {ref}/modules-scripting-security.html#enable-dynamic-scripting[inline scripts],
+If you have enabled {ref}/modules-scripting.html#enable-dynamic-scripting[inline scripts],
 you can use Python as follows:
 
-[source,js]
+[source,json]
 ----
+DELETE test
+
 PUT test/doc/1
 {
   "num": 1.0
@@ -83,20 +81,22 @@ GET test/_search
   }
 }
 ----
-// CONSOLE
+// AUTOSENSE
 
-[[lang-python-stored]]
+[[lang-python-indexed]]
 [float]
-=== Stored scripts
+=== Indexed scripts
 
-WARNING: Enabling stored scripts on an unprotected Elasticsearch cluster is dangerous.
+WARNING: Enabling indexed scripting on an unprotected Elasticsearch cluster is dangerous.
 See <<lang-python-file>> for a safer option.
 
-If you have enabled {ref}/modules-scripting-security.html#enable-dynamic-scripting[stored scripts],
+If you have enabled {ref}/modules-scripting.html#enable-dynamic-scripting[indexed scripts],
 you can use Python as follows:
 
-[source,js]
+[source,json]
 ----
+DELETE test
+
 PUT test/doc/1
 {
   "num": 1.0
@@ -130,9 +130,9 @@ GET test/_search
 }
 
 ----
-// CONSOLE
+// AUTOSENSE
 
-<1> We store the script under the id `my_script`.
+<1> We index the script under the id `my_script`.
 <2> The function score query retrieves the script with id `my_script`.
 
 
@@ -154,8 +154,10 @@ doc["num"].value * factor
 
 then use the script as follows:
 
-[source,js]
+[source,json]
 ----
+DELETE test
+
 PUT test/doc/1
 {
   "num": 1.0
@@ -182,7 +184,9 @@ GET test/_search
     }
   }
 }
+
 ----
-// CONSOLE
+// AUTOSENSE
 
 <1> The function score query retrieves the script with filename `my_script.py`.
+

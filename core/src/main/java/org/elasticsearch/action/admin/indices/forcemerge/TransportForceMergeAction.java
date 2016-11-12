@@ -22,13 +22,13 @@ package org.elasticsearch.action.admin.indices.forcemerge;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.broadcast.node.TransportBroadcastByNodeAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardsIterator;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.settings.Settings;
@@ -52,7 +52,7 @@ public class TransportForceMergeAction extends TransportBroadcastByNodeAction<Fo
                                    TransportService transportService, IndicesService indicesService,
                                    ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
         super(settings, ForceMergeAction.NAME, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver,
-                ForceMergeRequest::new, ThreadPool.Names.FORCE_MERGE);
+                ForceMergeRequest.class, ThreadPool.Names.FORCE_MERGE);
         this.indicesService = indicesService;
     }
 
@@ -75,7 +75,7 @@ public class TransportForceMergeAction extends TransportBroadcastByNodeAction<Fo
 
     @Override
     protected EmptyResult shardOperation(ForceMergeRequest request, ShardRouting shardRouting) throws IOException {
-        IndexShard indexShard = indicesService.indexServiceSafe(shardRouting.shardId().getIndex()).getShard(shardRouting.shardId().id());
+        IndexShard indexShard = indicesService.indexServiceSafe(shardRouting.shardId().getIndex()).shardSafe(shardRouting.shardId().id());
         indexShard.forceMerge(request);
         return EmptyResult.INSTANCE;
     }

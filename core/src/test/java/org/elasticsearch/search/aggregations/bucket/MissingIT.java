@@ -25,6 +25,7 @@ import org.elasticsearch.search.aggregations.bucket.missing.Missing;
 import org.elasticsearch.search.aggregations.metrics.avg.Avg;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.hamcrest.Matchers;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,12 +35,14 @@ import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.avg;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.histogram;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.missing;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertSearchResponse;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsNull.notNullValue;
 
+/**
+ *
+ */
 @ESIntegTestCase.SuiteScopeTestCase
 public class MissingIT extends ESIntegTestCase {
 
@@ -47,8 +50,7 @@ public class MissingIT extends ESIntegTestCase {
 
     @Override
     public void setupSuiteScopeCluster() throws Exception {
-        assertAcked(client().admin().indices().prepareCreate("idx")
-                .addMapping("type", "tag", "type=keyword").get());
+        createIndex("idx");
         List<IndexRequestBuilder> builders = new ArrayList<>();
         numDocs = randomIntBetween(5, 20);
         numDocsMissing = randomIntBetween(1, numDocs - 1);
@@ -86,7 +88,8 @@ public class MissingIT extends ESIntegTestCase {
         ensureSearchable();
     }
 
-    public void testUnmapped() throws Exception {
+    @Test
+    public void unmapped() throws Exception {
         SearchResponse response = client().prepareSearch("unmapped_idx")
                 .addAggregation(missing("missing_tag").field("tag"))
                 .execute().actionGet();
@@ -100,7 +103,8 @@ public class MissingIT extends ESIntegTestCase {
         assertThat(missing.getDocCount(), equalTo((long) numDocsUnmapped));
     }
 
-    public void testPartiallyUnmapped() throws Exception {
+    @Test
+    public void partiallyUnmapped() throws Exception {
         SearchResponse response = client().prepareSearch("idx", "unmapped_idx")
                 .addAggregation(missing("missing_tag").field("tag"))
                 .execute().actionGet();
@@ -114,7 +118,8 @@ public class MissingIT extends ESIntegTestCase {
         assertThat(missing.getDocCount(), equalTo((long) numDocsMissing + numDocsUnmapped));
     }
 
-    public void testSimple() throws Exception {
+    @Test
+    public void simple() throws Exception {
         SearchResponse response = client().prepareSearch("idx")
                 .addAggregation(missing("missing_tag").field("tag"))
                 .execute().actionGet();
@@ -128,7 +133,8 @@ public class MissingIT extends ESIntegTestCase {
         assertThat(missing.getDocCount(), equalTo((long) numDocsMissing));
     }
 
-    public void testWithSubAggregation() throws Exception {
+    @Test
+    public void withSubAggregation() throws Exception {
         SearchResponse response = client().prepareSearch("idx", "unmapped_idx")
                 .addAggregation(missing("missing_tag").field("tag")
                         .subAggregation(avg("avg_value").field("value")))
@@ -159,14 +165,38 @@ public class MissingIT extends ESIntegTestCase {
         assertThat((double) missing.getProperty("avg_value.value"), equalTo((double) sum / (numDocsMissing + numDocsUnmapped)));
     }
 
-    public void testEmptyAggregation() throws Exception {
-        SearchResponse searchResponse = client().prepareSearch("empty_bucket_idx")
-                .setQuery(matchAllQuery())
-                .addAggregation(histogram("histo").field("value").interval(1L).minDocCount(0)
-                        .subAggregation(missing("missing").field("value")))
+    @Test
+    public void withInheritedSubMissing() throws Exception {
+
+        SearchResponse response = client().prepareSearch("idx", "unmapped_idx")
+                .addAggregation(missing("top_missing").field("tag")
+                        .subAggregation(missing("sub_missing")))
                 .execute().actionGet();
 
-        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2L));
+        assertSearchResponse(response);
+
+
+        Missing topMissing = response.getAggregations().get("top_missing");
+        assertThat(topMissing, notNullValue());
+        assertThat(topMissing.getName(), equalTo("top_missing"));
+        assertThat(topMissing.getDocCount(), equalTo((long) numDocsMissing + numDocsUnmapped));
+        assertThat(topMissing.getAggregations().asList().isEmpty(), is(false));
+
+        Missing subMissing = topMissing.getAggregations().get("sub_missing");
+        assertThat(subMissing, notNullValue());
+        assertThat(subMissing.getName(), equalTo("sub_missing"));
+        assertThat(subMissing.getDocCount(), equalTo((long) numDocsMissing + numDocsUnmapped));
+    }
+
+    @Test
+    public void emptyAggregation() throws Exception {
+        SearchResponse searchResponse = client().prepareSearch("empty_bucket_idx")
+                .setQuery(matchAllQuery())
+                .addAggregation(histogram("histo").field("value").interval(1l).minDocCount(0)
+                        .subAggregation(missing("missing")))
+                .execute().actionGet();
+
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2l));
         Histogram histo = searchResponse.getAggregations().get("histo");
         assertThat(histo, Matchers.notNullValue());
         Histogram.Bucket bucket = histo.getBuckets().get(1);
@@ -175,7 +205,7 @@ public class MissingIT extends ESIntegTestCase {
         Missing missing = bucket.getAggregations().get("missing");
         assertThat(missing, Matchers.notNullValue());
         assertThat(missing.getName(), equalTo("missing"));
-        assertThat(missing.getDocCount(), is(0L));
+        assertThat(missing.getDocCount(), is(0l));
     }
 
 

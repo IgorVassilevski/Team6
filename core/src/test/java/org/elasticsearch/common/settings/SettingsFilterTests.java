@@ -18,26 +18,38 @@
  */
 package org.elasticsearch.common.settings;
 
-import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
-import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.test.rest.FakeRestRequest;
+import org.elasticsearch.rest.RestRequest;
+import org.junit.Test;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashSet;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 
 public class SettingsFilterTests extends ESTestCase {
+
+    @Test
     public void testAddingAndRemovingFilters() {
-        HashSet<String> hashSet = new HashSet<>(Arrays.asList("foo", "bar", "baz"));
-        SettingsFilter settingsFilter = new SettingsFilter(Settings.EMPTY, hashSet);
-        assertEquals(settingsFilter.getPatterns(), hashSet);
+        SettingsFilter settingsFilter = new SettingsFilter(Settings.EMPTY);
+        settingsFilter.addFilter("foo");
+        settingsFilter.addFilter("bar");
+        settingsFilter.addFilter("baz");
+        assertThat(settingsFilter.getPatterns(), equalTo("foo,bar,baz"));
+
+        settingsFilter.removeFilter("bar");
+        assertThat(settingsFilter.getPatterns(), equalTo("foo,baz"));
+
+        settingsFilter.removeFilter("bar");
+        settingsFilter.removeFilter("foo");
+        settingsFilter.removeFilter("baz");
+
+        assertThat(settingsFilter.getPatterns(), equalTo(""));
     }
 
+    @Test
     public void testSettingsFiltering() throws IOException {
 
         testFiltering(Settings.builder()
@@ -50,7 +62,7 @@ public class SettingsFilterTests extends ESTestCase {
                 Settings.builder()
                         .put("foo1", "foo1_test")
                         .build(),
-                "foo", "bar*"
+                "foo,bar*"
         );
 
         testFiltering(Settings.builder()
@@ -76,7 +88,7 @@ public class SettingsFilterTests extends ESTestCase {
                         .build(),
                 Settings.builder()
                         .build(),
-                "foo", "bar*", "foo*"
+                "foo,bar*,foo*"
         );
 
         testFiltering(Settings.builder()
@@ -90,24 +102,16 @@ public class SettingsFilterTests extends ESTestCase {
                         .put("baz", "baz_test")
                         .build()
         );
-
-        testFiltering(Settings.builder()
-                .put("a.b.something.d", "foo_test")
-                .put("a.b.something.c", "foo1_test")
-                .build(),
-            Settings.builder()
-                .put("a.b.something.c", "foo1_test")
-                .build(),
-            "a.b.*.d"
-        );
-
     }
 
     private void testFiltering(Settings source, Settings filtered, String... patterns) throws IOException {
-        SettingsFilter settingsFilter = new SettingsFilter(Settings.EMPTY, Arrays.asList(patterns));
+        SettingsFilter settingsFilter = new SettingsFilter(Settings.EMPTY);
+        for (String pattern : patterns) {
+            settingsFilter.addFilter(pattern);
+        }
 
         // Test using direct filtering
-        Settings filteredSettings = settingsFilter.filter(source);
+        Settings filteredSettings = SettingsFilter.filterSettings(settingsFilter.getPatterns(), source);
         assertThat(filteredSettings.getAsMap().entrySet(), equalTo(filtered.getAsMap().entrySet()));
 
         // Test using toXContent filtering

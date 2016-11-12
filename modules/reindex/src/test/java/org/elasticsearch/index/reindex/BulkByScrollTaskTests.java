@@ -19,44 +19,17 @@
 
 package org.elasticsearch.index.reindex;
 
-import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.common.util.concurrent.AbstractRunnable;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.json.JsonXContent;
-import org.elasticsearch.tasks.TaskId;
 import org.elasticsearch.test.ESTestCase;
-import org.elasticsearch.threadpool.TestThreadPool;
-import org.elasticsearch.threadpool.ThreadPool;
 import org.junit.Before;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Delayed;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.elasticsearch.common.unit.TimeValue.parseTimeValue;
-import static org.elasticsearch.common.unit.TimeValue.timeValueNanos;
-import static org.elasticsearch.common.unit.TimeValue.timeValueSeconds;
-import static org.hamcrest.Matchers.both;
-import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
 public class BulkByScrollTaskTests extends ESTestCase {
     private BulkByScrollTask task;
 
     @Before
     public void createTask() {
-        task = new BulkByScrollTask(1, "test_type", "test_action", "test", TaskId.EMPTY_TASK_ID, Float.POSITIVE_INFINITY);
+        task = new BulkByScrollTask(1, "test_type", "test_action", "test");
     }
 
     public void testBasicData() {
@@ -130,171 +103,45 @@ public class BulkByScrollTaskTests extends ESTestCase {
     }
 
     public void testStatusHatesNegatives() {
-        checkStatusNegatives(-1, 0, 0, 0, 0, 0, 0, 0, 0, "total");
-        checkStatusNegatives(0, -1, 0, 0, 0, 0, 0, 0, 0, "updated");
-        checkStatusNegatives(0, 0, -1, 0, 0, 0, 0, 0, 0, "created");
-        checkStatusNegatives(0, 0, 0, -1, 0, 0, 0, 0, 0, "deleted");
-        checkStatusNegatives(0, 0, 0, 0, -1, 0, 0, 0, 0, "batches");
-        checkStatusNegatives(0, 0, 0, 0, 0, -1, 0, 0, 0, "versionConflicts");
-        checkStatusNegatives(0, 0, 0, 0, 0, 0, -1, 0, 0, "noops");
-        checkStatusNegatives(0, 0, 0, 0, 0, 0, 0, -1, 0, "bulkRetries");
-        checkStatusNegatives(0, 0, 0, 0, 0, 0, 0, 0, -1, "searchRetries");
-    }
-
-    /**
-     * Build a task status with only some values. Used for testing negative values.
-     */
-    private void checkStatusNegatives(long total, long updated, long created, long deleted, int batches, long versionConflicts,
-            long noops, long bulkRetries, long searchRetries, String fieldName) {
-        TimeValue throttle = parseTimeValue(randomPositiveTimeValue(), "test");
-        TimeValue throttledUntil = parseTimeValue(randomPositiveTimeValue(), "test");
-
-        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> new BulkByScrollTask.Status(total, updated, created,
-                deleted, batches, versionConflicts, noops, bulkRetries, searchRetries, throttle, 0f, null, throttledUntil));
-        assertEquals(e.getMessage(), fieldName + " must be greater than 0 but was [-1]");
-    }
-
-    /**
-     * Furiously rethrottles a delayed request to make sure that we never run it twice.
-     */
-    public void testDelayAndRethrottle() throws IOException, InterruptedException {
-        List<Throwable> errors = new CopyOnWriteArrayList<>();
-        AtomicBoolean done = new AtomicBoolean();
-        int threads = between(1, 10);
-        CyclicBarrier waitForShutdown = new CyclicBarrier(threads);
-
-        /*
-         * We never end up waiting this long because the test rethrottles over and over again, ratcheting down the delay a random amount
-         * each time.
-         */
-        float originalRequestsPerSecond = (float) randomDoubleBetween(1, 10000, true);
-        task.rethrottle(originalRequestsPerSecond);
-        TimeValue maxDelay = timeValueSeconds(between(1, 5));
-        assertThat(maxDelay.nanos(), greaterThanOrEqualTo(0L));
-        int batchSizeForMaxDelay = (int) (maxDelay.seconds() * originalRequestsPerSecond);
-        ThreadPool threadPool = new TestThreadPool(getTestName()) {
-            @Override
-            public ScheduledFuture<?> schedule(TimeValue delay, String name, Runnable command) {
-                assertThat(delay.nanos(), both(greaterThanOrEqualTo(0L)).and(lessThanOrEqualTo(maxDelay.nanos())));
-                return super.schedule(delay, name, command);
-            }
-        };
         try {
-            task.delayPrepareBulkRequest(threadPool, timeValueNanos(System.nanoTime()), batchSizeForMaxDelay, new AbstractRunnable() {
-                @Override
-                protected void doRun() throws Exception {
-                    boolean oldValue = done.getAndSet(true);
-                    if (oldValue) {
-                        throw new RuntimeException("Ran twice oh no!");
-                    }
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    errors.add(e);
-                }
-            });
-
-            // Rethrottle on a random number of threads, on of which is this thread.
-            Runnable test = () -> {
-                try {
-                    int rethrottles = 0;
-                    while (false == done.get()) {
-                        float requestsPerSecond = (float) randomDoubleBetween(0, originalRequestsPerSecond * 2, true);
-                        task.rethrottle(requestsPerSecond);
-                        rethrottles += 1;
-                    }
-                    logger.info("Rethrottled [{}] times", rethrottles);
-                    waitForShutdown.await();
-                } catch (Exception e) {
-                    errors.add(e);
-                }
-            };
-            for (int i = 1; i < threads; i++) {
-                threadPool.generic().execute(test);
-            }
-            test.run();
-        } finally {
-            // Other threads should finish up quickly as they are checking the same AtomicBoolean.
-            threadPool.shutdown();
-            threadPool.awaitTermination(10, TimeUnit.SECONDS);
+            new BulkByScrollTask.Status(-1, 0, 0, 0, 0, 0, 0, 0, null);
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("total must be greater than 0 but was [-1]"));
         }
-        assertThat(errors, empty());
-    }
-
-    public void testDelayNeverNegative() throws IOException {
-        // Thread pool that returns a ScheduledFuture that claims to have a negative delay
-        ThreadPool threadPool = new TestThreadPool("test") {
-            public ScheduledFuture<?> schedule(TimeValue delay, String name, Runnable command) {
-                return new ScheduledFuture<Void>() {
-                    @Override
-                    public long getDelay(TimeUnit unit) {
-                        return -1;
-                    }
-
-                    @Override
-                    public int compareTo(Delayed o) {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public boolean cancel(boolean mayInterruptIfRunning) {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public boolean isCancelled() {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public boolean isDone() {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public Void get() throws InterruptedException, ExecutionException {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-                        throw new UnsupportedOperationException();
-                    }
-                };
-            }
-        };
         try {
-            // Have the task use the thread pool to delay a task that does nothing
-            task.delayPrepareBulkRequest(threadPool, timeValueSeconds(0), 1, new AbstractRunnable() {
-                @Override
-                protected void doRun() throws Exception {
-                }
-                @Override
-                public void onFailure(Exception e) {
-                    throw new UnsupportedOperationException();
-                }
-            });
-            // Even though the future returns a negative delay we just return 0 because the time is up.
-            assertEquals(timeValueSeconds(0), task.getStatus().getThrottledUntil());
-        } finally {
-            threadPool.shutdown();
+            new BulkByScrollTask.Status(0, -1, 0, 0, 0, 0, 0, 0, null);
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("updated must be greater than 0 but was [-1]"));
         }
-    }
-
-    public void testXContentRepresentationOfUnlimitedRequestsPerSecon() throws IOException {
-        XContentBuilder builder = JsonXContent.contentBuilder();
-        task.getStatus().toXContent(builder, ToXContent.EMPTY_PARAMS);
-        assertThat(builder.string(), containsString("\"requests_per_second\":-1"));
-    }
-
-    public void testPerfectlyThrottledBatchTime() {
-        task.rethrottle(Float.POSITIVE_INFINITY);
-        assertThat((double) task.perfectlyThrottledBatchTime(randomInt()), closeTo(0f, 0f));
-
-        int total = between(0, 1000000);
-        task.rethrottle(1);
-        assertThat((double) task.perfectlyThrottledBatchTime(total),
-                closeTo(TimeUnit.SECONDS.toNanos(total), TimeUnit.SECONDS.toNanos(1)));
+        try {
+            new BulkByScrollTask.Status(0, 0, -1, 0, 0, 0, 0, 0, null);
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("created must be greater than 0 but was [-1]"));
+        }
+        try {
+            new BulkByScrollTask.Status(0, 0, 0, -1, 0, 0, 0, 0, null);
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("deleted must be greater than 0 but was [-1]"));
+        }
+        try {
+            new BulkByScrollTask.Status(0, 0, 0, 0, -1, 0, 0, 0, null);
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("batches must be greater than 0 but was [-1]"));
+        }
+        try {
+            new BulkByScrollTask.Status(0, 0, 0, 0, 0, -1, 0, 0, null);
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("versionConflicts must be greater than 0 but was [-1]"));
+        }
+        try {
+            new BulkByScrollTask.Status(0, 0, 0, 0, 0, 0, -1, 0, null);
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("noops must be greater than 0 but was [-1]"));
+        }
+        try {
+            new BulkByScrollTask.Status(0, 0, 0, 0, 0, 0, 0, -1, null);
+        } catch (IllegalArgumentException e) {
+            assertThat(e.getMessage(), containsString("retries must be greater than 0 but was [-1]"));
+        }
     }
 }

@@ -16,6 +16,7 @@
 
 package org.elasticsearch.common.inject;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.internal.Errors;
 import org.elasticsearch.common.inject.internal.ErrorsException;
 import org.elasticsearch.common.inject.internal.InternalContext;
@@ -34,10 +35,10 @@ import org.elasticsearch.common.inject.spi.TypeListenerBinding;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.logging.Logger;
 
-import static java.util.Collections.emptySet;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static org.elasticsearch.common.inject.Scopes.SINGLETON;
 
 /**
@@ -50,10 +51,16 @@ class InjectorShell {
 
     private final List<Element> elements;
     private final InjectorImpl injector;
+    private final PrivateElements privateElements;
 
-    private InjectorShell(List<Element> elements, InjectorImpl injector) {
+    private InjectorShell(Builder builder, List<Element> elements, InjectorImpl injector) {
+        this.privateElements = builder.privateElements;
         this.elements = elements;
         this.injector = injector;
+    }
+
+    PrivateElements getPrivateElements() {
+        return privateElements;
     }
 
     InjectorImpl getInjector() {
@@ -118,17 +125,11 @@ class InjectorShell {
          */
         List<InjectorShell> build(Initializer initializer, BindingProcessor bindingProcessor,
                                   Stopwatch stopwatch, Errors errors) {
-            if (stage == null) {
-                throw new IllegalStateException("Stage not initialized");
-            }
-            if (privateElements != null && parent == null) {
-                throw new IllegalStateException("PrivateElements with no parent");
-            }
-            if (state == null) {
-                throw new IllegalStateException("no state. Did you remember to lock() ?");
-            }
+            checkState(stage != null, "Stage not initialized");
+            checkState(privateElements == null || parent != null, "PrivateElements with no parent");
+            checkState(state != null, "no state. Did you remember to lock() ?");
 
-            InjectorImpl injector = new InjectorImpl(state, initializer);
+            InjectorImpl injector = new InjectorImpl(parent, state, initializer);
             if (privateElements != null) {
                 privateElements.initInjector(injector);
             }
@@ -161,7 +162,7 @@ class InjectorShell {
             stopwatch.resetAndLog("Binding creation");
 
             List<InjectorShell> injectorShells = new ArrayList<>();
-            injectorShells.add(new InjectorShell(elements, injector));
+            injectorShells.add(new InjectorShell(this, elements, injector));
 
             // recursively build child shells
             PrivateElementProcessor processor = new PrivateElementProcessor(errors, stage);
@@ -192,7 +193,7 @@ class InjectorShell {
         injector.state.putBinding(key,
                 new ProviderInstanceBindingImpl<>(injector, key, SourceProvider.UNKNOWN_SOURCE,
                         injectorFactory, Scoping.UNSCOPED, injectorFactory,
-                        emptySet()));
+                        ImmutableSet.<InjectionPoint>of()));
     }
 
     private static class InjectorFactory implements InternalFactory<Injector>, Provider<Injector> {
@@ -229,7 +230,7 @@ class InjectorShell {
         injector.state.putBinding(key,
                 new ProviderInstanceBindingImpl<>(injector, key,
                         SourceProvider.UNKNOWN_SOURCE, loggerFactory, Scoping.UNSCOPED,
-                        loggerFactory, emptySet()));
+                        loggerFactory, ImmutableSet.<InjectionPoint>of()));
     }
 
     private static class LoggerFactory implements InternalFactory<Logger>, Provider<Logger> {
@@ -256,7 +257,7 @@ class InjectorShell {
         final Stage stage;
 
         private RootModule(Stage stage) {
-            this.stage = Objects.requireNonNull(stage, "stage");
+            this.stage = checkNotNull(stage, "stage");
         }
 
         @Override

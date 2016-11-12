@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.bulk;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.IndicesRequest;
 import org.elasticsearch.action.delete.DeleteRequest;

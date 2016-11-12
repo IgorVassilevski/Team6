@@ -17,7 +17,7 @@ that connects to a cluster.
 
 The client must have the same major version (e.g. `2.x`, or `5.x`) as the
 nodes in the cluster. Clients may connect to clusters which have a different
-minor version (e.g. `2.3.x`) but it is possible that new functionality may not
+minor version (e.g. `2.3.x`) but it is possible that new funcionality may not
 be supported.  Ideally, the client should have the same version as the
 cluster.
 
@@ -37,7 +37,7 @@ be "two hop" operations).
 --------------------------------------------------
 // on startup
 
-TransportClient client = new PreBuiltTransportClient(Settings.EMPTY)
+Client client = TransportClient.builder().build()
         .addTransportAddress(new InetSocketTransportAddress(InetAddress.getByName("host1"), 9300))
         .addTransportAddress(new InetSocketTransportAddress(InetAddress.getByName("host2"), 9300));
 
@@ -51,9 +51,9 @@ Note that you have to set the cluster name if you use one different than
 
 [source,java]
 --------------------------------------------------
-Settings settings = Settings.builder()
+Settings settings = Settings.settingsBuilder()
         .put("cluster.name", "myClusterName").build();
-TransportClient client = new PreBuiltTransportClient(settings);
+Client client = TransportClient.builder().settings(settings).build();
 //Add transport addresses and do something with the client...
 --------------------------------------------------
 
@@ -79,7 +79,7 @@ In order to enable sniffing, set `client.transport.sniff` to `true`:
 --------------------------------------------------
 Settings settings = Settings.settingsBuilder()
         .put("client.transport.sniff", true).build();
-TransportClient client = new PreBuiltTransportClient(settings);
+TransportClient client = TransportClient.builder().settings(settings).build();
 --------------------------------------------------
 
 Other transport client level settings include:
@@ -99,11 +99,9 @@ the nodes listed and connected. Defaults to `5s`.
 
 
 [[client-connected-to-client-node]]
-=== Connecting a Client to a Coordinating Only Node
+=== Connecting a Client to a Client Node
 
-You can start locally a {ref}/modules-node.html#coordinating-only-node[Coordinating Only Node]
-and then simply create a <<transport-client,`TransportClient`>> in your
-application which connects to this Coordinating Only Node.
+You can start locally a {ref}/modules-node.html#client-node[Client Node] and then simply create
+a <<transport-client,`TransportClient`>> in your application which connects to this Client Node.
 
-This way, the coordinating only node will be able to load whatever plugin you
-need (think about discovery plugins for example).
+This way, the client node will be able to load whatever plugin you need (think about discovery plugins for example).

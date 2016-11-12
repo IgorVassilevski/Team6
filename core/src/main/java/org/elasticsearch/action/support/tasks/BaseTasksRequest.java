@@ -36,11 +36,13 @@ import static org.elasticsearch.action.ValidateActions.addValidationError;
 /**
  * A base class for task requests
  */
-public class BaseTasksRequest<Request extends BaseTasksRequest<Request>> extends ActionRequest<Request> {
+public class BaseTasksRequest<T extends BaseTasksRequest> extends ActionRequest<T> {
 
     public static final String[] ALL_ACTIONS = Strings.EMPTY_ARRAY;
 
     public static final String[] ALL_NODES = Strings.EMPTY_ARRAY;
+
+    public static final long ALL_TASKS = -1L;
 
     private String[] nodesIds = ALL_NODES;
 
@@ -69,9 +71,9 @@ public class BaseTasksRequest<Request extends BaseTasksRequest<Request>> extends
      * Sets the list of action masks for the actions that should be returned
      */
     @SuppressWarnings("unchecked")
-    public final Request setActions(String... actions) {
+    public final T setActions(String... actions) {
         this.actions = actions;
-        return (Request) this;
+        return (T) this;
     }
 
     /**
@@ -86,9 +88,9 @@ public class BaseTasksRequest<Request extends BaseTasksRequest<Request>> extends
     }
 
     @SuppressWarnings("unchecked")
-    public final Request setNodesIds(String... nodesIds) {
+    public final T setNodesIds(String... nodesIds) {
         this.nodesIds = nodesIds;
-        return (Request) this;
+        return (T) this;
     }
 
     /**
@@ -101,9 +103,9 @@ public class BaseTasksRequest<Request extends BaseTasksRequest<Request>> extends
     }
 
     @SuppressWarnings("unchecked")
-    public final Request setTaskId(TaskId taskId) {
+    public final T setTaskId(TaskId taskId) {
         this.taskId = taskId;
-        return (Request) this;
+        return (T) this;
     }
 
 
@@ -115,9 +117,9 @@ public class BaseTasksRequest<Request extends BaseTasksRequest<Request>> extends
     }
 
     @SuppressWarnings("unchecked")
-    public Request setParentTaskId(TaskId parentTaskId) {
+    public T setParentTaskId(TaskId parentTaskId) {
         this.parentTaskId = parentTaskId;
-        return (Request) this;
+        return (T) this;
     }
 
 
@@ -126,25 +128,27 @@ public class BaseTasksRequest<Request extends BaseTasksRequest<Request>> extends
     }
 
     @SuppressWarnings("unchecked")
-    public final Request setTimeout(TimeValue timeout) {
+    public final T setTimeout(TimeValue timeout) {
         this.timeout = timeout;
-        return (Request) this;
+        return (T) this;
     }
 
     @SuppressWarnings("unchecked")
-    public final Request setTimeout(String timeout) {
+    public final T setTimeout(String timeout) {
         this.timeout = TimeValue.parseTimeValue(timeout, null, getClass().getSimpleName() + ".timeout");
-        return (Request) this;
+        return (T) this;
     }
 
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
-        taskId = TaskId.readFromStream(in);
-        parentTaskId = TaskId.readFromStream(in);
+        taskId = new TaskId(in);
+        parentTaskId = new TaskId(in);
         nodesIds = in.readStringArray();
         actions = in.readStringArray();
-        timeout = in.readOptionalWriteable(TimeValue::new);
+        if (in.readBoolean()) {
+            timeout = TimeValue.readTimeValue(in);
+        }
     }
 
     @Override
@@ -154,7 +158,7 @@ public class BaseTasksRequest<Request extends BaseTasksRequest<Request>> extends
         parentTaskId.writeTo(out);
         out.writeStringArrayNullable(nodesIds);
         out.writeStringArrayNullable(actions);
-        out.writeOptionalWriteable(timeout);
+        out.writeOptionalStreamable(timeout);
     }
 
     public boolean match(Task task) {

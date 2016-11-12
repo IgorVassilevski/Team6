@@ -35,6 +35,7 @@ import re
 import os
 import shutil
 from functools import partial
+from os.path import expanduser
 import sys
 
 VERSION_FILE = 'core/src/main/java/org/elasticsearch/Version.java'
@@ -49,27 +50,27 @@ The new release candidate for %(version)s is now available, including the x-plug
 
 The packages may be downloaded from the following URLs:
 
- * ZIP    - http://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/org/elasticsearch/distribution/zip/elasticsearch/%(version)s/elasticsearch-%(version)s.zip
- * tar.gz - http://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/org/elasticsearch/distribution/tar/elasticsearch/%(version)s/elasticsearch-%(version)s.tar.gz
- * RPM    - http://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/org/elasticsearch/distribution/rpm/elasticsearch/%(version)s/elasticsearch-%(version)s.rpm
- * deb    - http://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/org/elasticsearch/distribution/deb/elasticsearch/%(version)s/elasticsearch-%(version)s.deb
+ * ZIP    - https://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/org/elasticsearch/distribution/zip/elasticsearch/%(version)s/elasticsearch-%(version)s.zip
+ * tar.gz - https://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/org/elasticsearch/distribution/tar/elasticsearch/%(version)s/elasticsearch-%(version)s.tar.gz
+ * RPM    - https://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/org/elasticsearch/distribution/rpm/elasticsearch/%(version)s/elasticsearch-%(version)s.rpm
+ * deb    - https://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/org/elasticsearch/distribution/deb/elasticsearch/%(version)s/elasticsearch-%(version)s.deb
 
 Plugins can be installed as follows:
 
-    ES_JAVA_OPTS="-Des.plugins.staging=true" bin/elasticsearch-plugin install cloud-aws
+    bin/plugin -Des.plugins.staging=true install cloud-aws
 
 The same goes for the x-plugins:
 
-    ES_JAVA_OPTS="-Des.plugins.staging=true" bin/elasticsearch-plugin install license
-    ES_JAVA_OPTS="-Des.plugins.staging=true" bin/elasticsearch-plugin install marvel-agent
-    ES_JAVA_OPTS="-Des.plugins.staging=true" bin/elasticsearch-plugin install shield
-    ES_JAVA_OPTS="-Des.plugins.staging=true" bin/elasticsearch-plugin install watcher
+    bin/plugin -Des.plugins.staging=true install license
+    bin/plugin -Des.plugins.staging=true install marvel-agent
+    bin/plugin -Des.plugins.staging=true install shield
+    bin/plugin -Des.plugins.staging=true install watcher
 
 To install the deb from an APT repo:
 
 APT line sources.list line:
 
-deb http://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/repos/%(package_repo_version)s/debian/ stable main
+deb https://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/repos/%(package_repo_version)s/debian/ stable main
 
 To install the RPM, create a YUM file like:
 
@@ -77,16 +78,16 @@ To install the RPM, create a YUM file like:
 
 containing:
 
-[elasticsearch-2.0]
+[elasticsearch-2.x]
 name=Elasticsearch repository for packages
-baseurl=http://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/repos/%(package_repo_version)s/centos
+baseurl=https://%(bucket)s/elasticsearch/staging/%(version)s-%(hash)s/repos/%(package_repo_version)s/centos
 gpgcheck=1
-gpgkey=http://packages.elastic.co/GPG-KEY-elasticsearch
+gpgkey=https://packages.elastic.co/GPG-KEY-elasticsearch
 enabled=1
 
 To smoke-test the release please run:
 
- python3 -B ./dev-tools/smoke_test_rc.py --version %(version)s --hash %(hash)s --plugins license,shield,watcher
+ python3 -B ./dev-tools/smoke_test_rc.py --version %(version)s --hash %(hash)s --plugins license,shield,watcher,graph
 
 NOTE: this script requires JAVA_HOME to point to a Java 7 Runtime
 
@@ -260,7 +261,7 @@ if __name__ == "__main__":
   parser.add_argument('--check', dest='check', action='store_true',
                       help='Checks and reports for all requirements and then exits')
 
-  # by default, we only run mvn install and don't push anything repo
+  # by default, we only run mvn install and dont push anything repo
   parser.set_defaults(deploy_sonatype=False)
   parser.set_defaults(deploy_s3=False)
   parser.set_defaults(deploy_s3_repos=False)
@@ -327,7 +328,7 @@ if __name__ == "__main__":
 
   mvn_target = 'deploy' if deploy_sonatype else 'install'
   tests = '-DskipTests' if skip_tests else '-Dskip.integ.tests=true'
-  install_command = 'mvn clean %s -Prelease %s -Dgpg.key="%s" -Dpackaging.rpm.rpmbuild=/usr/bin/rpmbuild -Drpm.sign=true -Dmaven.repo.local=%s -Dno.commit.pattern="\\bno(n|)commit\\b" -Dforbidden.test.signatures=""' % (mvn_target, tests, gpg_key, localRepo)
+  install_command = 'mvn clean %s -Prelease %s -Dgpg.key="%s" -Dgpg.keypath="%s" -Dpackaging.rpm.rpmbuild=/usr/bin/rpmbuild -Drpm.sign=true -Dmaven.repo.local=%s -Dno.commit.pattern="\\bno(n|)commit\\b" -Dforbidden.test.signatures=""' % (mvn_target, tests, gpg_key, expanduser("~/.gnupg"), localRepo)
   clean_repo_command = 'find %s -name _remote.repositories -exec rm {} \;' % (localRepoElasticsearch)
 
   if not run_mvn_install:
@@ -352,7 +353,7 @@ if __name__ == "__main__":
   s3cmd_sync_official_repo_cmd = 's3cmd sync s3://packages.elasticsearch.org/elasticsearch/%s s3://%s' % (package_repo_version, s3_bucket_sync_to)
 
   debs3_prefix = 'elasticsearch/staging/%s-%s/repos/%s/debian' % (release_version, shortHash, package_repo_version)
-  debs3_upload_cmd = 'deb-s3 upload --preserve-versions %s/distribution/deb/elasticsearch/%s/elasticsearch-%s.deb -b %s --prefix %s --sign %s --arch amd64' % (localRepoElasticsearch, release_version, release_version, bucket, debs3_prefix, gpg_key)
+  debs3_upload_cmd = 'deb-s3 upload --preserve-versions %s/distribution/deb/elasticsearch/%s/elasticsearch-%s.deb -b %s --prefix %s --sign %s --arch amd64 --gpg-options="--digest-algo SHA512"' % (localRepoElasticsearch, release_version, release_version, bucket, debs3_prefix, gpg_key)
   debs3_list_cmd = 'deb-s3 list -b %s --prefix %s' % (bucket, debs3_prefix)
   debs3_verify_cmd = 'deb-s3 verify -b %s --prefix %s' % (bucket, debs3_prefix)
   rpms3_prefix = 'elasticsearch/staging/%s-%s/repos/%s/centos' % (release_version, shortHash, package_repo_version)
@@ -413,5 +414,3 @@ if __name__ == "__main__":
   print('Now go ahead and tag the release:')
   print('   git tag -a v%(version)s %(hash)s'  % string_format_dict)
   print('   git push origin v%(version)s' % string_format_dict )
-
-

@@ -19,11 +19,12 @@
 
 package org.elasticsearch.index.shard;
 
-import org.apache.logging.log4j.Logger;
+import com.google.common.base.Charsets;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 import static org.hamcrest.Matchers.equalTo;
@@ -33,8 +34,10 @@ import static org.hamcrest.Matchers.nullValue;
  *
  */
 public class CommitPointsTests extends ESTestCase {
-    private final Logger logger = Loggers.getLogger(CommitPointsTests.class);
 
+    private final ESLogger logger = Loggers.getLogger(CommitPointsTests.class);
+
+    @Test
     public void testCommitPointXContent() throws Exception {
         ArrayList<CommitPoint.FileInfo> indexFiles = new ArrayList<>();
         indexFiles.add(new CommitPoint.FileInfo("file1", "file1_p", 100, "ck1"));
@@ -47,7 +50,7 @@ public class CommitPointsTests extends ESTestCase {
         CommitPoint commitPoint = new CommitPoint(1, "test", CommitPoint.Type.GENERATED, indexFiles, translogFiles);
 
         byte[] serialized = CommitPoints.toXContent(commitPoint);
-        logger.info("serialized commit_point {}", new String(serialized, StandardCharsets.UTF_8));
+        logger.info("serialized commit_point {}", new String(serialized, Charsets.UTF_8));
 
         CommitPoint desCp = CommitPoints.fromXContent(serialized);
         assertThat(desCp.version(), equalTo(commitPoint.version()));

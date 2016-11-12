@@ -42,6 +42,15 @@ public class ElasticsearchCorruptionException extends IOException {
      * @param ex the exception cause
      */
     public ElasticsearchCorruptionException(Throwable ex) {
-        super(ex);
+        this(ex.getMessage());
+        if (ex != null) {
+            this.setStackTrace(ex.getStackTrace());
+        }
+        Throwable[] suppressed = ex.getSuppressed();
+        if (suppressed != null) {
+            for (Throwable supressedExc : suppressed) {
+                addSuppressed(supressedExc);
+            }
+        }
     }
 }

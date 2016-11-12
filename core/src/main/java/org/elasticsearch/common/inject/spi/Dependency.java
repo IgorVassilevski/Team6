@@ -16,13 +16,13 @@
 
 package org.elasticsearch.common.inject.spi;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.Key;
 
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-
-import static java.util.Collections.unmodifiableSet;
 
 /**
  * A variable that can be resolved by an injector.
@@ -60,11 +60,11 @@ public final class Dependency<T> {
      * Returns the dependencies from the given injection points.
      */
     public static Set<Dependency<?>> forInjectionPoints(Set<InjectionPoint> injectionPoints) {
-        Set<Dependency<?>> dependencies = new HashSet<>();
+        List<Dependency<?>> dependencies = new ArrayList<>();
         for (InjectionPoint injectionPoint : injectionPoints) {
             dependencies.addAll(injectionPoint.getDependencies());
         }
-        return unmodifiableSet(dependencies);
+        return ImmutableSet.copyOf(dependencies);
     }
 
     /**
@@ -91,7 +91,7 @@ public final class Dependency<T> {
 
     /**
      * Returns the index of this dependency in the injection point's parameter list, or {@code -1} if
-     * this dependency does not belong to a parameter list. Only method and constructor dependencies
+     * this dependency does not belong to a parameter list. Only method and constuctor dependencies
      * are elements in a parameter list.
      */
     public int getParameterIndex() {

@@ -19,13 +19,17 @@
 
 package org.elasticsearch.broadcast;
 
-import org.elasticsearch.action.search.SearchResponse;
+import com.google.common.base.Charsets;
+import org.elasticsearch.action.count.CountResponse;
+import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 
+import static org.elasticsearch.client.Requests.countRequest;
 import static org.elasticsearch.client.Requests.indexRequest;
 import static org.elasticsearch.index.query.QueryBuilders.termQuery;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
@@ -38,12 +42,15 @@ public class BroadcastActionsIT extends ESIntegTestCase {
         return 1;
     }
 
+    @Test
     public void testBroadcastOperations() throws IOException {
         assertAcked(prepareCreate("test", 1).execute().actionGet(5000));
 
         NumShards numShards = getNumShards("test");
 
         logger.info("Running Cluster Health");
+        ensureYellow();
+
         client().index(indexRequest("test").type("type1").id("1").source(source("1", "test"))).actionGet();
         flush();
         client().index(indexRequest("test").type("type1").id("2").source(source("2", "test"))).actionGet();
@@ -53,13 +60,22 @@ public class BroadcastActionsIT extends ESIntegTestCase {
         // check count
         for (int i = 0; i < 5; i++) {
             // test successful
-            SearchResponse countResponse = client().prepareSearch("test").setSize(0)
+            CountResponse countResponse = client().prepareCount("test")
                     .setQuery(termQuery("_type", "type1"))
                     .get();
-            assertThat(countResponse.getHits().totalHits(), equalTo(2L));
+            assertThat(countResponse.getCount(), equalTo(2l));
             assertThat(countResponse.getTotalShards(), equalTo(numShards.numPrimaries));
             assertThat(countResponse.getSuccessfulShards(), equalTo(numShards.numPrimaries));
             assertThat(countResponse.getFailedShards(), equalTo(0));
+        }
+
+        for (int i = 0; i < 5; i++) {
+            // test failed (simply query that can't be parsed)
+            try {
+                client().count(countRequest("test").source("{ term : { _type : \"type1 } }".getBytes(Charsets.UTF_8))).actionGet();
+            } catch(SearchPhaseExecutionException e) {
+                assertThat(e.shardFailures().length, equalTo(numShards.numPrimaries));
+            }
         }
     }
 

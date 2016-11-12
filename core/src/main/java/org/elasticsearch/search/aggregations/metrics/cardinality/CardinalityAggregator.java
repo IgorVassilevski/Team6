@@ -20,6 +20,8 @@
 package org.elasticsearch.search.aggregations.metrics.cardinality;
 
 import com.carrotsearch.hppc.BitMixer;
+import com.google.common.base.Preconditions;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.RandomAccessOrds;
 import org.apache.lucene.index.SortedNumericDocValues;
@@ -42,6 +44,7 @@ import org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregator;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
+import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 
 import java.io.IOException;
 import java.util.List;
@@ -60,13 +63,15 @@ public class CardinalityAggregator extends NumericMetricsAggregator.SingleValue 
     private HyperLogLogPlusPlus counts;
 
     private Collector collector;
+    private ValueFormatter formatter;
 
-    public CardinalityAggregator(String name, ValuesSource valuesSource, int precision,
+    public CardinalityAggregator(String name, ValuesSource valuesSource, int precision, ValueFormatter formatter,
             AggregationContext context, Aggregator parent, List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData) throws IOException {
         super(name, context, parent, pipelineAggregators, metaData);
         this.valuesSource = valuesSource;
         this.precision = precision;
         this.counts = valuesSource == null ? null : new HyperLogLogPlusPlus(precision, context.bigArrays(), 1);
+        this.formatter = formatter;
     }
 
     @Override
@@ -143,12 +148,12 @@ public class CardinalityAggregator extends NumericMetricsAggregator.SingleValue 
         // this Aggregator (and its HLL++ counters) is released.
         HyperLogLogPlusPlus copy = new HyperLogLogPlusPlus(precision, BigArrays.NON_RECYCLING_INSTANCE, 1);
         copy.merge(0, counts, owningBucketOrdinal);
-        return new InternalCardinality(name, copy, pipelineAggregators(), metaData());
+        return new InternalCardinality(name, copy, formatter, pipelineAggregators(), metaData());
     }
 
     @Override
     public InternalAggregation buildEmptyAggregation() {
-        return new InternalCardinality(name, null, pipelineAggregators(), metaData());
+        return new InternalCardinality(name, null, formatter, pipelineAggregators(), metaData());
     }
 
     @Override
@@ -156,7 +161,7 @@ public class CardinalityAggregator extends NumericMetricsAggregator.SingleValue 
         Releasables.close(counts, collector);
     }
 
-    private abstract static class Collector extends LeafBucketCollector implements Releasable {
+    private static abstract class Collector extends LeafBucketCollector implements Releasable {
 
         public abstract void postCollect();
 
@@ -229,9 +234,7 @@ public class CardinalityAggregator extends NumericMetricsAggregator.SingleValue 
         private ObjectArray<FixedBitSet> visitedOrds;
 
         OrdinalsCollector(HyperLogLogPlusPlus counts, RandomAccessOrds values, BigArrays bigArrays) {
-            if (values.getValueCount() > Integer.MAX_VALUE) {
-                throw new IllegalArgumentException();
-            }
+            Preconditions.checkArgument(values.getValueCount() <= Integer.MAX_VALUE);
             maxOrd = (int) values.getValueCount();
             this.bigArrays = bigArrays;
             this.counts = counts;
@@ -293,13 +296,33 @@ public class CardinalityAggregator extends NumericMetricsAggregator.SingleValue 
     /**
      * Representation of a list of hash values. There might be dups and there is no guarantee on the order.
      */
-    abstract static class MurmurHash3Values {
+    static abstract class MurmurHash3Values {
 
         public abstract void setDocument(int docId);
 
         public abstract int count();
 
         public abstract long valueAt(int index);
+
+        /**
+         * Return a {@link MurmurHash3Values} instance that returns each value as its hash.
+         */
+        public static MurmurHash3Values cast(final SortedNumericDocValues values) {
+            return new MurmurHash3Values() {
+                @Override
+                public void setDocument(int docId) {
+                    values.setDocument(docId);
+                }
+                @Override
+                public int count() {
+                    return values.count();
+                }
+                @Override
+                public long valueAt(int index) {
+                    return values.valueAt(index);
+                }
+            };
+        }
 
         /**
          * Return a {@link MurmurHash3Values} instance that computes hashes on the fly for each double value.

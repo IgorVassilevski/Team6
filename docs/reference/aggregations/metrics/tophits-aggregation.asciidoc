@@ -21,9 +21,8 @@ The top_hits aggregation returns regular search hits, because of this many per h
 * <<search-request-explain,Explain>>
 * <<search-request-named-queries-and-filters,Named filters and queries>>
 * <<search-request-source-filtering,Source filtering>>
-* <<search-request-stored-fields,Stored fields>>
 * <<search-request-script-fields,Script fields>>
-* <<search-request-docvalue-fields,Doc value fields>>
+* <<search-request-fielddata-fields,Fielddata fields>>
 * <<search-request-version,Include versions>>
 
 ==== Example
@@ -183,10 +182,7 @@ relevancy order of the most relevant document in a bucket.
         },
         "top_hit" : {
           "max": {
-            "script": {
-              "lang": "painless",
-              "inline": "_score"
-            }
+            "script": "_score"
           }
         }
       }

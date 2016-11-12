@@ -19,19 +19,22 @@
 
 package org.elasticsearch.action.support.tasks;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
+import com.google.common.base.Supplier;
 import org.elasticsearch.ResourceNotFoundException;
+import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.FailedNodeException;
 import org.elasticsearch.action.NoSuchNodeException;
 import org.elasticsearch.action.TaskOperationFailure;
 import org.elasticsearch.action.support.ActionFilters;
+import org.elasticsearch.action.support.ChildTaskRequest;
 import org.elasticsearch.action.support.HandledTransportAction;
+import org.elasticsearch.cluster.ClusterName;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -39,54 +42,57 @@ import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.transport.BaseTransportResponseHandler;
 import org.elasticsearch.transport.NodeShouldNotConnectException;
 import org.elasticsearch.transport.TransportChannel;
 import org.elasticsearch.transport.TransportException;
-import org.elasticsearch.transport.TransportRequest;
 import org.elasticsearch.transport.TransportRequestHandler;
 import org.elasticsearch.transport.TransportRequestOptions;
 import org.elasticsearch.transport.TransportResponse;
-import org.elasticsearch.transport.TransportResponseHandler;
 import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
+import org.elasticsearch.common.util.Consumer;
 
 /**
  * The base class for transport actions that are interacting with currently running tasks.
  */
 public abstract class TransportTasksAction<
-        OperationTask extends Task,
-        TasksRequest extends BaseTasksRequest<TasksRequest>,
-        TasksResponse extends BaseTasksResponse,
-        TaskResponse extends Writeable
+    OperationTask extends Task,
+    TasksRequest extends BaseTasksRequest<TasksRequest>,
+    TasksResponse extends BaseTasksResponse,
+    TaskResponse extends Writeable<TaskResponse>
     > extends HandledTransportAction<TasksRequest, TasksResponse> {
 
+    protected final ClusterName clusterName;
     protected final ClusterService clusterService;
     protected final TransportService transportService;
-    protected final Supplier<TasksRequest> requestSupplier;
-    protected final Supplier<TasksResponse> responseSupplier;
+    protected final Callable<TasksRequest> requestFactory;
 
     protected final String transportNodeAction;
 
-    protected TransportTasksAction(Settings settings, String actionName, ThreadPool threadPool,
+    protected TransportTasksAction(Settings settings, String actionName, ClusterName clusterName, ThreadPool threadPool,
                                    ClusterService clusterService, TransportService transportService, ActionFilters actionFilters,
-                                   IndexNameExpressionResolver indexNameExpressionResolver, Supplier<TasksRequest> requestSupplier,
-                                   Supplier<TasksResponse> responseSupplier,
+                                   IndexNameExpressionResolver indexNameExpressionResolver, Callable<TasksRequest> requestFactory,
                                    String nodeExecutor) {
-        super(settings, actionName, threadPool, transportService, actionFilters, indexNameExpressionResolver, requestSupplier);
+        super(settings, actionName, threadPool, transportService, actionFilters, indexNameExpressionResolver, requestFactory);
+        this.clusterName = clusterName;
         this.clusterService = clusterService;
         this.transportService = transportService;
         this.transportNodeAction = actionName + "[n]";
-        this.requestSupplier = requestSupplier;
-        this.responseSupplier = responseSupplier;
+        this.requestFactory = requestFactory;
 
-        transportService.registerRequestHandler(transportNodeAction, NodeTaskRequest::new, nodeExecutor, new NodeTransportHandler());
+        transportService.registerRequestHandler(transportNodeAction, new Callable<NodeTaskRequest>() {
+            @Override
+            public NodeTaskRequest call() throws Exception {
+                return new NodeTaskRequest();
+            }
+        }, nodeExecutor, new NodeTransportHandler());
     }
 
     @Override
@@ -101,31 +107,42 @@ public abstract class TransportTasksAction<
     }
 
     private NodeTasksResponse nodeOperation(NodeTaskRequest nodeTaskRequest) {
-        TasksRequest request = nodeTaskRequest.tasksRequest;
-        List<TaskResponse> results = new ArrayList<>();
-        List<TaskOperationFailure> exceptions = new ArrayList<>();
-        processTasks(request, task -> {
-            try {
-                TaskResponse response = taskOperation(request, task);
-                if (response != null) {
-                    results.add(response);
+        final TasksRequest request = nodeTaskRequest.tasksRequest;
+        final List<TaskResponse> results = new ArrayList<>();
+        final List<TaskOperationFailure> exceptions = new ArrayList<>();
+        processTasks(request, new Consumer<OperationTask>() {
+                @Override
+                public void accept(OperationTask task) {
+                    try {
+                        TaskResponse response = taskOperation(request, task);
+                        if (response != null) {
+                            results.add(response);
+                        }
+                    } catch (Exception ex) {
+                        exceptions.add(new TaskOperationFailure(clusterService.localNode().id(), task.getId(), ex));
+                    }
                 }
-            } catch (Exception ex) {
-                exceptions.add(new TaskOperationFailure(clusterService.localNode().getId(), task.getId(), ex));
-            }
-        });
-        return new NodeTasksResponse(clusterService.localNode().getId(), results, exceptions);
+            });
+        return new NodeTasksResponse(clusterService.localNode().id(), results, exceptions);
     }
 
     protected String[] filterNodeIds(DiscoveryNodes nodes, String[] nodesIds) {
-        return nodesIds;
+        // Filter out all old nodes that don't support task management API
+        List<String> supportedNodes = new ArrayList<>(nodesIds.length);
+        for (String nodeId : nodesIds) {
+            DiscoveryNode node = nodes.get(nodeId);
+            if(node != null && node.version().onOrAfter(Version.V_2_3_0)) {
+                supportedNodes.add(nodeId);
+            }
+        }
+        return supportedNodes.toArray(new String[supportedNodes.size()]);
     }
 
     protected String[] resolveNodes(TasksRequest request, ClusterState clusterState) {
         if (request.getTaskId().isSet()) {
             return new String[]{request.getTaskId().getNodeId()};
         } else {
-            return clusterState.nodes().resolveNodes(request.getNodesIds());
+            return clusterState.nodes().resolveNodesIds(request.getNodesIds());
         }
     }
 
@@ -203,7 +220,7 @@ public abstract class TransportTasksAction<
             ClusterState clusterState = clusterService.state();
             String[] nodesIds = resolveNodes(request, clusterState);
             this.nodesIds = filterNodeIds(clusterState.nodes(), nodesIds);
-            ImmutableOpenMap<String, DiscoveryNode> nodes = clusterState.nodes().getNodes();
+            ImmutableOpenMap<String, DiscoveryNode> nodes = clusterState.nodes().nodes();
             this.nodes = new DiscoveryNode[nodesIds.length];
             for (int i = 0; i < this.nodesIds.length; i++) {
                 this.nodes[i] = nodes.get(this.nodesIds[i]);
@@ -216,9 +233,9 @@ public abstract class TransportTasksAction<
                 // nothing to do
                 try {
                     listener.onResponse(newResponse(request, responses));
-                } catch (Exception e) {
-                    logger.debug("failed to generate empty response", e);
-                    listener.onFailure(e);
+                } catch (Throwable t) {
+                    logger.debug("failed to generate empty response", t);
+                    listener.onFailure(t);
                 }
             } else {
                 TransportRequestOptions.Builder builder = TransportRequestOptions.builder();
@@ -233,12 +250,18 @@ public abstract class TransportTasksAction<
                     try {
                         if (node == null) {
                             onFailure(idx, nodeId, new NoSuchNodeException(nodeId));
+                        } else if (!clusterService.localNode().shouldConnectTo(node) && !clusterService.localNode().equals(node)) {
+                            // the check "!clusterService.localNode().equals(node)" is to maintain backward comp. where before
+                            // we allowed to connect from "local" client node to itself, certain tests rely on it, if we remove it, we
+                            // need to fix
+                            // those (and they randomize the client node usage, so tricky to find when)
+                            onFailure(idx, nodeId, new NodeShouldNotConnectException(clusterService.localNode(), node));
                         } else {
                             NodeTaskRequest nodeRequest = new NodeTaskRequest(request);
-                            nodeRequest.setParentTask(clusterService.localNode().getId(), task.getId());
+                            nodeRequest.setParentTask(clusterService.localNode().id(), task.getId());
                             taskManager.registerChildTask(task, node.getId());
                             transportService.sendRequest(node, transportNodeAction, nodeRequest, builder.build(),
-                                new TransportResponseHandler<NodeTasksResponse>() {
+                                new BaseTransportResponseHandler<NodeTasksResponse>() {
                                     @Override
                                     public NodeTasksResponse newInstance() {
                                         return new NodeTasksResponse();
@@ -251,7 +274,7 @@ public abstract class TransportTasksAction<
 
                                     @Override
                                     public void handleException(TransportException exp) {
-                                        onFailure(idx, node.getId(), exp);
+                                        onFailure(idx, node.id(), exp);
                                     }
 
                                     @Override
@@ -260,8 +283,8 @@ public abstract class TransportTasksAction<
                                     }
                                 });
                         }
-                    } catch (Exception e) {
-                        onFailure(idx, nodeId, e);
+                    } catch (Throwable t) {
+                        onFailure(idx, nodeId, t);
                     }
                 }
             }
@@ -276,9 +299,7 @@ public abstract class TransportTasksAction<
 
         private void onFailure(int idx, String nodeId, Throwable t) {
             if (logger.isDebugEnabled() && !(t instanceof NodeShouldNotConnectException)) {
-                logger.debug(
-                    (org.apache.logging.log4j.util.Supplier<?>)
-                        () -> new ParameterizedMessage("failed to execute on node [{}]", nodeId), t);
+                logger.debug("failed to execute on node [{}]", t, nodeId);
             }
             if (accumulateExceptions()) {
                 responses.set(idx, new FailedNodeException(nodeId, "Failed node [" + nodeId + "]", t));
@@ -292,16 +313,16 @@ public abstract class TransportTasksAction<
             TasksResponse finalResponse;
             try {
                 finalResponse = newResponse(request, responses);
-            } catch (Exception e) {
-                logger.debug("failed to combine responses from nodes", e);
-                listener.onFailure(e);
+            } catch (Throwable t) {
+                logger.debug("failed to combine responses from nodes", t);
+                listener.onFailure(t);
                 return;
             }
             listener.onResponse(finalResponse);
         }
     }
 
-    class NodeTransportHandler implements TransportRequestHandler<NodeTaskRequest> {
+    class NodeTransportHandler extends TransportRequestHandler<NodeTaskRequest> {
 
         @Override
         public void messageReceived(final NodeTaskRequest request, final TransportChannel channel) throws Exception {
@@ -310,7 +331,7 @@ public abstract class TransportTasksAction<
     }
 
 
-    private class NodeTaskRequest extends TransportRequest {
+    private class NodeTaskRequest extends ChildTaskRequest {
         private TasksRequest tasksRequest;
 
         protected NodeTaskRequest() {
@@ -318,14 +339,19 @@ public abstract class TransportTasksAction<
         }
 
         protected NodeTaskRequest(TasksRequest tasksRequest) {
-            super();
+            super(tasksRequest);
             this.tasksRequest = tasksRequest;
         }
 
         @Override
         public void readFrom(StreamInput in) throws IOException {
             super.readFrom(in);
-            tasksRequest = requestSupplier.get();
+            try {
+                tasksRequest = requestFactory.call();
+            } catch (Exception ex) {
+                throw new IOException("cannot create task request", ex);
+            }
+
             tasksRequest.readFrom(in);
         }
 

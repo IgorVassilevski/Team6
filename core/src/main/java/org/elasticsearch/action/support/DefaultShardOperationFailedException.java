@@ -48,17 +48,17 @@ public class DefaultShardOperationFailedException implements ShardOperationFaile
     }
 
     public DefaultShardOperationFailedException(ElasticsearchException e) {
-        this.index = e.getIndex() == null ? null : e.getIndex().getName();
+        this.index = e.getIndex();
         this.shardId = e.getShardId().id();
         this.reason = e;
         this.status = e.status();
     }
 
-    public DefaultShardOperationFailedException(String index, int shardId, Throwable reason) {
+    public DefaultShardOperationFailedException(String index, int shardId, Throwable t) {
         this.index = index;
         this.shardId = shardId;
-        this.reason = reason;
-        this.status = ExceptionsHelper.status(reason);
+        this.reason = t;
+        status = ExceptionsHelper.status(t);
     }
 
     @Override
@@ -98,7 +98,7 @@ public class DefaultShardOperationFailedException implements ShardOperationFaile
             index = in.readString();
         }
         shardId = in.readVInt();
-        reason = in.readException();
+        reason = in.readThrowable();
         status = RestStatus.readFrom(in);
     }
 
@@ -111,13 +111,13 @@ public class DefaultShardOperationFailedException implements ShardOperationFaile
             out.writeString(index);
         }
         out.writeVInt(shardId);
-        out.writeException(reason);
+        out.writeThrowable(reason);
         RestStatus.writeTo(out, status);
     }
 
     @Override
     public String toString() {
-        return "[" + index + "][" + shardId + "] failed, reason [" + reason() + "]";
+        return "[" + index + "][" + shardId + "] failed, reason [" + reason() + "], cause [" + ExceptionsHelper.stackTrace(reason) + "]";
     }
 
     @Override

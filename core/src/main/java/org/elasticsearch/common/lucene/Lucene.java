@@ -19,46 +19,15 @@
 
 package org.elasticsearch.common.lucene;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
+import com.google.common.collect.Iterables;
 import org.apache.lucene.analysis.core.KeywordAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.DocValuesFormat;
 import org.apache.lucene.codecs.PostingsFormat;
-import org.apache.lucene.index.CorruptIndexException;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexCommit;
-import org.apache.lucene.index.IndexFileNames;
-import org.apache.lucene.index.IndexFormatTooNewException;
-import org.apache.lucene.index.IndexFormatTooOldException;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.NoMergePolicy;
-import org.apache.lucene.index.SegmentCommitInfo;
-import org.apache.lucene.index.SegmentInfos;
-import org.apache.lucene.search.Collector;
-import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.search.Explanation;
-import org.apache.lucene.search.FieldDoc;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.LeafCollector;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.Scorer;
-import org.apache.lucene.search.SimpleCollector;
-import org.apache.lucene.search.SortField;
-import org.apache.lucene.search.TimeLimitingCollector;
-import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.search.TopFieldDocs;
-import org.apache.lucene.search.TwoPhaseIterator;
-import org.apache.lucene.search.Weight;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.Lock;
+import org.apache.lucene.index.*;
+import org.apache.lucene.search.*;
+import org.apache.lucene.store.*;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Counter;
@@ -70,27 +39,27 @@ import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.SuppressForbidden;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.util.iterable.Iterables;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.index.analysis.AnalyzerScope;
 import org.elasticsearch.index.analysis.NamedAnalyzer;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 /**
  *
  */
 public class Lucene {
+
+    // TODO: remove VERSION, and have users use Version.LATEST.
+    public static final Version VERSION = Version.LATEST;
+    public static final Version ANALYZER_VERSION = VERSION;
+    public static final Version QUERYPARSER_VERSION = VERSION;
     public static final String LATEST_DOC_VALUES_FORMAT = "Lucene54";
     public static final String LATEST_POSTINGS_FORMAT = "Lucene50";
-    public static final String LATEST_CODEC = "Lucene62";
+    public static final String LATEST_CODEC = "Lucene54";
 
     static {
         Deprecated annotation = PostingsFormat.forName(LATEST_POSTINGS_FORMAT).getClass().getAnnotation(Deprecated.class);
@@ -106,14 +75,15 @@ public class Lucene {
 
     public static final TopDocs EMPTY_TOP_DOCS = new TopDocs(0, EMPTY_SCORE_DOCS, 0.0f);
 
-    public static Version parseVersion(@Nullable String version, Version defaultVersion, Logger logger) {
+    @SuppressWarnings("deprecation")
+    public static Version parseVersion(@Nullable String version, Version defaultVersion, ESLogger logger) {
         if (version == null) {
             return defaultVersion;
         }
         try {
             return Version.parse(version);
         } catch (ParseException e) {
-            logger.warn((Supplier<?>) () -> new ParameterizedMessage("no version match {}, default to {}", version, defaultVersion), e);
+            logger.warn("no version match {}, default to {}", e, version, defaultVersion);
             return defaultVersion;
         }
     }
@@ -134,7 +104,7 @@ public class Lucene {
         for (SegmentCommitInfo info : infos) {
             list.add(info.files());
         }
-        return Iterables.flatten(list);
+        return Iterables.concat(list.toArray(new Collection[0]));
     }
 
     /**
@@ -237,7 +207,16 @@ public class Lucene {
             @Override
             protected Object doBody(String segmentFileName) throws IOException {
                 try (IndexInput input = directory.openInput(segmentFileName, IOContext.READ)) {
-                    CodecUtil.checksumEntireFile(input);
+                    final int format = input.readInt();
+                    final int actualFormat;
+                    if (format == CodecUtil.CODEC_MAGIC) {
+                        // 4.0+
+                        actualFormat = CodecUtil.checkHeaderNoMagic(input, "segments", SegmentInfos.VERSION_40, Integer.MAX_VALUE);
+                        if (actualFormat >= SegmentInfos.VERSION_48) {
+                            CodecUtil.checksumEntireFile(input);
+                        }
+                    }
+                    // legacy....
                 }
                 return null;
             }
@@ -247,14 +226,14 @@ public class Lucene {
     /**
      * Wraps <code>delegate</code> with count based early termination collector with a threshold of <code>maxCountHits</code>
      */
-    public static final EarlyTerminatingCollector wrapCountBasedEarlyTerminatingCollector(final Collector delegate, int maxCountHits) {
+    public final static EarlyTerminatingCollector wrapCountBasedEarlyTerminatingCollector(final Collector delegate, int maxCountHits) {
         return new EarlyTerminatingCollector(delegate, maxCountHits);
     }
 
     /**
      * Wraps <code>delegate</code> with a time limited collector with a timeout of <code>timeoutInMillis</code>
      */
-    public static final TimeLimitingCollector wrapTimeLimitingCollector(final Collector delegate, final Counter counter, long timeoutInMillis) {
+    public final static TimeLimitingCollector wrapTimeLimitingCollector(final Collector delegate, final Counter counter, long timeoutInMillis) {
         return new TimeLimitingCollector(delegate, counter, timeoutInMillis);
     }
 
@@ -375,7 +354,7 @@ public class Lucene {
                     writeMissingValue(out, comparatorSource.missingValue(sortField.getReverse()));
                 } else {
                     writeSortType(out, sortField.getType());
-                    writeMissingValue(out, sortField.getMissingValue());
+                    writeMissingValue(out, sortField.missingValue);
                 }
                 out.writeBoolean(sortField.getReverse());
             }
@@ -512,7 +491,7 @@ public class Lucene {
      * This exception is thrown when {@link org.elasticsearch.common.lucene.Lucene.EarlyTerminatingCollector}
      * reaches early termination
      * */
-    public static final class EarlyTerminationException extends ElasticsearchException {
+    public final static class EarlyTerminationException extends ElasticsearchException {
 
         public EarlyTerminationException(String msg) {
             super(msg);
@@ -527,7 +506,7 @@ public class Lucene {
      * A collector that terminates early by throwing {@link org.elasticsearch.common.lucene.Lucene.EarlyTerminationException}
      * when count of matched documents has reached <code>maxCountHits</code>
      */
-    public static final class EarlyTerminatingCollector extends SimpleCollector {
+    public final static class EarlyTerminatingCollector extends SimpleCollector {
 
         private final int maxCountHits;
         private final Collector delegate;
@@ -612,7 +591,7 @@ public class Lucene {
 
     /**
      * Returns <tt>true</tt> iff the given exception or
-     * one of it's causes is an instance of {@link CorruptIndexException},
+     * one of it's causes is an instance of {@link CorruptIndexException}, 
      * {@link IndexFormatTooOldException}, or {@link IndexFormatTooNewException} otherwise <tt>false</tt>.
      */
     public static boolean isCorruptionException(Throwable t) {
@@ -620,7 +599,7 @@ public class Lucene {
     }
 
     /**
-     * Parses the version string lenient and returns the default value if the given string is null or emtpy
+     * Parses the version string lenient and returns the the default value if the given string is null or emtpy
      */
     public static Version parseVersionLenient(String toParse, Version defaultValue) {
         return LenientParser.parse(toParse, defaultValue);
@@ -677,7 +656,7 @@ public class Lucene {
             segmentsFileName = infos.getSegmentsFileName();
             this.dir = dir;
             userData = infos.getUserData();
-            files = Collections.unmodifiableCollection(infos.files(true));
+            files = Collections.unmodifiableCollection(infos.files(dir, true));
             generation = infos.getGeneration();
             segmentCount = infos.size();
         }
@@ -726,6 +705,13 @@ public class Lucene {
         public void delete() {
             throw new UnsupportedOperationException("This IndexCommit does not support deletions");
         }
+    }
+
+    /**
+     * Is it an empty {@link DocIdSet}?
+     */
+    public static boolean isEmpty(@Nullable DocIdSet set) {
+        return set == null || set == DocIdSet.EMPTY;
     }
 
     /**

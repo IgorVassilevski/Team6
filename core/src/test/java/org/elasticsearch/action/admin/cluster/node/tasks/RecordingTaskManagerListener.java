@@ -19,17 +19,16 @@
 
 package org.elasticsearch.action.admin.cluster.node.tasks;
 
+import org.elasticsearch.action.admin.cluster.node.tasks.list.TaskInfo;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.tasks.Task;
-import org.elasticsearch.tasks.TaskInfo;
 import org.elasticsearch.test.tasks.MockTaskManagerListener;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * MockTaskManagerListener that records all task registration/unregistration events
@@ -60,21 +59,27 @@ public class RecordingTaskManagerListener implements MockTaskManagerListener {
         }
     }
 
-    @Override
-    public void waitForTaskCompletion(Task task) {
-    }
-
     public synchronized List<Tuple<Boolean, TaskInfo>> getEvents() {
         return Collections.unmodifiableList(new ArrayList<>(events));
     }
 
     public synchronized List<TaskInfo> getRegistrationEvents() {
-        List<TaskInfo> events = this.events.stream().filter(Tuple::v1).map(Tuple::v2).collect(Collectors.toList());
+        List<TaskInfo> events = new ArrayList<>();
+        for (Tuple<Boolean, TaskInfo> event : this.events) {
+            if(event.v1()) {
+                events.add(event.v2());
+            }
+        }
         return Collections.unmodifiableList(events);
     }
 
     public synchronized List<TaskInfo> getUnregistrationEvents() {
-        List<TaskInfo> events = this.events.stream().filter(event -> event.v1() == false).map(Tuple::v2).collect(Collectors.toList());
+        List<TaskInfo> events = new ArrayList<>();
+        for (Tuple<Boolean, TaskInfo> event : this.events) {
+            if(event.v1() == false) {
+                events.add(event.v2());
+            }
+        }
         return Collections.unmodifiableList(events);
     }
 

@@ -19,10 +19,12 @@
 
 package org.elasticsearch.action.admin.indices.mapping.get;
 
+import com.google.common.collect.ObjectArrays;
+import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequestBuilder;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.ElasticsearchClient;
-import org.elasticsearch.common.util.ArrayUtils;
+import org.elasticsearch.client.IndicesAdminClient;
 
 /** A helper class to build {@link GetFieldMappingsRequest} objects */
 public class GetFieldMappingsRequestBuilder extends ActionRequestBuilder<GetFieldMappingsRequest, GetFieldMappingsResponse, GetFieldMappingsRequestBuilder> {
@@ -37,7 +39,7 @@ public class GetFieldMappingsRequestBuilder extends ActionRequestBuilder<GetFiel
     }
 
     public GetFieldMappingsRequestBuilder addIndices(String... indices) {
-        request.indices(ArrayUtils.concat(request.indices(), indices));
+        request.indices(ObjectArrays.concat(request.indices(), indices, String.class));
         return this;
     }
 
@@ -47,7 +49,7 @@ public class GetFieldMappingsRequestBuilder extends ActionRequestBuilder<GetFiel
     }
 
     public GetFieldMappingsRequestBuilder addTypes(String... types) {
-        request.types(ArrayUtils.concat(request.types(), types));
+        request.types(ObjectArrays.concat(request.types(), types, String.class));
         return this;
     }
 

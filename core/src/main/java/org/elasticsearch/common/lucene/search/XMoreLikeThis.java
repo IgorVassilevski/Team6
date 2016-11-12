@@ -38,21 +38,9 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexableField;
-import org.apache.lucene.index.MultiFields;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.index.*;
+import org.apache.lucene.search.*;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRefBuilder;
@@ -62,12 +50,7 @@ import org.elasticsearch.common.io.FastStringReader;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 
 /**
@@ -304,7 +287,7 @@ public final class XMoreLikeThis {
     /**
      * For idf() calculations.
      */
-    private TFIDFSimilarity similarity;// = new ClassicSimilarity();
+    private TFIDFSimilarity similarity;// = new DefaultSimilarity();
 
     /**
      * IndexReader to use
@@ -346,7 +329,7 @@ public final class XMoreLikeThis {
      * Constructor requiring an IndexReader.
      */
     public XMoreLikeThis(IndexReader ir) {
-        this(ir, new ClassicSimilarity());
+        this(ir, new DefaultSimilarity());
     }
 
     public XMoreLikeThis(IndexReader ir, TFIDFSimilarity sim) {
@@ -656,7 +639,7 @@ public final class XMoreLikeThis {
             }
         }
         // term selection is per field, then appended to a single boolean query
-        BooleanQuery.Builder bq = new BooleanQuery.Builder();
+        BooleanQuery bq = new BooleanQuery();
         for (String fieldName : fieldNames) {
             Map<String, Int> termFreqMap = new HashMap<>();
             for (Fields fields : likeFields) {
@@ -667,34 +650,34 @@ public final class XMoreLikeThis {
             }
             addToQuery(createQueue(termFreqMap, fieldName), bq);
         }
-        return bq.build();
+        return bq;
     }
 
     /**
      * Create the More like query from a PriorityQueue
      */
     private Query createQuery(PriorityQueue<ScoreTerm> q) {
-        BooleanQuery.Builder query = new BooleanQuery.Builder();
+        BooleanQuery query = new BooleanQuery();
         addToQuery(q, query);
-        return query.build();
+        return query;
     }
 
     /**
      * Add to an existing boolean query the More Like This query from this PriorityQueue
      */
-    private void addToQuery(PriorityQueue<ScoreTerm> q, BooleanQuery.Builder query) {
+    private void addToQuery(PriorityQueue<ScoreTerm> q, BooleanQuery query) {
         ScoreTerm scoreTerm;
         float bestScore = -1;
 
         while ((scoreTerm = q.pop()) != null) {
-            Query tq = new TermQuery(new Term(scoreTerm.topField, scoreTerm.word));
+            TermQuery tq = new TermQuery(new Term(scoreTerm.topField, scoreTerm.word));
 
             if (boost) {
                 if (bestScore == -1) {
                     bestScore = (scoreTerm.score);
                 }
                 float myScore = (scoreTerm.score);
-                tq = new BoostQuery(tq, boostFactor * myScore / bestScore);
+                tq.setBoost(boostFactor * myScore / bestScore);
             }
 
             try {
@@ -862,7 +845,7 @@ public final class XMoreLikeThis {
             while(docs != null && docs.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
                 freq += docs.freq();
             }
-
+            
             // increment frequency
             Int cnt = termFreqMap.get(term);
             if (cnt == null) {

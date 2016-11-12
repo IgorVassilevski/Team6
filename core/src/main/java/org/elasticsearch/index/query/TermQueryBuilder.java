@@ -19,137 +19,128 @@
 
 package org.elasticsearch.index.query;
 
-import org.apache.lucene.index.Term;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermQuery;
-import org.elasticsearch.common.ParseField;
-import org.elasticsearch.common.ParsingException;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.lucene.BytesRefs;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.mapper.MappedFieldType;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
-import java.util.Optional;
 
 /**
  * A Query that matches documents containing a term.
  */
-public class TermQueryBuilder extends BaseTermQueryBuilder<TermQueryBuilder> {
-    public static final String NAME = "term";
+public class TermQueryBuilder extends QueryBuilder implements BoostableQueryBuilder<TermQueryBuilder> {
 
-    private static final ParseField TERM_FIELD = new ParseField("term");
-    private static final ParseField VALUE_FIELD = new ParseField("value");
+    private final String name;
 
-    /** @see BaseTermQueryBuilder#BaseTermQueryBuilder(String, String) */
-    public TermQueryBuilder(String fieldName, String value) {
-        super(fieldName, (Object) value);
-    }
+    private final Object value;
 
-    /** @see BaseTermQueryBuilder#BaseTermQueryBuilder(String, int) */
-    public TermQueryBuilder(String fieldName, int value) {
-        super(fieldName, (Object) value);
-    }
+    private float boost = -1;
 
-    /** @see BaseTermQueryBuilder#BaseTermQueryBuilder(String, long) */
-    public TermQueryBuilder(String fieldName, long value) {
-        super(fieldName, (Object) value);
-    }
+    private String queryName;
 
-    /** @see BaseTermQueryBuilder#BaseTermQueryBuilder(String, float) */
-    public TermQueryBuilder(String fieldName, float value) {
-        super(fieldName, (Object) value);
-    }
-
-    /** @see BaseTermQueryBuilder#BaseTermQueryBuilder(String, double) */
-    public TermQueryBuilder(String fieldName, double value) {
-        super(fieldName, (Object) value);
-    }
-
-    /** @see BaseTermQueryBuilder#BaseTermQueryBuilder(String, boolean) */
-    public TermQueryBuilder(String fieldName, boolean value) {
-        super(fieldName, (Object) value);
-    }
-
-    /** @see BaseTermQueryBuilder#BaseTermQueryBuilder(String, Object) */
-    public TermQueryBuilder(String fieldName, Object value) {
-        super(fieldName, value);
+    /**
+     * Constructs a new term query.
+     *
+     * @param name  The name of the field
+     * @param value The value of the term
+     */
+    public TermQueryBuilder(String name, String value) {
+        this(name, (Object) value);
     }
 
     /**
-     * Read from a stream.
+     * Constructs a new term query.
+     *
+     * @param name  The name of the field
+     * @param value The value of the term
      */
-    public TermQueryBuilder(StreamInput in) throws IOException {
-        super(in);
+    public TermQueryBuilder(String name, int value) {
+        this(name, (Object) value);
     }
 
-    public static Optional<TermQueryBuilder> fromXContent(QueryParseContext parseContext) throws IOException {
-        XContentParser parser = parseContext.parser();
+    /**
+     * Constructs a new term query.
+     *
+     * @param name  The name of the field
+     * @param value The value of the term
+     */
+    public TermQueryBuilder(String name, long value) {
+        this(name, (Object) value);
+    }
 
-        String queryName = null;
-        String fieldName = null;
-        Object value = null;
-        float boost = AbstractQueryBuilder.DEFAULT_BOOST;
-        String currentFieldName = null;
-        XContentParser.Token token;
-        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-            if (token == XContentParser.Token.FIELD_NAME) {
-                currentFieldName = parser.currentName();
-            } else if (parseContext.isDeprecatedSetting(currentFieldName)) {
-                // skip
-            } else if (token == XContentParser.Token.START_OBJECT) {
-                throwParsingExceptionOnMultipleFields(NAME, parser.getTokenLocation(), fieldName, currentFieldName);
-                fieldName = currentFieldName;
-                while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                    if (token == XContentParser.Token.FIELD_NAME) {
-                        currentFieldName = parser.currentName();
-                    } else {
-                        if (parseContext.getParseFieldMatcher().match(currentFieldName, TERM_FIELD)) {
-                            value = parser.objectBytes();
-                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, VALUE_FIELD)) {
-                            value = parser.objectBytes();
-                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.NAME_FIELD)) {
-                            queryName = parser.text();
-                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.BOOST_FIELD)) {
-                            boost = parser.floatValue();
-                        } else {
-                            throw new ParsingException(parser.getTokenLocation(),
-                                    "[term] query does not support [" + currentFieldName + "]");
-                        }
-                    }
-                }
-            } else if (token.isValue()) {
-                throwParsingExceptionOnMultipleFields(NAME, parser.getTokenLocation(), fieldName, parser.currentName());
-                fieldName = currentFieldName;
-                value = parser.objectBytes();
-            } else if (token == XContentParser.Token.START_ARRAY) {
-                throw new ParsingException(parser.getTokenLocation(), "[term] query does not support array of values");
+    /**
+     * Constructs a new term query.
+     *
+     * @param name  The name of the field
+     * @param value The value of the term
+     */
+    public TermQueryBuilder(String name, float value) {
+        this(name, (Object) value);
+    }
+
+    /**
+     * Constructs a new term query.
+     *
+     * @param name  The name of the field
+     * @param value The value of the term
+     */
+    public TermQueryBuilder(String name, double value) {
+        this(name, (Object) value);
+    }
+
+    /**
+     * Constructs a new term query.
+     *
+     * @param name  The name of the field
+     * @param value The value of the term
+     */
+    public TermQueryBuilder(String name, boolean value) {
+        this(name, (Object) value);
+    }
+
+    /**
+     * Constructs a new term query.
+     *
+     * @param name  The name of the field
+     * @param value The value of the term
+     */
+    public TermQueryBuilder(String name, Object value) {
+        this.name = name;
+        this.value = value;
+    }
+
+    /**
+     * Sets the boost for this query.  Documents matching this query will (in addition to the normal
+     * weightings) have their score multiplied by the boost provided.
+     */
+    @Override
+    public TermQueryBuilder boost(float boost) {
+        this.boost = boost;
+        return this;
+    }
+
+    /**
+     * Sets the query name for the filter that can be used when searching for matched_filters per hit.
+     */
+    public TermQueryBuilder queryName(String queryName) {
+        this.queryName = queryName;
+        return this;
+    }
+
+    @Override
+    public void doXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject(TermQueryParser.NAME);
+        if (boost == -1 && queryName == null) {
+            builder.field(name, value);
+        } else {
+            builder.startObject(name);
+            builder.field("value", value);
+            if (boost != -1) {
+                builder.field("boost", boost);
             }
+            if (queryName != null) {
+                builder.field("_name", queryName);
+            }
+            builder.endObject();
         }
-
-        TermQueryBuilder termQuery = new TermQueryBuilder(fieldName, value);
-        termQuery.boost(boost);
-        if (queryName != null) {
-            termQuery.queryName(queryName);
-        }
-        return Optional.of(termQuery);
-    }
-
-    @Override
-    protected Query doToQuery(QueryShardContext context) throws IOException {
-        Query query = null;
-        MappedFieldType mapper = context.fieldMapper(this.fieldName);
-        if (mapper != null) {
-            query = mapper.termQuery(this.value, context);
-        }
-        if (query == null) {
-            query = new TermQuery(new Term(this.fieldName, BytesRefs.toBytesRef(this.value)));
-        }
-        return query;
-    }
-
-    @Override
-    public String getWriteableName() {
-        return NAME;
+        builder.endObject();
     }
 }

@@ -19,89 +19,24 @@
 
 package org.elasticsearch.bootstrap;
 
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
-import joptsimple.util.PathConverter;
-import org.elasticsearch.Build;
-import org.elasticsearch.cli.ExitCodes;
-import org.elasticsearch.cli.SettingCommand;
-import org.elasticsearch.cli.Terminal;
-import org.elasticsearch.cli.UserException;
-import org.elasticsearch.monitor.jvm.JvmInfo;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Map;
-
 /**
  * This class starts elasticsearch.
  */
-class Elasticsearch extends SettingCommand {
+public final class Elasticsearch {
 
-    private final OptionSpecBuilder versionOption;
-    private final OptionSpecBuilder daemonizeOption;
-    private final OptionSpec<Path> pidfileOption;
-
-    // visible for testing
-    Elasticsearch() {
-        super("starts elasticsearch");
-        versionOption = parser.acceptsAll(Arrays.asList("V", "version"),
-            "Prints elasticsearch version information and exits");
-        daemonizeOption = parser.acceptsAll(Arrays.asList("d", "daemonize"),
-            "Starts Elasticsearch in the background")
-            .availableUnless(versionOption);
-        pidfileOption = parser.acceptsAll(Arrays.asList("p", "pidfile"),
-            "Creates a pid file in the specified path on start")
-            .availableUnless(versionOption)
-            .withRequiredArg()
-            .withValuesConvertedBy(new PathConverter());
-    }
+    /** no instantiation */
+    private Elasticsearch() {}
 
     /**
      * Main entry point for starting elasticsearch
      */
-    public static void main(final String[] args) throws Exception {
-        final Elasticsearch elasticsearch = new Elasticsearch();
-        int status = main(args, elasticsearch, Terminal.DEFAULT);
-        if (status != ExitCodes.OK) {
-            exit(status);
-        }
-    }
-
-    static int main(final String[] args, final Elasticsearch elasticsearch, final Terminal terminal) throws Exception {
-        return elasticsearch.main(args, terminal);
-    }
-
-    @Override
-    protected void execute(Terminal terminal, OptionSet options, Map<String, String> settings) throws Exception {
-        if (options.nonOptionArguments().isEmpty() == false) {
-            throw new UserException(ExitCodes.USAGE, "Positional arguments not allowed, found " + options.nonOptionArguments());
-        }
-        if (options.has(versionOption)) {
-            if (options.has(daemonizeOption) || options.has(pidfileOption)) {
-                throw new UserException(ExitCodes.USAGE, "Elasticsearch version option is mutually exclusive with any other option");
-            }
-            terminal.println("Version: " + org.elasticsearch.Version.CURRENT
-                    + ", Build: " + Build.CURRENT.shortHash() + "/" + Build.CURRENT.date()
-                    + ", JVM: " + JvmInfo.jvmInfo().version());
-            return;
-        }
-
-        final boolean daemonize = options.has(daemonizeOption);
-        final Path pidFile = pidfileOption.value(options);
-
-        init(daemonize, pidFile, settings);
-    }
-
-    void init(final boolean daemonize, final Path pidFile, final Map<String, String> esSettings) {
+    public static void main(String[] args) throws StartupError {
         try {
-            Bootstrap.init(!daemonize, pidFile, esSettings);
-        } catch (final Throwable t) {
+            Bootstrap.init(args);
+        } catch (Throwable t) {
             // format exceptions to the console in a special way
             // to avoid 2MB stacktraces from guice, etc.
-            throw new StartupException(t);
+            throw new StartupError(t);
         }
     }
 
@@ -113,8 +48,7 @@ class Elasticsearch extends SettingCommand {
      *
      * NOTE: If this method is renamed and/or moved, make sure to update service.bat!
      */
-    static void close(String[] args) throws IOException {
+    static void close(String[] args) {
         Bootstrap.stop();
     }
-
 }

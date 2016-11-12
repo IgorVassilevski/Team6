@@ -2,17 +2,14 @@
 === Highlighting
 
 Allows to highlight search results on one or more fields. The
-implementation uses either the lucene `plain` highlighter, the
-fast vector highlighter (`fvh`) or `postings` highlighter.
-The following is an example of the search request body:
+implementation uses either the lucene `highlighter`, `fast-vector-highlighter`
+or `postings-highlighter`. The following is an example of the  search request
+body:
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "fields" : {
             "content" : {}
@@ -20,7 +17,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 In the above case, the `content` field will be highlighted for each
 search hit (there will be another element in each search hit, called
@@ -39,8 +35,7 @@ be used for highlighting if it mapped to have `store` set to `true`.
 ==================================
 
 The field name supports wildcard notation. For example, using `comment_*`
-will cause all <<text,text>> and <<keyword,keyword>> fields (and <<string,string>>
-from versions before 5.0) that match the expression to be highlighted.
+will cause all <<string,string>> fields that match the expression to be highlighted.
 Note that all other fields will not be highlighted. If you use a custom mapper and want to
 highlight on a field anyway, you have to provide the field name explicitly.
 
@@ -52,9 +47,9 @@ It tries hard to reflect the query matching logic in terms of understanding word
 
 [WARNING]
 If you want to highlight a lot of fields in a lot of documents with complex queries this highlighter will not be fast.
-In its efforts to accurately reflect query logic it creates a tiny in-memory index and re-runs the original query criteria through
-Lucene's query execution planner to get access to low-level match information on the current document.
-This is repeated for every field and every document that needs highlighting. If this presents a performance issue in your system consider using an alternative highlighter.
+In its efforts to accurately reflect query logic it creates a tiny in-memory index and re-runs the original query criteria through 
+Lucene's query execution planner to get access to low-level match information on the current document. 
+This is repeated for every field and every document that needs highlighting. If this presents a performance issue in your system consider using an alternative highlighter. 
 
 [[postings-highlighter]]
 ==== Postings highlighter
@@ -135,11 +130,8 @@ The following is an example that forces the use of the plain highlighter:
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "fields" : {
             "content" : {"type" : "plain"}
@@ -147,7 +139,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 ==== Force highlighting on source
 
@@ -156,11 +147,8 @@ stored separately. Defaults to `false`.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "fields" : {
             "content" : {"force_source" : true}
@@ -168,7 +156,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 [[tags]]
 ==== Highlighting Tags
@@ -179,11 +166,8 @@ for example:
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "pre_tags" : ["<tag1>"],
         "post_tags" : ["</tag1>"],
@@ -193,18 +177,14 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 Using the fast vector highlighter there can be more tags, and the "importance"
 is ordered.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "pre_tags" : ["<tag1>", "<tag2>"],
         "post_tags" : ["</tag1>", "</tag2>"],
@@ -214,7 +194,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 There are also built in "tag" schemas, with currently a single schema
 called `styled` with the following `pre_tags`:
@@ -233,11 +212,8 @@ is an example of switching tag schemas:
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "tags_schema" : "styled",
         "fields" : {
@@ -246,7 +222,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 
 ==== Encoder
@@ -264,11 +239,8 @@ For example:
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "fields" : {
             "content" : {"fragment_size" : 150, "number_of_fragments" : 3}
@@ -276,7 +248,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 The `fragment_size` is ignored when using the postings highlighter, as it
 outputs sentences regardless of their length.
@@ -286,11 +257,8 @@ to be sorted by score:
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "order" : "score",
         "fields" : {
@@ -299,7 +267,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 If the `number_of_fragments` value is set to `0` then no fragments are
 produced, instead the whole content of the field is returned, and of
@@ -309,11 +276,8 @@ is required. Note that `fragment_size` is ignored in this case.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "fields" : {
             "_all" : {},
@@ -322,9 +286,8 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
-When using `fvh` one can use `fragment_offset`
+When using `fast-vector-highlighter` one can use `fragment_offset`
 parameter to control the margin to start highlighting from.
 
 In the case where there is no matching fragment to highlight, the default is
@@ -338,11 +301,8 @@ greater than `0`.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "fields" : {
             "content" : {
@@ -354,7 +314,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 
 ==== Highlight query
@@ -370,9 +329,8 @@ Generally it is better to include the search query in the
 query and the rescore query in `highlight_query`.
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "stored_fields": [ "_id" ],
+    "fields": [ "_id" ],
     "query" : {
         "match": {
             "content": {
@@ -387,7 +345,7 @@ GET /_search
                 "match_phrase": {
                     "content": {
                         "query": "foo bar",
-                        "slop": 1
+                        "phrase_slop": 1
                     }
                 }
             },
@@ -413,7 +371,7 @@ GET /_search
                             "match_phrase": {
                                 "content": {
                                     "query": "foo bar",
-                                    "slop": 1,
+                                    "phrase_slop": 1,
                                     "boost": 10.0
                                 }
                             }
@@ -426,7 +384,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 Note that the score of text fragment in this case is calculated by the Lucene
 highlighting framework. For implementation details you can check the
@@ -442,14 +399,12 @@ at the field level.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
         "number_of_fragments" : 3,
         "fragment_size" : 150,
+        "tag_schema" : "styled",
         "fields" : {
             "_all" : { "pre_tags" : ["<em>"], "post_tags" : ["</em>"] },
             "bio.title" : { "number_of_fragments" : 0 },
@@ -459,7 +414,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 [[field-match]]
 ==== Require Field Match
@@ -471,20 +425,14 @@ match will be highlighted.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
-    "query" : {
-        "match": { "user": "kimchy" }
-    },
+    "query" : {...},
     "highlight" : {
-        "require_field_match": false,
-        "fields": {
-                "_all" : { "pre_tags" : ["<em>"], "post_tags" : ["</em>"] }
-        }
+        "require_field_match": false
+        "fields" : {...}
     }
 }
 --------------------------------------------------
-// CONSOLE
 
 [[boundary-characters]]
 ==== Boundary Characters
@@ -513,7 +461,6 @@ analyzer and `content.plain` is analyzed by the `standard` analyzer.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
     "query": {
         "query_string": {
@@ -532,7 +479,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 The above matches both "run with scissors" and "running with scissors"
 and would highlight "running" and "scissors" but not "run". If both
 phrases appear in a large document then "running with scissors" is
@@ -541,7 +487,6 @@ are more matches in that fragment.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
     "query": {
         "query_string": {
@@ -560,14 +505,12 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
 The above highlights "run" as well as "running" and "scissors" but
 still sorts "running with scissors" above "run with scissors" because
 the plain match ("running") is boosted.
 
 [source,js]
 --------------------------------------------------
-GET /_search
 {
     "query": {
         "query_string": {
@@ -586,8 +529,6 @@ GET /_search
     }
 }
 --------------------------------------------------
-// CONSOLE
-
 The above query wouldn't highlight "run" or "scissor" but shows that
 it is just fine not to list the field to which the matches are combined
 (`content`) in the matched fields.
@@ -626,7 +567,7 @@ to
 
 [[phrase-limit]]
 ==== Phrase Limit
-The fast vector highlighter has a `phrase_limit` parameter that prevents
+The `fast-vector-highlighter` has a `phrase_limit` parameter that prevents
 it from analyzing too many phrases and eating tons of memory.  It defaults
 to 256 so only the first 256 matching phrases in the document scored
 considered.  You can raise the limit with the `phrase_limit` parameter but

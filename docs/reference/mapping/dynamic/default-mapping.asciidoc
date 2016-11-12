@@ -27,7 +27,7 @@ PUT my_index
   }
 }
 --------------------------------------------------
-// CONSOLE
+// AUTOSENSE
 <1> The `_default_` mapping defaults the <<mapping-all-field,`_all`>> field to disabled.
 <2> The `user` type inherits the settings from `_default_`.
 <3> The `blogpost` type overrides the defaults and enables the <<mapping-all-field,`_all`>> field.
@@ -56,10 +56,11 @@ PUT _template/logging
           "strings": { <4>
             "match_mapping_type": "string",
             "mapping": {
-              "type": "text",
+              "type": "string",
               "fields": {
                 "raw": {
-                  "type":  "keyword",
+                  "type":  "string",
+                  "index": "not_analyzed",
                   "ignore_above": 256
                 }
               }
@@ -74,8 +75,8 @@ PUT _template/logging
 PUT logs-2015.10.01/event/1
 { "message": "error:16" }
 --------------------------------------------------
-// CONSOLE
+// AUTOSENSE
 <1> The `logging` template will match any indices beginning with `logs-`.
 <2> Matching indices will be created with a single primary shard.
 <3> The `_all` field will be disabled by default for new type mappings.
-<4> String fields will be created with a `text` main field, and a `keyword` `.raw` field.
+<4> String fields will be created with an `analyzed` main field, and a `not_analyzed` `.raw` field.

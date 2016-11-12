@@ -19,8 +19,7 @@
 
 package org.elasticsearch.index.shard;
 
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.*;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.lucene.index.ElasticsearchDirectoryReader;
 import org.elasticsearch.common.lucene.index.ElasticsearchLeafReader;

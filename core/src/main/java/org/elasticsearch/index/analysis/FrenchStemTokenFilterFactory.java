@@ -19,14 +19,16 @@
 
 package org.elasticsearch.index.analysis;
 
-import org.apache.lucene.analysis.CharArraySet;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.miscellaneous.SetKeywordMarkerFilter;
+import org.apache.lucene.analysis.util.CharArraySet;
 import org.apache.lucene.analysis.snowball.SnowballFilter;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.settings.IndexSettingsService;
 import org.tartarus.snowball.ext.FrenchStemmer;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
+import org.elasticsearch.index.Index;
 
 /**
  *
@@ -35,8 +37,9 @@ public class FrenchStemTokenFilterFactory extends AbstractTokenFilterFactory {
 
     private final CharArraySet exclusions;
 
-    public FrenchStemTokenFilterFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public FrenchStemTokenFilterFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         this.exclusions = Analysis.parseStemExclusion(settings, CharArraySet.EMPTY_SET);
     }
 

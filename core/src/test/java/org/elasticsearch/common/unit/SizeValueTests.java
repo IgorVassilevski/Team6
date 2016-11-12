@@ -19,17 +19,19 @@
 package org.elasticsearch.common.unit;
 
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
 /**
  *
  */
 public class SizeValueTests extends ESTestCase {
+
+    @Test
     public void testThatConversionWorks() {
         SizeValue sizeValue = new SizeValue(1000);
-        assertThat(sizeValue.kilo(), is(1L));
+        assertThat(sizeValue.kilo(), is(1l));
         assertThat(sizeValue.toString(), is("1k"));
 
         sizeValue = new SizeValue(1000, SizeUnit.KILO);
@@ -53,18 +55,15 @@ public class SizeValueTests extends ESTestCase {
         assertThat(sizeValue.toString(), is("1000p"));
     }
 
+    @Test
     public void testThatParsingWorks() {
         assertThat(SizeValue.parseSizeValue("1k").toString(), is(new SizeValue(1000).toString()));
         assertThat(SizeValue.parseSizeValue("1p").toString(), is(new SizeValue(1, SizeUnit.PETA).toString()));
         assertThat(SizeValue.parseSizeValue("1G").toString(), is(new SizeValue(1, SizeUnit.GIGA).toString()));
     }
 
+    @Test(expected = IllegalArgumentException.class)
     public void testThatNegativeValuesThrowException() {
-        try {
-            new SizeValue(-1);
-            fail("Expected IllegalArgumentException");
-        } catch (IllegalArgumentException e) {
-            assertThat(e.getMessage(), containsString("may not be negative"));
-        }
+        new SizeValue(-1);
     }
 }

@@ -19,7 +19,6 @@
 
 package org.elasticsearch.index.fielddata.ordinals;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.MultiDocValues.OrdinalMap;
@@ -27,8 +26,10 @@ import org.apache.lucene.index.RandomAccessOrds;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.packed.PackedInts;
 import org.elasticsearch.common.breaker.CircuitBreaker;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
 import org.elasticsearch.index.fielddata.AtomicOrdinalsFieldData;
 import org.elasticsearch.index.fielddata.IndexOrdinalsFieldData;
 import org.elasticsearch.index.fielddata.plain.AbstractAtomicOrdinalsFieldData;
@@ -37,7 +38,6 @@ import org.elasticsearch.indices.breaker.CircuitBreakerService;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Utility class to build global ordinals.
@@ -48,7 +48,7 @@ public enum GlobalOrdinalsBuilder {
     /**
      * Build global ordinals for the provided {@link IndexReader}.
      */
-    public static IndexOrdinalsFieldData build(final IndexReader indexReader, IndexOrdinalsFieldData indexFieldData, IndexSettings indexSettings, CircuitBreakerService breakerService, Logger logger) throws IOException {
+    public static IndexOrdinalsFieldData build(final IndexReader indexReader, IndexOrdinalsFieldData indexFieldData, Settings settings, CircuitBreakerService breakerService, ESLogger logger) throws IOException {
         assert indexReader.leaves().size() > 1;
         long startTimeNS = System.nanoTime();
 
@@ -64,18 +64,18 @@ public enum GlobalOrdinalsBuilder {
 
         if (logger.isDebugEnabled()) {
             logger.debug(
-                    "global-ordinals [{}][{}] took [{}]",
-                    indexFieldData.getFieldName(),
+                    "Global-ordinals[{}][{}] took {} ms",
+                    indexFieldData.getFieldNames().fullName(),
                     ordinalMap.getValueCount(),
-                    new TimeValue(System.nanoTime() - startTimeNS, TimeUnit.NANOSECONDS)
+                    TimeValue.nsecToMSec(System.nanoTime() - startTimeNS)
             );
         }
-        return new InternalGlobalOrdinalsIndexFieldData(indexSettings, indexFieldData.getFieldName(),
-                atomicFD, ordinalMap, memorySizeInBytes
+        return new InternalGlobalOrdinalsIndexFieldData(indexFieldData.index(), settings, indexFieldData.getFieldNames(),
+                indexFieldData.getFieldDataType(), atomicFD, ordinalMap, memorySizeInBytes
         );
     }
 
-    public static IndexOrdinalsFieldData buildEmpty(IndexSettings indexSettings, final IndexReader indexReader, IndexOrdinalsFieldData indexFieldData) throws IOException {
+    public static IndexOrdinalsFieldData buildEmpty(Index index, Settings settings, final IndexReader indexReader, IndexOrdinalsFieldData indexFieldData) throws IOException {
         assert indexReader.leaves().size() > 1;
 
         final AtomicOrdinalsFieldData[] atomicFD = new AtomicOrdinalsFieldData[indexReader.leaves().size()];
@@ -104,8 +104,8 @@ public enum GlobalOrdinalsBuilder {
             subs[i] = atomicFD[i].getOrdinalsValues();
         }
         final OrdinalMap ordinalMap = OrdinalMap.build(null, subs, PackedInts.DEFAULT);
-        return new InternalGlobalOrdinalsIndexFieldData(indexSettings, indexFieldData.getFieldName(),
-                atomicFD, ordinalMap, 0
+        return new InternalGlobalOrdinalsIndexFieldData(index, settings, indexFieldData.getFieldNames(),
+                indexFieldData.getFieldDataType(), atomicFD, ordinalMap, 0
         );
     }
 

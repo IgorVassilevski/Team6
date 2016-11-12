@@ -21,12 +21,14 @@ package org.elasticsearch.action.explain;
 
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.ValidateActions;
+import org.elasticsearch.action.support.QuerySourceBuilder;
 import org.elasticsearch.action.support.single.shard.SingleShardRequest;
+import org.elasticsearch.client.Requests;
 import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
+import org.elasticsearch.search.fetch.source.FetchSourceContext;
 
 import java.io.IOException;
 
@@ -39,7 +41,7 @@ public class ExplainRequest extends SingleShardRequest<ExplainRequest> {
     private String id;
     private String routing;
     private String preference;
-    private QueryBuilder query;
+    private BytesReference source;
     private String[] fields;
     private FetchSourceContext fetchSourceContext;
 
@@ -100,12 +102,17 @@ public class ExplainRequest extends SingleShardRequest<ExplainRequest> {
         return this;
     }
 
-    public QueryBuilder query() {
-        return query;
+    public BytesReference source() {
+        return source;
     }
 
-    public ExplainRequest query(QueryBuilder query) {
-        this.query = query;
+    public ExplainRequest source(QuerySourceBuilder sourceBuilder) {
+        this.source = sourceBuilder.buildAsBytes(Requests.CONTENT_TYPE);
+        return this;
+    }
+
+    public ExplainRequest source(BytesReference source) {
+        this.source = source;
         return this;
     }
 
@@ -152,8 +159,8 @@ public class ExplainRequest extends SingleShardRequest<ExplainRequest> {
         if (id == null) {
             validationException = ValidateActions.addValidationError("id is missing", validationException);
         }
-        if (query == null) {
-            validationException = ValidateActions.addValidationError("query is missing", validationException);
+        if (source == null) {
+            validationException = ValidateActions.addValidationError("source is missing", validationException);
         }
         return validationException;
     }
@@ -165,10 +172,13 @@ public class ExplainRequest extends SingleShardRequest<ExplainRequest> {
         id = in.readString();
         routing = in.readOptionalString();
         preference = in.readOptionalString();
-        query = in.readNamedWriteable(QueryBuilder.class);
+        source = in.readBytesReference();
         filteringAlias = in.readStringArray();
-        fields = in.readOptionalStringArray();
-        fetchSourceContext = in.readOptionalStreamable(FetchSourceContext::new);
+        if (in.readBoolean()) {
+            fields = in.readStringArray();
+        }
+
+        fetchSourceContext = FetchSourceContext.optionalReadFromStream(in);
         nowInMillis = in.readVLong();
     }
 
@@ -179,10 +189,16 @@ public class ExplainRequest extends SingleShardRequest<ExplainRequest> {
         out.writeString(id);
         out.writeOptionalString(routing);
         out.writeOptionalString(preference);
-        out.writeNamedWriteable(query);
+        out.writeBytesReference(source);
         out.writeStringArray(filteringAlias);
-        out.writeOptionalStringArray(fields);
-        out.writeOptionalStreamable(fetchSourceContext);
+        if (fields != null) {
+            out.writeBoolean(true);
+            out.writeStringArray(fields);
+        } else {
+            out.writeBoolean(false);
+        }
+
+        FetchSourceContext.optionalWriteToStream(fetchSourceContext, out);
         out.writeVLong(nowInMillis);
     }
 }

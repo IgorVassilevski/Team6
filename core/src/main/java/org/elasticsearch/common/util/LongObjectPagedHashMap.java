@@ -20,6 +20,8 @@
 package org.elasticsearch.common.util;
 
 
+import com.google.common.collect.UnmodifiableIterator;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.lease.Releasables;
 
 import java.util.Iterator;
@@ -123,7 +125,7 @@ public class LongObjectPagedHashMap<T> extends AbstractPagedHashMap implements I
 
     @Override
     public Iterator<Cursor<T>> iterator() {
-        return new Iterator<Cursor<T>>() {
+        return new UnmodifiableIterator<Cursor<T>>() {
 
             boolean cached;
             final Cursor<T> cursor;
@@ -158,11 +160,6 @@ public class LongObjectPagedHashMap<T> extends AbstractPagedHashMap implements I
                 }
                 cached = false;
                 return cursor;
-            }
-
-            @Override
-            public final void remove() {
-                throw new UnsupportedOperationException();
             }
 
         };

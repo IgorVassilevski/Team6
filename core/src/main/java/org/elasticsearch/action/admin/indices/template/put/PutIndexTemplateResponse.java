@@ -29,10 +29,10 @@ import java.io.IOException;
  */
 public class PutIndexTemplateResponse extends AcknowledgedResponse {
 
-    protected PutIndexTemplateResponse() {
+    PutIndexTemplateResponse() {
     }
 
-    protected PutIndexTemplateResponse(boolean acknowledged) {
+    PutIndexTemplateResponse(boolean acknowledged) {
         super(acknowledged);
     }
 

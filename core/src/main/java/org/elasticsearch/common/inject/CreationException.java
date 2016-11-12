@@ -16,10 +16,13 @@
 
 package org.elasticsearch.common.inject;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.internal.Errors;
 import org.elasticsearch.common.inject.spi.Message;
 
 import java.util.Collection;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Thrown when errors occur while creating a {@link Injector}. Includes a list of encountered
@@ -28,16 +31,15 @@ import java.util.Collection;
  * @author crazybob@google.com (Bob Lee)
  */
 public class CreationException extends RuntimeException {
-    private final Collection<Message> messages;
+
+    private final ImmutableSet<Message> messages;
 
     /**
      * Creates a CreationException containing {@code messages}.
      */
     public CreationException(Collection<Message> messages) {
-        this.messages = messages;
-        if (this.messages.isEmpty()) {
-            throw new IllegalArgumentException();
-        }
+        this.messages = ImmutableSet.copyOf(messages);
+        checkArgument(!this.messages.isEmpty());
         initCause(Errors.getOnlyCause(this.messages));
     }
 
@@ -52,4 +54,6 @@ public class CreationException extends RuntimeException {
     public String getMessage() {
         return Errors.format("Guice creation errors", messages);
     }
+
+    private static final long serialVersionUID = 0;
 }

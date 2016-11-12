@@ -21,8 +21,8 @@ package org.apache.lucene.queryparser.classic;
 
 import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.Query;
-import org.elasticsearch.index.query.ExistsQueryBuilder;
-import org.elasticsearch.index.query.QueryShardContext;
+import org.elasticsearch.index.query.ExistsQueryParser;
+import org.elasticsearch.index.query.QueryParseContext;
 
 /**
  *
@@ -32,7 +32,7 @@ public class ExistsFieldQueryExtension implements FieldQueryExtension {
     public static final String NAME = "_exists_";
 
     @Override
-    public Query query(QueryShardContext context, String queryText) {
-        return new ConstantScoreQuery(ExistsQueryBuilder.newFilter(context, queryText));
+    public Query query(QueryParseContext parseContext, String queryText) {
+        return new ConstantScoreQuery(ExistsQueryParser.newFilter(parseContext, queryText, null));
     }
 }

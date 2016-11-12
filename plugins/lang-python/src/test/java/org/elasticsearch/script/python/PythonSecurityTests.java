@@ -48,6 +48,9 @@ public class PythonSecurityTests extends ESTestCase {
 
     @Override
     public void tearDown() throws Exception {
+        // We need to clear some system properties
+        System.clearProperty("python.cachedir.skip");
+        System.clearProperty("python.console.encoding");
         se.close();
         super.tearDown();
     }
@@ -55,7 +58,7 @@ public class PythonSecurityTests extends ESTestCase {
     /** runs a script */
     private void doTest(String script) {
         Map<String, Object> vars = new HashMap<String, Object>();
-        se.executable(new CompiledScript(ScriptService.ScriptType.INLINE, "test", "python", se.compile(null, script, Collections.emptyMap())), vars).run();
+        se.executable(new CompiledScript(ScriptService.ScriptType.INLINE, "test", "python", se.compile(script, Collections.<String, String>emptyMap())), vars).run();
     }
 
     /** asserts that a script runs without exception */

@@ -19,6 +19,9 @@
 
 package org.elasticsearch.index.snapshots;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Represent shard snapshot status
  */

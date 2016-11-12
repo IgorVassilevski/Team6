@@ -23,26 +23,31 @@ import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
 import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
+import org.elasticsearch.cluster.routing.allocation.decider.FilterAllocationDecider;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.env.NodeEnvironment;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
-import org.elasticsearch.test.ESIntegTestCase.Scope;
 import org.elasticsearch.test.InternalTestCluster;
-import org.elasticsearch.test.InternalTestCluster.RestartCallback;
+import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.concurrent.Future;
 
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
+import static org.elasticsearch.test.ESIntegTestCase.Scope;
+import static org.elasticsearch.test.InternalTestCluster.RestartCallback;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 @ClusterScope(scope = Scope.TEST, numDataNodes = 0)
 public class MetaDataWriteDataNodesIT extends ESIntegTestCase {
+
+    @Test
     public void testMetaWrittenAlsoOnDataNode() throws Exception {
         // this test checks that index state is written on data only nodes if they have a shard allocated
         String masterNode = internalCluster().startMasterOnlyNode(Settings.EMPTY);
@@ -54,32 +59,33 @@ public class MetaDataWriteDataNodesIT extends ESIntegTestCase {
         assertIndexInMetaState(masterNode, "test");
     }
 
+    @Test
     public void testMetaIsRemovedIfAllShardsFromIndexRemoved() throws Exception {
         // this test checks that the index state is removed from a data only node once all shards have been allocated away from it
         String masterNode = internalCluster().startMasterOnlyNode(Settings.EMPTY);
-        InternalTestCluster.Async<String> nodeName1 = internalCluster().startDataOnlyNodeAsync();
-        InternalTestCluster.Async<String> nodeName2 = internalCluster().startDataOnlyNodeAsync();
+        Future<String> nodeName1 = internalCluster().startDataOnlyNodeAsync();
+        Future<String> nodeName2 = internalCluster().startDataOnlyNodeAsync();
         String node1 = nodeName1.get();
         String node2 = nodeName2.get();
 
         String index = "index";
-        assertAcked(prepareCreate(index).setSettings(Settings.builder().put("index.number_of_replicas", 0).put(IndexMetaData.INDEX_ROUTING_INCLUDE_GROUP_SETTING.getKey() + "_name", node1)));
+        assertAcked(prepareCreate(index).setSettings(Settings.builder().put("index.number_of_replicas", 0).put(FilterAllocationDecider.INDEX_ROUTING_INCLUDE_GROUP + "_name", node1)));
         index(index, "doc", "1", jsonBuilder().startObject().field("text", "some text").endObject());
         ensureGreen();
         assertIndexInMetaState(node1, index);
-        Index resolveIndex = resolveIndex(index);
-        assertIndexDirectoryDeleted(node2, resolveIndex);
+        assertIndexDirectoryDeleted(node2, index);
         assertIndexInMetaState(masterNode, index);
 
         logger.debug("relocating index...");
-        client().admin().indices().prepareUpdateSettings(index).setSettings(Settings.builder().put(IndexMetaData.INDEX_ROUTING_INCLUDE_GROUP_SETTING.getKey() + "_name", node2)).get();
-        client().admin().cluster().prepareHealth().setWaitForNoRelocatingShards(true).get();
+        client().admin().indices().prepareUpdateSettings(index).setSettings(Settings.builder().put(FilterAllocationDecider.INDEX_ROUTING_INCLUDE_GROUP + "_name", node2)).get();
+        client().admin().cluster().prepareHealth().setWaitForRelocatingShards(0).get();
         ensureGreen();
-        assertIndexDirectoryDeleted(node1, resolveIndex);
+        assertIndexDirectoryDeleted(node1, index);
         assertIndexInMetaState(node2, index);
         assertIndexInMetaState(masterNode, index);
     }
 
+    @Test
     public void testMetaWrittenWhenIndexIsClosedAndMetaUpdated() throws Exception {
         String masterNode = internalCluster().startMasterOnlyNode(Settings.EMPTY);
         final String dataNode = internalCluster().startDataOnlyNode(Settings.EMPTY);
@@ -142,37 +148,41 @@ public class MetaDataWriteDataNodesIT extends ESIntegTestCase {
 
         // finally check that meta data is also written of index opened again
         assertAcked(client().admin().indices().prepareOpen(index).get());
-        // make sure index is fully initialized and nothing is changed anymore
-        ensureGreen();
         indicesMetaData = getIndicesMetaDataOnNode(dataNode);
         assertThat(indicesMetaData.get(index).getState(), equalTo(IndexMetaData.State.OPEN));
     }
 
-    protected void assertIndexDirectoryDeleted(final String nodeName, final Index index) throws Exception {
-        assertBusy(() -> {
-            logger.info("checking if index directory exists...");
-            assertFalse("Expecting index directory of " + index + " to be deleted from node " + nodeName, indexDirectoryExists(nodeName, index));
-        }
+    protected void assertIndexDirectoryDeleted(final String nodeName, final String indexName) throws Exception {
+        assertBusy(new Runnable() {
+                       @Override
+                       public void run() {
+                           logger.info("checking if index directory exists...");
+                           assertFalse("Expecting index directory of " + indexName + " to be deleted from node " + nodeName, MetaDataWriteDataNodesIT.this.indexDirectoryExists(nodeName, indexName));
+                       }
+                   }
         );
     }
 
     protected void assertIndexInMetaState(final String nodeName, final String indexName) throws Exception {
-        assertBusy(() -> {
-            logger.info("checking if meta state exists...");
-            try {
-                assertTrue("Expecting meta state of index " + indexName + " to be on node " + nodeName, getIndicesMetaDataOnNode(nodeName).containsKey(indexName));
-            } catch (Exception e) {
-                logger.info("failed to load meta state", e);
-                fail("could not load meta state");
-            }
-        }
+        assertBusy(new Runnable() {
+                       @Override
+                       public void run() {
+                           logger.info("checking if meta state exists...");
+                           try {
+                               assertTrue("Expecting meta state of index " + indexName + " to be on node " + nodeName, MetaDataWriteDataNodesIT.this.getIndicesMetaDataOnNode(nodeName).containsKey(indexName));
+                           } catch (Throwable t) {
+                               logger.info("failed to load meta state", t);
+                               fail("could not load meta state");
+
+                           }
+                       }
+                   }
         );
     }
 
-
-    private boolean indexDirectoryExists(String nodeName, Index index) {
+    private boolean indexDirectoryExists(String nodeName, String indexName) {
         NodeEnvironment nodeEnv = ((InternalTestCluster) cluster()).getInstance(NodeEnvironment.class, nodeName);
-        for (Path path : nodeEnv.indexPaths(index)) {
+        for (Path path : nodeEnv.indexPaths(new Index(indexName))) {
             if (Files.exists(path)) {
                 return true;
             }

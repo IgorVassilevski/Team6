@@ -20,24 +20,16 @@ package org.elasticsearch.index.fielddata.plain;
 
 import org.apache.lucene.codecs.blocktree.FieldReader;
 import org.apache.lucene.codecs.blocktree.Stats;
-import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.PagedBytes;
 import org.apache.lucene.util.packed.PackedInts;
 import org.apache.lucene.util.packed.PackedLongValues;
 import org.elasticsearch.common.breaker.CircuitBreaker;
-import org.elasticsearch.index.IndexSettings;
-import org.elasticsearch.index.fielddata.AtomicOrdinalsFieldData;
-import org.elasticsearch.index.fielddata.IndexFieldData;
-import org.elasticsearch.index.fielddata.IndexFieldDataCache;
-import org.elasticsearch.index.fielddata.IndexOrdinalsFieldData;
-import org.elasticsearch.index.fielddata.RamAccountingTermsEnum;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.fielddata.*;
 import org.elasticsearch.index.fielddata.ordinals.Ordinals;
 import org.elasticsearch.index.fielddata.ordinals.OrdinalsBuilder;
 import org.elasticsearch.index.mapper.MappedFieldType;
@@ -53,27 +45,16 @@ public class PagedBytesIndexFieldData extends AbstractIndexOrdinalsFieldData {
 
     public static class Builder implements IndexFieldData.Builder {
 
-        private final double minFrequency, maxFrequency;
-        private final int minSegmentSize;
-
-        public Builder(double minFrequency, double maxFrequency, int minSegmentSize) {
-            this.minFrequency = minFrequency;
-            this.maxFrequency = maxFrequency;
-            this.minSegmentSize = minSegmentSize;
-        }
-
         @Override
-        public IndexOrdinalsFieldData build(IndexSettings indexSettings, MappedFieldType fieldType,
+        public IndexOrdinalsFieldData build(Index index, Settings indexSettings, MappedFieldType fieldType,
                                                                IndexFieldDataCache cache, CircuitBreakerService breakerService, MapperService mapperService) {
-            return new PagedBytesIndexFieldData(indexSettings, fieldType.name(), cache, breakerService,
-                    minFrequency, maxFrequency, minSegmentSize);
+            return new PagedBytesIndexFieldData(index, indexSettings, fieldType.names(), fieldType.fieldDataType(), cache, breakerService);
         }
     }
 
-    public PagedBytesIndexFieldData(IndexSettings indexSettings, String fieldName,
-                                    IndexFieldDataCache cache, CircuitBreakerService breakerService,
-                                    double minFrequency, double maxFrequency, int minSegmentSize) {
-        super(indexSettings, fieldName, cache, breakerService, minFrequency, maxFrequency, minSegmentSize);
+    public PagedBytesIndexFieldData(Index index, Settings indexSettings, MappedFieldType.Names fieldNames,
+                                    FieldDataType fieldDataType, IndexFieldDataCache cache, CircuitBreakerService breakerService) {
+        super(index, indexSettings, fieldNames, fieldDataType, cache, breakerService);
     }
 
     @Override
@@ -81,8 +62,8 @@ public class PagedBytesIndexFieldData extends AbstractIndexOrdinalsFieldData {
         LeafReader reader = context.reader();
         AtomicOrdinalsFieldData data = null;
 
-        PagedBytesEstimator estimator = new PagedBytesEstimator(context, breakerService.getBreaker(CircuitBreaker.FIELDDATA), getFieldName());
-        Terms terms = reader.terms(getFieldName());
+        PagedBytesEstimator estimator = new PagedBytesEstimator(context, breakerService.getBreaker(CircuitBreaker.FIELDDATA), getFieldNames().fullName());
+        Terms terms = reader.terms(getFieldNames().indexName());
         if (terms == null) {
             data = AbstractAtomicOrdinalsFieldData.empty();
             estimator.afterLoad(null, data.ramBytesUsed());
@@ -92,7 +73,14 @@ public class PagedBytesIndexFieldData extends AbstractIndexOrdinalsFieldData {
         final PagedBytes bytes = new PagedBytes(15);
 
         final PackedLongValues.Builder termOrdToBytesOffset = PackedLongValues.monotonicBuilder(PackedInts.COMPACT);
-        final float acceptableTransientOverheadRatio = OrdinalsBuilder.DEFAULT_ACCEPTABLE_OVERHEAD_RATIO;
+        final long numTerms;
+        if (regex == null && frequency == null) {
+            numTerms = terms.size();
+        } else {
+            numTerms = -1;
+        }
+        final float acceptableTransientOverheadRatio = fieldDataType.getSettings().getAsFloat(
+                FilterSettingFields.ACCEPTABLE_TRANSIENT_OVERHEAD_RATIO, OrdinalsBuilder.DEFAULT_ACCEPTABLE_OVERHEAD_RATIO);
 
         // Wrap the context in an estimator and use it to either estimate
         // the entire set, or wrap the TermsEnum so it can be calculated
@@ -101,7 +89,7 @@ public class PagedBytesIndexFieldData extends AbstractIndexOrdinalsFieldData {
         TermsEnum termsEnum = estimator.beforeLoad(terms);
         boolean success = false;
 
-        try (OrdinalsBuilder builder = new OrdinalsBuilder(reader.maxDoc(), acceptableTransientOverheadRatio)) {
+        try (OrdinalsBuilder builder = new OrdinalsBuilder(numTerms, reader.maxDoc(), acceptableTransientOverheadRatio)) {
             PostingsEnum docsEnum = null;
             for (BytesRef term = termsEnum.next(); term != null; term = termsEnum.next()) {
                 final long termOrd = builder.nextOrdinal();
@@ -113,7 +101,7 @@ public class PagedBytesIndexFieldData extends AbstractIndexOrdinalsFieldData {
                 }
             }
             PagedBytes.Reader bytesReader = bytes.freeze(true);
-            final Ordinals ordinals = builder.build();
+            final Ordinals ordinals = builder.build(fieldDataType.getSettings());
 
             data = new PagedBytesAtomicFieldData(bytesReader, termOrdToBytesOffset.build(), ordinals);
             success = true;
@@ -170,10 +158,10 @@ public class PagedBytesIndexFieldData extends AbstractIndexOrdinalsFieldData {
         public long estimateStringFieldData() {
             try {
                 LeafReader reader = context.reader();
-                Terms terms = reader.terms(getFieldName());
+                Terms terms = reader.terms(getFieldNames().indexName());
 
                 Fields fields = reader.fields();
-                final Terms fieldTerms = fields.terms(getFieldName());
+                final Terms fieldTerms = fields.terms(getFieldNames().indexName());
 
                 if (fieldTerms instanceof FieldReader) {
                     final Stats stats = ((FieldReader) fieldTerms).getStats();
@@ -202,28 +190,33 @@ public class PagedBytesIndexFieldData extends AbstractIndexOrdinalsFieldData {
          */
         @Override
         public TermsEnum beforeLoad(Terms terms) throws IOException {
+            final float acceptableTransientOverheadRatio = fieldDataType.getSettings().getAsFloat(
+                    FilterSettingFields.ACCEPTABLE_TRANSIENT_OVERHEAD_RATIO,
+                    OrdinalsBuilder.DEFAULT_ACCEPTABLE_OVERHEAD_RATIO);
+
             LeafReader reader = context.reader();
-
-            TermsEnum iterator = terms.iterator();
-            TermsEnum filteredIterator = filter(terms, iterator, reader);
-            final boolean filtered = iterator != filteredIterator;
-            iterator = filteredIterator;
-
-            if (filtered) {
+            // Check if one of the following is present:
+            // - The OrdinalsBuilder overhead has been tweaked away from the default
+            // - A field data filter is present
+            // - A regex filter is present
+            if (acceptableTransientOverheadRatio != OrdinalsBuilder.DEFAULT_ACCEPTABLE_OVERHEAD_RATIO ||
+                    fieldDataType.getSettings().getAsDouble(FilterSettingFields.FREQUENCY_MIN, 0d) != 0d ||
+                    fieldDataType.getSettings().getAsDouble(FilterSettingFields.FREQUENCY_MAX, 0d) != 0d ||
+                    fieldDataType.getSettings().getAsDouble(FilterSettingFields.FREQUENCY_MIN_SEGMENT_SIZE, 0d) != 0d ||
+                    fieldDataType.getSettings().get(FilterSettingFields.REGEX_PATTERN) != null) {
                 if (logger.isTraceEnabled()) {
                     logger.trace("Filter exists, can't circuit break normally, using RamAccountingTermsEnum");
                 }
-                return new RamAccountingTermsEnum(iterator, breaker, this, this.fieldName);
+                return new RamAccountingTermsEnum(filter(terms, reader), breaker, this, this.fieldName);
             } else {
                 estimatedBytes = this.estimateStringFieldData();
                 // If we weren't able to estimate, wrap in the RamAccountingTermsEnum
                 if (estimatedBytes == 0) {
-                    iterator = new RamAccountingTermsEnum(iterator, breaker, this, this.fieldName);
-                } else {
-                    breaker.addEstimateBytesAndMaybeBreak(estimatedBytes, fieldName);
+                    return new RamAccountingTermsEnum(filter(terms, reader), breaker, this, this.fieldName);
                 }
 
-                return iterator;
+                breaker.addEstimateBytesAndMaybeBreak(estimatedBytes, fieldName);
+                return filter(terms, reader);
             }
         }
 
@@ -253,5 +246,13 @@ public class PagedBytesIndexFieldData extends AbstractIndexOrdinalsFieldData {
         public void adjustForNoTerms(long actualUsed) {
             breaker.addWithoutBreaking(actualUsed);
         }
+    }
+
+    static final class FilterSettingFields {
+        static final String ACCEPTABLE_TRANSIENT_OVERHEAD_RATIO = "acceptable_transient_overhead_ratio";
+        static final String FREQUENCY_MIN = "filter.frequency.min";
+        static final String FREQUENCY_MAX = "filter.frequency.max";
+        static final String FREQUENCY_MIN_SEGMENT_SIZE = "filter.frequency.min_segment_size";
+        static final String REGEX_PATTERN = "filter.regex.pattern";
     }
 }

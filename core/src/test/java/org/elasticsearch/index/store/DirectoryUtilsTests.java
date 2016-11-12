@@ -18,23 +18,20 @@
  */
 package org.elasticsearch.index.store;
 
-import org.apache.lucene.store.BaseDirectoryWrapper;
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.FileSwitchDirectory;
-import org.apache.lucene.store.FilterDirectory;
-import org.apache.lucene.store.RAMDirectory;
+import org.apache.lucene.store.*;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.CoreMatchers.sameInstance;
+import static org.hamcrest.CoreMatchers.*;
 
 public class DirectoryUtilsTests extends ESTestCase {
+
+    @Test
     public void testGetLeave() throws IOException {
         Path file = createTempDir();
         final int iters = scaledRandomIntBetween(10, 100);

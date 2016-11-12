@@ -18,6 +18,7 @@
  */
 package org.elasticsearch.indices.flush;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -27,9 +28,6 @@ import org.elasticsearch.index.shard.ShardId;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.unmodifiableMap;
 
 /**
  * Result for all copies of a shard
@@ -55,7 +53,7 @@ public class ShardsSyncedFlushResult implements Streamable {
     public ShardsSyncedFlushResult(ShardId shardId, int totalShards, String failureReason) {
         this.syncId = null;
         this.failureReason = failureReason;
-        this.shardResponses = emptyMap();
+        this.shardResponses = ImmutableMap.of();
         this.shardId = shardId;
         this.totalShards = totalShards;
     }
@@ -65,7 +63,8 @@ public class ShardsSyncedFlushResult implements Streamable {
      */
     public ShardsSyncedFlushResult(ShardId shardId, String syncId, int totalShards, Map<ShardRouting, SyncedFlushService.ShardSyncedFlushResponse> shardResponses) {
         this.failureReason = null;
-        this.shardResponses = unmodifiableMap(new HashMap<>(shardResponses));
+        ImmutableMap.Builder<ShardRouting, SyncedFlushService.ShardSyncedFlushResponse> builder = ImmutableMap.builder();
+        this.shardResponses = builder.putAll(shardResponses).build();
         this.syncId = syncId;
         this.totalShards = totalShards;
         this.shardId = shardId;
@@ -141,7 +140,7 @@ public class ShardsSyncedFlushResult implements Streamable {
         int numResponses = in.readInt();
         shardResponses = new HashMap<>();
         for (int i = 0; i < numResponses; i++) {
-            ShardRouting shardRouting = new ShardRouting(in);
+            ShardRouting shardRouting = ShardRouting.readShardRoutingEntry(in);
             SyncedFlushService.ShardSyncedFlushResponse response = SyncedFlushService.ShardSyncedFlushResponse.readSyncedFlushResponse(in);
             shardResponses.put(shardRouting, response);
         }

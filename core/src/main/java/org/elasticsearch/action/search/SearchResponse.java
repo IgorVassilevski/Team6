@@ -21,14 +21,15 @@ package org.elasticsearch.action.search;
 
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.StatusToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
+import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.rest.RestStatus;
-import org.elasticsearch.rest.action.RestActions;
+import org.elasticsearch.rest.action.support.RestActions;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.internal.InternalSearchResponse;
@@ -36,6 +37,7 @@ import org.elasticsearch.search.profile.ProfileShardResult;
 import org.elasticsearch.search.suggest.Suggest;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 import static org.elasticsearch.action.search.ShardSearchFailure.readShardSearchFailure;
@@ -166,17 +168,17 @@ public class SearchResponse extends ActionResponse implements StatusToXContent {
      * If profiling was enabled, this returns an object containing the profile results from
      * each shard.  If profiling was not enabled, this will return null
      *
-     * @return The profile results or an empty map
+     * @return The profile results or null
      */
-    @Nullable public Map<String, ProfileShardResult> getProfileResults() {
+    public @Nullable Map<String, List<ProfileShardResult>> getProfileResults() {
         return internalResponse.profile();
     }
 
     static final class Fields {
-        static final String _SCROLL_ID = "_scroll_id";
-        static final String TOOK = "took";
-        static final String TIMED_OUT = "timed_out";
-        static final String TERMINATED_EARLY = "terminated_early";
+        static final XContentBuilderString _SCROLL_ID = new XContentBuilderString("_scroll_id");
+        static final XContentBuilderString TOOK = new XContentBuilderString("took");
+        static final XContentBuilderString TIMED_OUT = new XContentBuilderString("timed_out");
+        static final XContentBuilderString TERMINATED_EARLY = new XContentBuilderString("terminated_early");
     }
 
     @Override
@@ -231,6 +233,14 @@ public class SearchResponse extends ActionResponse implements StatusToXContent {
 
     @Override
     public String toString() {
-        return Strings.toString(this, true);
+        try {
+            XContentBuilder builder = XContentFactory.jsonBuilder().prettyPrint();
+            builder.startObject();
+            toXContent(builder, EMPTY_PARAMS);
+            builder.endObject();
+            return builder.string();
+        } catch (IOException e) {
+            return "{ \"error\" : \"" + e.getMessage() + "\"}";
+        }
     }
 }

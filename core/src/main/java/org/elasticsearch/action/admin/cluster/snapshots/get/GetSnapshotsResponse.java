@@ -24,6 +24,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.snapshots.SnapshotInfo;
 
 import java.io.IOException;
@@ -42,7 +43,7 @@ public class GetSnapshotsResponse extends ActionResponse implements ToXContent {
     }
 
     GetSnapshotsResponse(List<SnapshotInfo> snapshots) {
-        this.snapshots = Collections.unmodifiableList(snapshots);
+        this.snapshots = snapshots;
     }
 
     /**
@@ -60,7 +61,7 @@ public class GetSnapshotsResponse extends ActionResponse implements ToXContent {
         int size = in.readVInt();
         List<SnapshotInfo> builder = new ArrayList<>();
         for (int i = 0; i < size; i++) {
-            builder.add(new SnapshotInfo(in));
+            builder.add(SnapshotInfo.readSnapshotInfo(in));
         }
         snapshots = Collections.unmodifiableList(builder);
     }
@@ -74,9 +75,13 @@ public class GetSnapshotsResponse extends ActionResponse implements ToXContent {
         }
     }
 
+    static final class Fields {
+        static final XContentBuilderString SNAPSHOTS = new XContentBuilderString("snapshots");
+    }
+
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
-        builder.startArray("snapshots");
+        builder.startArray(Fields.SNAPSHOTS);
         for (SnapshotInfo snapshotInfo : snapshots) {
             snapshotInfo.toXContent(builder, params);
         }

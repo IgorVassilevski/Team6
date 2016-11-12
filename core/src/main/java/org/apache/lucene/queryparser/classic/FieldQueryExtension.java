@@ -20,12 +20,12 @@
 package org.apache.lucene.queryparser.classic;
 
 import org.apache.lucene.search.Query;
-import org.elasticsearch.index.query.QueryShardContext;
+import org.elasticsearch.index.query.QueryParseContext;
 
 /**
  *
  */
 public interface FieldQueryExtension {
 
-    Query query(QueryShardContext context, String queryText);
+    Query query(QueryParseContext parseContext, String queryText);
 }

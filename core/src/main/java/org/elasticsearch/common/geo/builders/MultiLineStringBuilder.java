@@ -19,48 +19,31 @@
 
 package org.elasticsearch.common.geo.builders;
 
-import org.locationtech.spatial4j.shape.Shape;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+
+import com.spatial4j.core.shape.Shape;
+import com.spatial4j.core.shape.jts.JtsGeometry;
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.LineString;
 
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.Objects;
 
 public class MultiLineStringBuilder extends ShapeBuilder {
 
     public static final GeoShapeType TYPE = GeoShapeType.MULTILINESTRING;
 
-    private final ArrayList<LineStringBuilder> lines = new ArrayList<>();
+    private final ArrayList<BaseLineStringBuilder<?>> lines = new ArrayList<>();
 
-    public MultiLineStringBuilder() {
+    public InternalLineStringBuilder linestring() {
+        InternalLineStringBuilder line = new InternalLineStringBuilder(this);
+        this.lines.add(line);
+        return line;
     }
 
-    /**
-     * Read from a stream.
-     */
-    public MultiLineStringBuilder(StreamInput in) throws IOException {
-        int size = in.readVInt();
-        for (int i = 0; i < size; i++) {
-            linestring(new LineStringBuilder(in));
-        }
-    }
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeVInt(lines.size());
-        for (LineStringBuilder line : lines) {
-            line.writeTo(out);
-        }
-    }
-
-    public MultiLineStringBuilder linestring(LineStringBuilder line) {
+    public MultiLineStringBuilder linestring(BaseLineStringBuilder<?> line) {
         this.lines.add(line);
         return this;
     }
@@ -81,10 +64,10 @@ public class MultiLineStringBuilder extends ShapeBuilder {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(FIELD_TYPE, TYPE.shapeName());
+        builder.field(FIELD_TYPE, TYPE.shapename);
         builder.field(FIELD_COORDINATES);
         builder.startArray();
-        for(LineStringBuilder line : lines) {
+        for(BaseLineStringBuilder<?> line : lines) {
             line.coordinatesToXcontent(builder, false);
         }
         builder.endArray();
@@ -97,8 +80,8 @@ public class MultiLineStringBuilder extends ShapeBuilder {
         final Geometry geometry;
         if(wrapdateline) {
             ArrayList<LineString> parts = new ArrayList<>();
-            for (LineStringBuilder line : lines) {
-                LineStringBuilder.decompose(FACTORY, line.coordinates(false), parts);
+            for (BaseLineStringBuilder<?> line : lines) {
+                BaseLineStringBuilder.decompose(FACTORY, line.coordinates(false), parts);
             }
             if(parts.size() == 1) {
                 geometry = parts.get(0);
@@ -108,7 +91,7 @@ public class MultiLineStringBuilder extends ShapeBuilder {
             }
         } else {
             LineString[] lineStrings = new LineString[lines.size()];
-            Iterator<LineStringBuilder> iterator = lines.iterator();
+            Iterator<BaseLineStringBuilder<?>> iterator = lines.iterator();
             for (int i = 0; iterator.hasNext(); i++) {
                 lineStrings[i] = FACTORY.createLineString(iterator.next().coordinates(false));
             }
@@ -117,20 +100,26 @@ public class MultiLineStringBuilder extends ShapeBuilder {
         return jtsGeometry(geometry);
     }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(lines);
-    }
+    public static class InternalLineStringBuilder extends BaseLineStringBuilder<InternalLineStringBuilder> {
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
+        private final MultiLineStringBuilder collection;
+        
+        public InternalLineStringBuilder(MultiLineStringBuilder collection) {
+            super();
+            this.collection = collection;
         }
-        if (obj == null || getClass() != obj.getClass()) {
-            return false;
+        
+        public MultiLineStringBuilder end() {
+            return collection;
         }
-        MultiLineStringBuilder other = (MultiLineStringBuilder) obj;
-        return Objects.equals(lines, other.lines);
+
+        public Coordinate[] coordinates() {
+            return super.coordinates(false);
+        }
+
+        @Override
+        public GeoShapeType type() {
+            return null;
+        }
     }
 }

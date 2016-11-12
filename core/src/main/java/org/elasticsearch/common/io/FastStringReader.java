@@ -28,7 +28,7 @@ import java.io.Reader;
  * (shay.banon
  * )
  */
-public class FastStringReader extends Reader implements CharSequence {
+public class FastStringReader extends CharSequenceReader {
 
     private String str;
     private int length;

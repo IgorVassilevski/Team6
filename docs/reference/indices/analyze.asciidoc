@@ -49,19 +49,7 @@ curl -XGET 'localhost:9200/_analyze' -d '
 }'
 --------------------------------------------------
 
-deprecated[5.0.0, Use `filter`/`token_filter`/`char_filter` instead of `filters`/`token_filters`/`char_filters`]
-
-Custom tokenizers, token filters, and character filters can be specified in the request body as follows:
-
-[source,js]
---------------------------------------------------
-curl -XGET 'localhost:9200/_analyze' -d '
-{
-  "tokenizer" : "whitespace",
-  "filter" : ["lowercase", {"type": "stop", "stopwords": ["a", "is", "this"]}],
-  "text" : "this is a test"
-}'
---------------------------------------------------
+deprecated[2.4.0, `filters`/`token_filters`/`char_filters` will be removed in 5.0.0. Use `filter`/`token_filter`/`char_filter`]
 
 It can also run against a specific index:
 
@@ -82,7 +70,7 @@ can also be provided to use a different analyzer:
 curl -XGET 'localhost:9200/test/_analyze' -d '
 {
   "analyzer" : "whitespace",
-  "text" : "this is a test"
+  "text : "this is a test"
 }'
 --------------------------------------------------
 
@@ -124,17 +112,19 @@ experimental[The format of the additional detail information is experimental and
 
 [source,js]
 --------------------------------------------------
-GET _analyze
+GET test/_analyze
 {
   "tokenizer" : "standard",
-  "filter" : ["snowball"],
+  "token_filter" : ["snowball"],
   "text" : "detailed output",
   "explain" : true,
   "attributes" : ["keyword"] <1>
 }
 --------------------------------------------------
-// CONSOLE
+// AUTOSENSE
 <1> Set "keyword" to output "keyword" attribute only
+
+coming[2.0.0, body based parameters were added in 2.0.0]
 
 The request returns the following result:
 
@@ -181,5 +171,5 @@ The request returns the following result:
   }
 }
 --------------------------------------------------
-// TESTRESPONSE
 <1> Output only "keyword" attribute, since specify "attributes" in the request.
+

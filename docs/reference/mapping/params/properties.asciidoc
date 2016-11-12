@@ -23,14 +23,14 @@ PUT my_index
         "manager": { <2>
           "properties": {
             "age":  { "type": "integer" },
-            "name": { "type": "text"  }
+            "name": { "type": "string"  }
           }
         },
         "employees": { <3>
           "type": "nested",
           "properties": {
             "age":  { "type": "integer" },
-            "name": { "type": "text"  }
+            "name": { "type": "string"  }
           }
         }
       }
@@ -57,7 +57,7 @@ PUT my_index/my_type/1 <4>
   ]
 }
 --------------------------------------------------
-// CONSOLE
+// AUTOSENSE
 <1> Properties under the `my_type` mapping type.
 <2> Properties under the `manager` object field.
 <3> Properties under the `employees` nested field.
@@ -98,7 +98,8 @@ GET my_index/_search
   }
 }
 --------------------------------------------------
-// CONSOLE
-// TEST[continued]
+// AUTOSENSE
 
 IMPORTANT: The full path to the inner field must be specified.
+
+

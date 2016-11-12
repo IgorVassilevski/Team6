@@ -101,7 +101,7 @@ public class NodesHotThreadsRequest extends BaseNodesRequest<NodesHotThreadsRequ
         threads = in.readInt();
         ignoreIdleThreads = in.readBoolean();
         type = in.readString();
-        interval = new TimeValue(in);
+        interval = TimeValue.readTimeValue(in);
         snapshots = in.readInt();
     }
 

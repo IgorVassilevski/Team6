@@ -19,20 +19,26 @@
 
 package org.elasticsearch.plugin.analysis;
 
-import org.elasticsearch.index.analysis.PhoneticTokenFilterFactory;
-import org.elasticsearch.index.analysis.TokenFilterFactory;
-import org.elasticsearch.indices.analysis.AnalysisModule.AnalysisProvider;
-import org.elasticsearch.plugins.AnalysisPlugin;
+import org.elasticsearch.index.analysis.AnalysisModule;
+import org.elasticsearch.index.analysis.PhoneticAnalysisBinderProcessor;
 import org.elasticsearch.plugins.Plugin;
 
-import java.util.Map;
+/**
+ */
+public class AnalysisPhoneticPlugin extends Plugin {
 
-import static java.util.Collections.singletonMap;
-
-public class AnalysisPhoneticPlugin extends Plugin implements AnalysisPlugin {
     @Override
-    public Map<String, AnalysisProvider<TokenFilterFactory>> getTokenFilters() {
-        return singletonMap("phonetic", PhoneticTokenFilterFactory::new);
+    public String name() {
+        return "analysis-phonetic";
+    }
+
+    @Override
+    public String description() {
+        return "Phonetic analysis support";
+    }
+
+    public void onModule(AnalysisModule module) {
+        module.addProcessor(new PhoneticAnalysisBinderProcessor());
     }
 }
 

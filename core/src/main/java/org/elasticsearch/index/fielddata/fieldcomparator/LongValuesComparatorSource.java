@@ -21,6 +21,7 @@ package org.elasticsearch.index.fielddata.fieldcomparator;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
+import org.apache.lucene.search.DocIdSet;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.FieldComparator;
 import org.apache.lucene.search.SortField;
@@ -56,7 +57,7 @@ public class LongValuesComparatorSource extends IndexFieldData.XFieldComparatorS
 
     @Override
     public FieldComparator<?> newComparator(String fieldname, int numHits, int sortPos, boolean reversed) throws IOException {
-        assert indexFieldData == null || fieldname.equals(indexFieldData.getFieldName());
+        assert indexFieldData == null || fieldname.equals(indexFieldData.getFieldNames().indexName());
 
         final Long dMissingValue = (Long) missingObject(missingValue, reversed);
         // NOTE: it's important to pass null as a missing value in the constructor so that

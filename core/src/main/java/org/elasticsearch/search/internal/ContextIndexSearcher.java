@@ -22,21 +22,13 @@ package org.elasticsearch.search.internal;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermContext;
-import org.apache.lucene.search.CollectionStatistics;
-import org.apache.lucene.search.Explanation;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.QueryCache;
-import org.apache.lucene.search.QueryCachingPolicy;
-import org.apache.lucene.search.TermStatistics;
-import org.apache.lucene.search.Weight;
+import org.apache.lucene.search.*;
 import org.elasticsearch.common.lease.Releasable;
 import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.search.dfs.AggregatedDfs;
-import org.elasticsearch.search.profile.query.ProfileWeight;
-import org.elasticsearch.search.profile.query.QueryProfileBreakdown;
-import org.elasticsearch.search.profile.query.QueryProfiler;
-import org.elasticsearch.search.profile.query.QueryTimingType;
+import org.elasticsearch.search.profile.ProfileBreakdown;
+import org.elasticsearch.search.profile.ProfileWeight;
+import org.elasticsearch.search.profile.Profiler;
 
 import java.io.IOException;
 
@@ -55,10 +47,10 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
     private final Engine.Searcher engineSearcher;
 
     // TODO revisit moving the profiler to inheritance or wrapping model in the future
-    private QueryProfiler profiler;
+    private Profiler profiler;
 
     public ContextIndexSearcher(Engine.Searcher searcher,
-            QueryCache queryCache, QueryCachingPolicy queryCachingPolicy) {
+                                QueryCache queryCache, QueryCachingPolicy queryCachingPolicy) {
         super(searcher.reader());
         in = searcher.searcher();
         engineSearcher = searcher;
@@ -71,7 +63,7 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
     public void close() {
     }
 
-    public void setProfiler(QueryProfiler profiler) {
+    public void setProfiler(Profiler profiler) {
         this.profiler = profiler;
     }
 
@@ -115,14 +107,14 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
             // createWeight() is called for each query in the tree, so we tell the queryProfiler
             // each invocation so that it can build an internal representation of the query
             // tree
-            QueryProfileBreakdown profile = profiler.getQueryBreakdown(query);
-            profile.startTime(QueryTimingType.CREATE_WEIGHT);
+            ProfileBreakdown profile = profiler.getQueryBreakdown(query);
+            profile.startTime(ProfileBreakdown.TimingType.CREATE_WEIGHT);
             final Weight weight;
             try {
                 weight = super.createWeight(query, needsScores);
             } finally {
                 profile.stopAndRecordTime();
-                profiler.pollLastElement();
+                profiler.pollLastQuery();
             }
             return new ProfileWeight(query, weight, profile);
         } else {
@@ -133,10 +125,6 @@ public class ContextIndexSearcher extends IndexSearcher implements Releasable {
 
     @Override
     public Explanation explain(Query query, int doc) throws IOException {
-        if (aggregatedDfs != null) {
-            // dfs data is needed to explain the score
-            return super.explain(createNormalizedWeight(query, true), doc);
-        }
         return in.explain(query, doc);
     }
 

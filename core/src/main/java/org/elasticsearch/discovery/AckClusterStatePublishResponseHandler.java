@@ -18,10 +18,8 @@
  */
 package org.elasticsearch.discovery;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.cluster.node.DiscoveryNode;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.ESLoggerFactory;
 
 import java.util.Set;
@@ -33,7 +31,7 @@ import java.util.Set;
  */
 public class AckClusterStatePublishResponseHandler extends BlockingClusterStatePublishResponseHandler {
 
-    private static final Logger logger = ESLoggerFactory.getLogger(AckClusterStatePublishResponseHandler.class.getName());
+    private static final ESLogger logger = ESLoggerFactory.getLogger(AckClusterStatePublishResponseHandler.class.getName());
 
     private final Discovery.AckListener ackListener;
 
@@ -57,20 +55,19 @@ public class AckClusterStatePublishResponseHandler extends BlockingClusterStateP
     }
 
     @Override
-    public void onFailure(DiscoveryNode node, Exception e) {
+    public void onFailure(DiscoveryNode node, Throwable t) {
         try {
-            super.onFailure(node, e);
+            super.onFailure(node, t);
         } finally {
-            onNodeAck(ackListener, node, e);
+            onNodeAck(ackListener, node, t);
         }
     }
 
-    private void onNodeAck(final Discovery.AckListener ackListener, DiscoveryNode node, Exception e) {
+    private void onNodeAck(final Discovery.AckListener ackListener, DiscoveryNode node, Throwable t) {
         try {
-            ackListener.onNodeAck(node, e);
-        } catch (Exception inner) {
-            inner.addSuppressed(e);
-            logger.debug((Supplier<?>) () -> new ParameterizedMessage("error while processing ack for node [{}]", node), inner);
+            ackListener.onNodeAck(node, t);
+        } catch (Throwable t1) {
+            logger.debug("error while processing ack for node [{}]", t1, node);
         }
     }
 }

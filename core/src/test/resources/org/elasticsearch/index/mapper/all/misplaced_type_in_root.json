@@ -1,8 +1,8 @@
 {
-    "type": "text",
+    "type": "string",
     "properties": {
         "foo": {
-            "type": "text"
+            "type": "string"
         }
     }
 }

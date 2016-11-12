@@ -19,6 +19,7 @@
 
 package org.elasticsearch.common.unit;
 
+import com.google.common.base.Preconditions;
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -45,9 +46,7 @@ public class SizeValue implements Streamable {
     }
 
     public SizeValue(long size, SizeUnit sizeUnit) {
-        if (size < 0) {
-            throw new IllegalArgumentException("size in SizeValue may not be negative");
-        }
+        Preconditions.checkArgument(size >= 0, "size in SizeValue may not be negative");
         this.size = size;
         this.sizeUnit = sizeUnit;
     }
@@ -175,7 +174,9 @@ public class SizeValue implements Streamable {
         }
         long singles;
         try {
-            if (sValue.endsWith("k") || sValue.endsWith("K")) {
+            if (sValue.endsWith("b")) {
+                singles = Long.parseLong(sValue.substring(0, sValue.length() - 1));
+            } else if (sValue.endsWith("k") || sValue.endsWith("K")) {
                 singles = (long) (Double.parseDouble(sValue.substring(0, sValue.length() - 1)) * SizeUnit.C1);
             } else if (sValue.endsWith("m") || sValue.endsWith("M")) {
                 singles = (long) (Double.parseDouble(sValue.substring(0, sValue.length() - 1)) * SizeUnit.C2);
@@ -226,7 +227,7 @@ public class SizeValue implements Streamable {
 
     @Override
     public int hashCode() {
-        int result = Long.hashCode(size);
+        int result = (int) (size ^ (size >>> 32));
         result = 31 * result + (sizeUnit != null ? sizeUnit.hashCode() : 0);
         return result;
     }

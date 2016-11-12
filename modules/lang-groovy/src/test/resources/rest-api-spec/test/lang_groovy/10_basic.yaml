@@ -11,3 +11,4 @@
         nodes.info: {}
 
     - match:  { nodes.$master.modules.0.name: lang-groovy  }
+    - match:  { nodes.$master.modules.0.jvm: true  }

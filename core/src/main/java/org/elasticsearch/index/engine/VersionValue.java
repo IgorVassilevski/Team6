@@ -21,18 +21,19 @@ package org.elasticsearch.index.engine;
 
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.RamUsageEstimator;
+import org.elasticsearch.index.translog.Translog;
 
 import java.util.Collection;
 import java.util.Collections;
 
 class VersionValue implements Accountable {
 
-    private static final long BASE_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(VersionValue.class);
-
     private final long version;
+    private final Translog.Location translogLocation;
 
-    public VersionValue(long version) {
+    public VersionValue(long version, Translog.Location translogLocation) {
         this.version = version;
+        this.translogLocation = translogLocation;
     }
 
     public long time() {
@@ -47,12 +48,15 @@ class VersionValue implements Accountable {
         return false;
     }
 
+    public Translog.Location translogLocation() {
+        return this.translogLocation;
+    }
 
     @Override
     public long ramBytesUsed() {
-        return BASE_RAM_BYTES_USED;
+        return RamUsageEstimator.NUM_BYTES_OBJECT_HEADER + RamUsageEstimator.NUM_BYTES_LONG + RamUsageEstimator.NUM_BYTES_OBJECT_REF + translogLocation.ramBytesUsed();
     }
-
+    
     @Override
     public Collection<Accountable> getChildResources() {
         return Collections.emptyList();

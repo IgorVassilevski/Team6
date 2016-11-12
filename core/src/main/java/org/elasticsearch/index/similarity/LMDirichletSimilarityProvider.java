@@ -21,6 +21,8 @@ package org.elasticsearch.index.similarity;
 
 import org.apache.lucene.search.similarities.LMDirichletSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
 
 /**
@@ -36,7 +38,8 @@ public class LMDirichletSimilarityProvider extends AbstractSimilarityProvider {
 
     private final LMDirichletSimilarity similarity;
 
-    public LMDirichletSimilarityProvider(String name, Settings settings) {
+    @Inject
+    public LMDirichletSimilarityProvider(@Assisted String name, @Assisted Settings settings) {
         super(name);
         float mu = settings.getAsFloat("mu", 2000f);
         this.similarity = new LMDirichletSimilarity(mu);

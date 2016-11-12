@@ -16,14 +16,10 @@
 
 package org.elasticsearch.common.inject;
 
-import org.elasticsearch.common.inject.internal.Errors;
-import org.elasticsearch.common.inject.internal.ErrorsException;
-import org.elasticsearch.common.inject.internal.InternalContext;
-import org.elasticsearch.common.inject.internal.InternalFactory;
-import org.elasticsearch.common.inject.internal.SourceProvider;
+import org.elasticsearch.common.inject.internal.*;
 import org.elasticsearch.common.inject.spi.Dependency;
 
-import java.util.Objects;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * @author crazybob@google.com (Bob Lee)
@@ -39,8 +35,8 @@ class InternalFactoryToProviderAdapter<T> implements InternalFactory<T> {
 
     public InternalFactoryToProviderAdapter(
             Initializable<Provider<? extends T>> initializable, Object source) {
-        this.initializable = Objects.requireNonNull(initializable, "provider");
-        this.source = Objects.requireNonNull(source, "source");
+        this.initializable = checkNotNull(initializable, "provider");
+        this.source = checkNotNull(source, "source");
     }
 
     @Override

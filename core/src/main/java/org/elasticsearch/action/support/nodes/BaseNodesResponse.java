@@ -19,85 +19,69 @@
 
 package org.elasticsearch.action.support.nodes;
 
+import com.google.common.collect.Maps;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.FailedNodeException;
 import org.elasticsearch.cluster.ClusterName;
+import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  *
  */
-public abstract class BaseNodesResponse<TNodeResponse extends BaseNodeResponse> extends ActionResponse {
+public abstract class BaseNodesResponse<TNodeResponse extends BaseNodeResponse> extends ActionResponse implements Iterable<TNodeResponse> {
 
     private ClusterName clusterName;
-    private List<FailedNodeException> failures;
-    private List<TNodeResponse> nodes;
+    protected TNodeResponse[] nodes;
     private Map<String, TNodeResponse> nodesMap;
 
     protected BaseNodesResponse() {
     }
 
-    protected BaseNodesResponse(ClusterName clusterName, List<TNodeResponse> nodes, List<FailedNodeException> failures) {
-        this.clusterName = Objects.requireNonNull(clusterName);
-        this.failures = Objects.requireNonNull(failures);
-        this.nodes = Objects.requireNonNull(nodes);
+    protected BaseNodesResponse(ClusterName clusterName, TNodeResponse[] nodes) {
+        this.clusterName = clusterName;
+        this.nodes = nodes;
     }
 
     /**
-     * Get the {@link ClusterName} associated with all of the nodes.
-     *
-     * @return Never {@code null}.
+     * The failed nodes, if set to be captured.
      */
+    @Nullable
+    public FailedNodeException[] failures() {
+        return null;
+    }
+
     public ClusterName getClusterName() {
-        return clusterName;
+        return this.clusterName;
     }
 
-    /**
-     * Get the failed node exceptions.
-     *
-     * @return Never {@code null}. Can be empty.
-     */
-    public List<FailedNodeException> failures() {
-        return failures;
+    public String getClusterNameAsString() {
+        return this.clusterName.value();
     }
 
-    /**
-     * Determine if there are any node failures in {@link #failures}.
-     *
-     * @return {@code true} if {@link #failures} contains at least 1 {@link FailedNodeException}.
-     */
-    public boolean hasFailures() {
-        return failures.isEmpty() == false;
-    }
-
-    /**
-     * Get the <em>successful</em> node responses.
-     *
-     * @return Never {@code null}. Can be empty.
-     * @see #hasFailures()
-     */
-    public List<TNodeResponse> getNodes() {
+    public TNodeResponse[] getNodes() {
         return nodes;
     }
 
-    /**
-     * Lazily build and get a map of Node ID to node response.
-     *
-     * @return Never {@code null}. Can be empty.
-     * @see #getNodes()
-     */
+    public TNodeResponse getAt(int position) {
+        return nodes[position];
+    }
+
+    @Override
+    public Iterator<TNodeResponse> iterator() {
+        return getNodesMap().values().iterator();
+    }
+
     public Map<String, TNodeResponse> getNodesMap() {
         if (nodesMap == null) {
-            nodesMap = new HashMap<>();
+            nodesMap = Maps.newHashMap();
             for (TNodeResponse nodeResponse : nodes) {
-                nodesMap.put(nodeResponse.getNode().getId(), nodeResponse);
+                nodesMap.put(nodeResponse.getNode().id(), nodeResponse);
             }
         }
         return nodesMap;
@@ -106,29 +90,12 @@ public abstract class BaseNodesResponse<TNodeResponse extends BaseNodeResponse> 
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
-        clusterName = new ClusterName(in);
-        nodes = readNodesFrom(in);
-        failures = in.readList(FailedNodeException::new);
+        clusterName = ClusterName.readClusterName(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         clusterName.writeTo(out);
-        writeNodesTo(out, nodes);
-        out.writeList(failures);
     }
-
-    /**
-     * Read the {@link #nodes} from the stream.
-     *
-     * @return Never {@code null}.
-     */
-    protected abstract List<TNodeResponse> readNodesFrom(StreamInput in) throws IOException;
-
-    /**
-     * Write the {@link #nodes} to the stream.
-     */
-    protected abstract void writeNodesTo(StreamOutput out, List<TNodeResponse> nodes) throws IOException;
-
 }

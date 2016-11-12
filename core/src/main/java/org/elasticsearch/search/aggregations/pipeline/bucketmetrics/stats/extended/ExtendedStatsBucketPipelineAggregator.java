@@ -21,46 +21,58 @@ package org.elasticsearch.search.aggregations.pipeline.bucketmetrics.stats.exten
 
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.search.DocValueFormat;
+import org.elasticsearch.search.aggregations.AggregatorFactory;
 import org.elasticsearch.search.aggregations.InternalAggregation;
+import org.elasticsearch.search.aggregations.InternalAggregation.Type;
 import org.elasticsearch.search.aggregations.pipeline.BucketHelpers.GapPolicy;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
+import org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorFactory;
+import org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorStreams;
 import org.elasticsearch.search.aggregations.pipeline.bucketmetrics.BucketMetricsPipelineAggregator;
+import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
 public class ExtendedStatsBucketPipelineAggregator extends BucketMetricsPipelineAggregator {
-    private final double sigma;
+
+    public final static Type TYPE = new Type("extended_stats_bucket");
+
+    public final static PipelineAggregatorStreams.Stream STREAM = new PipelineAggregatorStreams.Stream() {
+        @Override
+        public ExtendedStatsBucketPipelineAggregator readResult(StreamInput in) throws IOException {
+            ExtendedStatsBucketPipelineAggregator result = new ExtendedStatsBucketPipelineAggregator();
+            result.readFrom(in);
+            return result;
+        }
+    };
+
+    public static void registerStreams() {
+        PipelineAggregatorStreams.registerStream(STREAM, TYPE.stream());
+        InternalExtendedStatsBucket.registerStreams();
+    }
+
     private double sum = 0;
     private long count = 0;
     private double min = Double.POSITIVE_INFINITY;
     private double max = Double.NEGATIVE_INFINITY;
     private double sumOfSqrs = 1;
+    private double sigma;
 
     protected ExtendedStatsBucketPipelineAggregator(String name, String[] bucketsPaths, double sigma, GapPolicy gapPolicy,
-                                                    DocValueFormat formatter, Map<String, Object> metaData) {
+                                                    ValueFormatter formatter, Map<String, Object> metaData) {
         super(name, bucketsPaths, gapPolicy, formatter, metaData);
         this.sigma = sigma;
     }
 
-    /**
-     * Read from a stream.
-     */
-    public ExtendedStatsBucketPipelineAggregator(StreamInput in) throws IOException {
-        super(in);
-        sigma = in.readDouble();
+    ExtendedStatsBucketPipelineAggregator() {
+        // For Serialization
     }
 
     @Override
-    protected void innerWriteTo(StreamOutput out) throws IOException {
-        out.writeDouble(sigma);
-    }
-
-    @Override
-    public String getWriteableName() {
-        return ExtendedStatsBucketPipelineAggregationBuilder.NAME;
+    public Type type() {
+        return TYPE;
     }
 
     @Override
@@ -82,7 +94,52 @@ public class ExtendedStatsBucketPipelineAggregator extends BucketMetricsPipeline
     }
 
     @Override
-    protected InternalAggregation buildAggregation(List<PipelineAggregator> pipelineAggregators, Map<String, Object> metadata) {
-        return new InternalExtendedStatsBucket(name(), count, sum, min, max, sumOfSqrs, sigma, format, pipelineAggregators, metadata);
+    protected void innerReadFrom(StreamInput in) throws IOException {
+        sigma = in.readDouble();
     }
+
+    @Override
+    protected void innerWriteTo(StreamOutput out) throws IOException {
+        out.writeDouble(sigma);
+    }
+
+    @Override
+    protected InternalAggregation buildAggregation(List<PipelineAggregator> pipelineAggregators, Map<String, Object> metadata) {
+        return new InternalExtendedStatsBucket(name(), count, sum, min, max, sumOfSqrs, sigma, formatter, pipelineAggregators, metadata);
+    }
+
+    public static class Factory extends PipelineAggregatorFactory {
+
+        private final ValueFormatter formatter;
+        private final GapPolicy gapPolicy;
+        private final double sigma;
+
+        public Factory(String name, String[] bucketsPaths, double sigma, GapPolicy gapPolicy, ValueFormatter formatter) {
+            super(name, TYPE.name(), bucketsPaths);
+            this.gapPolicy = gapPolicy;
+            this.formatter = formatter;
+            this.sigma = sigma;
+        }
+
+        @Override
+        protected PipelineAggregator createInternal(Map<String, Object> metaData) throws IOException {
+            return new ExtendedStatsBucketPipelineAggregator(name, bucketsPaths, sigma, gapPolicy, formatter, metaData);
+        }
+
+        @Override
+        public void doValidate(AggregatorFactory parent, AggregatorFactory[] aggFactories,
+                List<PipelineAggregatorFactory> pipelineAggregatorFactories) {
+            if (bucketsPaths.length != 1) {
+                throw new IllegalStateException(Parser.BUCKETS_PATH.getPreferredName()
+                        + " must contain a single entry for aggregation [" + name + "]");
+            }
+
+            if (sigma < 0.0 ) {
+                throw new IllegalStateException(ExtendedStatsBucketParser.SIGMA.getPreferredName()
+                        + " must be a non-negative double");
+            }
+        }
+
+    }
+
 }

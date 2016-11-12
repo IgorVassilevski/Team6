@@ -134,7 +134,7 @@ public class LeafIndexLookup extends MinimalMap<String, IndexField> {
                 indexField = new IndexField(stringField, this);
                 indexFields.put(stringField, indexField);
             } catch (IOException e) {
-                throw new ElasticsearchException(e);
+                throw new ElasticsearchException(e.getMessage());
             }
         }
         return indexField;

@@ -19,12 +19,11 @@
 
 package org.elasticsearch.search.lookup;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.lucene.index.LeafReaderContext;
 
-import java.util.HashMap;
 import java.util.Map;
-
-import static java.util.Collections.unmodifiableMap;
 
 /**
  * Per-segment version of {@link SearchLookup}.
@@ -36,7 +35,7 @@ public class LeafSearchLookup {
     final SourceLookup sourceLookup;
     final LeafFieldsLookup fieldsLookup;
     final LeafIndexLookup indexLookup;
-    final Map<String, Object> asMap;
+    final ImmutableMap<String, Object> asMap;
 
     public LeafSearchLookup(LeafReaderContext ctx, LeafDocLookup docMap, SourceLookup sourceLookup,
             LeafFieldsLookup fieldsLookup, LeafIndexLookup indexLookup, Map<String, Object> topLevelMap) {
@@ -46,17 +45,17 @@ public class LeafSearchLookup {
         this.fieldsLookup = fieldsLookup;
         this.indexLookup = indexLookup;
 
-        Map<String, Object> asMap = new HashMap<>(topLevelMap.size() + 5);
-        asMap.putAll(topLevelMap);
-        asMap.put("doc", docMap);
-        asMap.put("_doc", docMap);
-        asMap.put("_source", sourceLookup);
-        asMap.put("_fields", fieldsLookup);
-        asMap.put("_index", indexLookup);
-        this.asMap = unmodifiableMap(asMap);
+        ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
+        builder.putAll(topLevelMap);
+        builder.put("doc", docMap);
+        builder.put("_doc", docMap);
+        builder.put("_source", sourceLookup);
+        builder.put("_fields", fieldsLookup);
+        builder.put("_index", indexLookup);
+        asMap = builder.build();
     }
 
-    public Map<String, Object> asMap() {
+    public ImmutableMap<String, Object> asMap() {
         return this.asMap;
     }
 

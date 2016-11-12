@@ -20,19 +20,20 @@
 package org.elasticsearch.index.analysis;
 
 import org.apache.lucene.analysis.fa.PersianAnalyzer;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
-/**
- *
- */
 public class PersianAnalyzerProvider extends AbstractIndexAnalyzerProvider<PersianAnalyzer> {
 
     private final PersianAnalyzer analyzer;
 
-    public PersianAnalyzerProvider(IndexSettings indexSettings, Environment env, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public PersianAnalyzerProvider(Index index, IndexSettingsService indexSettingsService, Environment env, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         analyzer = new PersianAnalyzer(Analysis.parseStopWords(env, settings, PersianAnalyzer.getDefaultStopSet()));
         analyzer.setVersion(version);
     }

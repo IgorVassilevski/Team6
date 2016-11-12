@@ -25,7 +25,7 @@ import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
+import org.elasticsearch.search.highlight.HighlightField;
 
 import java.util.Map;
 
@@ -108,10 +108,9 @@ public interface SearchHit extends Streamable, ToXContent, Iterable<SearchHitFie
     byte[] source();
 
     /**
-     * Is the source available or not. A source with no fields will return true. This will return false if {@code fields} doesn't contain
-     * {@code _source} or if source is disabled in the mapping.
+     * Is the source empty (not available) or not.
      */
-    boolean hasSource();
+    boolean isSourceEmpty();
 
     /**
      * The source of the document as a map (can be <tt>null</tt>).
@@ -146,7 +145,7 @@ public interface SearchHit extends Streamable, ToXContent, Iterable<SearchHitFie
     /**
      * The hit field matching the given field name.
      */
-    SearchHitField field(String fieldName);
+    public SearchHitField field(String fieldName);
 
     /**
      * A map of hit fields (from field name to hit fields) if additional fields
@@ -208,23 +207,23 @@ public interface SearchHit extends Streamable, ToXContent, Iterable<SearchHitFie
     /**
      * Encapsulates the nested identity of a hit.
      */
-    interface NestedIdentity {
+    public interface NestedIdentity {
 
         /**
          * Returns the nested field in the source this hit originates from
          */
-        Text getField();
+        public Text getField();
 
         /**
          * Returns the offset in the nested array of objects in the source this hit
          */
-        int getOffset();
+        public int getOffset();
 
         /**
          * Returns the next child nested level if there is any, otherwise <code>null</code> is returned.
          *
          * In the case of mappings with multiple levels of nested object fields
          */
-        NestedIdentity getChild();
+        public NestedIdentity getChild();
     }
 }

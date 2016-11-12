@@ -19,36 +19,35 @@
 
 package org.elasticsearch.cluster.block;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.rest.RestStatus;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.Set;
-
-import static java.util.Collections.unmodifiableSet;
 
 /**
  *
  */
 public class ClusterBlockException extends ElasticsearchException {
-    private final Set<ClusterBlock> blocks;
 
-    public ClusterBlockException(Set<ClusterBlock> blocks) {
+    private final ImmutableSet<ClusterBlock> blocks;
+
+    public ClusterBlockException(ImmutableSet<ClusterBlock> blocks) {
         super(buildMessage(blocks));
         this.blocks = blocks;
     }
 
     public ClusterBlockException(StreamInput in) throws IOException {
         super(in);
-        int totalBlocks = in.readVInt();
-        Set<ClusterBlock> blocks = new HashSet<>(totalBlocks);
-        for (int i = 0; i < totalBlocks;i++) {
-            blocks.add(ClusterBlock.readClusterBlock(in));
+        int num = in.readVInt();
+        ImmutableSet.Builder<ClusterBlock> builder = ImmutableSet.builder();
+        for (int i = 0; i < num; i++) {
+            builder.add(ClusterBlock.readClusterBlock(in));
         }
-        this.blocks = unmodifiableSet(blocks);
+        blocks = builder.build();
     }
 
     @Override
@@ -73,11 +72,11 @@ public class ClusterBlockException extends ElasticsearchException {
         return true;
     }
 
-    public Set<ClusterBlock> blocks() {
+    public ImmutableSet<ClusterBlock> blocks() {
         return blocks;
     }
 
-    private static String buildMessage(Set<ClusterBlock> blocks) {
+    private static String buildMessage(ImmutableSet<ClusterBlock> blocks) {
         StringBuilder sb = new StringBuilder("blocked by: ");
         for (ClusterBlock block : blocks) {
             sb.append("[").append(block.status()).append("/").append(block.id()).append("/").append(block.description()).append("];");

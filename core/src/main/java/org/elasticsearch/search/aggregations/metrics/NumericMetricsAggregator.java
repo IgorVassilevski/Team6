@@ -36,7 +36,7 @@ public abstract class NumericMetricsAggregator extends MetricsAggregator {
         super(name, context, parent, pipelineAggregators, metaData);
     }
 
-    public abstract static class SingleValue extends NumericMetricsAggregator {
+    public static abstract class SingleValue extends NumericMetricsAggregator {
 
         protected SingleValue(String name, AggregationContext context, Aggregator parent, List<PipelineAggregator> pipelineAggregators,
                 Map<String, Object> metaData) throws IOException {
@@ -46,7 +46,7 @@ public abstract class NumericMetricsAggregator extends MetricsAggregator {
         public abstract double metric(long owningBucketOrd);
     }
 
-    public abstract static class MultiValue extends NumericMetricsAggregator {
+    public static abstract class MultiValue extends NumericMetricsAggregator {
 
         protected MultiValue(String name, AggregationContext context, Aggregator parent, List<PipelineAggregator> pipelineAggregators,
                 Map<String, Object> metaData) throws IOException {

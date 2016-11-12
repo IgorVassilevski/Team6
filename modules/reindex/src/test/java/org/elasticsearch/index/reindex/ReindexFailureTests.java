@@ -57,11 +57,11 @@ public class ReindexFailureTests extends ReindexTestCase {
          */
         copy.source().setSize(1);
 
-        BulkIndexByScrollResponse response = copy.get();
-        assertThat(response, matcher()
+        ReindexResponse response = copy.get();
+        assertThat(response, responseMatcher()
                 .batches(1)
                 .failures(both(greaterThan(0)).and(lessThanOrEqualTo(maximumNumberOfShards()))));
-        for (Failure failure: response.getBulkFailures()) {
+        for (Failure failure: response.getIndexingFailures()) {
             assertThat(failure.getMessage(), containsString("NumberFormatException[For input string: \"words words\"]"));
         }
     }
@@ -77,10 +77,10 @@ public class ReindexFailureTests extends ReindexTestCase {
         // CREATE will cause the conflict to prevent the write.
         copy.destination().setOpType(CREATE);
 
-        BulkIndexByScrollResponse response = copy.get();
-        assertThat(response, matcher().batches(1).versionConflicts(1).failures(1).created(99));
-        for (Failure failure: response.getBulkFailures()) {
-            assertThat(failure.getMessage(), containsString("VersionConflictEngineException[[test]["));
+        ReindexResponse response = copy.get();
+        assertThat(response, responseMatcher().batches(1).versionConflicts(1).failures(1).created(99));
+        for (Failure failure: response.getIndexingFailures()) {
+            assertThat(failure.getMessage(), containsString("DocumentAlreadyExistsException[[test]["));
         }
     }
 
@@ -99,7 +99,7 @@ public class ReindexFailureTests extends ReindexTestCase {
             indexDocs(100);
             ReindexRequestBuilder copy = reindex().source("source").destination("dest");
             copy.source().setSize(10);
-            Future<BulkIndexByScrollResponse> response = copy.execute();
+            Future<ReindexResponse> response = copy.execute();
             client().admin().indices().prepareDelete("source").get();
 
             try {
@@ -108,11 +108,7 @@ public class ReindexFailureTests extends ReindexTestCase {
                 attempt++;
             } catch (ExecutionException e) {
                 logger.info("Triggered a reindex failure on the {} attempt", attempt);
-                assertThat(e.getMessage(),
-                        either(containsString("all shards failed"))
-                        .or(containsString("No search context found"))
-                        .or(containsString("no such index"))
-                        );
+                assertThat(e.getMessage(), either(containsString("all shards failed")).or(containsString("No search context found")));
                 return;
             }
         }

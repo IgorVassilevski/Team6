@@ -16,12 +16,12 @@ PUT my_index/type_1/1
   "text": "Document with type 1"
 }
 
-PUT my_index/type_2/2?refresh=true
+PUT my_index/type_2/2
 {
   "text": "Document with type 2"
 }
 
-GET my_index/type_*/_search
+GET my_index/_search/type_*
 {
   "query": {
     "terms": {
@@ -45,19 +45,16 @@ GET my_index/type_*/_search
   ],
   "script_fields": {
     "type": {
-      "script": {
-        "lang": "painless",
-        "inline": "doc['_type']" <4>
-      }
+      "script": "doc['_type']" <4>
     }
   }
 }
 
 --------------------------
-// CONSOLE
+// AUTOSENSE
 
 <1> Querying on the `_type` field
 <2> Aggregating on the `_type` field
 <3> Sorting on the `_type` field
-<4> Accessing the `_type` field in scripts
+<4> Accessing the `_type` field in scripts (inline scripts must be <<enable-dynamic-scripting,enabled>> for this example to work)
 

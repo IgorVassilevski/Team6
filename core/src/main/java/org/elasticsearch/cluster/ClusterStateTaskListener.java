@@ -25,19 +25,16 @@ public interface ClusterStateTaskListener {
     /**
      * A callback called when execute fails.
      */
-    void onFailure(String source, Exception e);
+    void onFailure(String source, Throwable t);
 
     /**
      * called when the task was rejected because the local node is no longer master
      */
-    default void onNoLongerMaster(String source) {
-        onFailure(source, new NotMasterException("no longer master. source: [" + source + "]"));
-    }
+    void onNoLongerMaster(String source);
 
     /**
      * Called when the result of the {@link ClusterStateTaskExecutor#execute(ClusterState, List)} have been processed
      * properly by all listeners.
      */
-    default void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
-    }
+    void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState);
 }

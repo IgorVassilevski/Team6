@@ -22,7 +22,6 @@ package org.elasticsearch.common.unit;
 import org.elasticsearch.common.geo.GeoUtils;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
 
 import java.io.IOException;
 
@@ -33,7 +32,7 @@ import java.io.IOException;
  * the earth ellipsoid defined in {@link GeoUtils}. The default unit used within
  * this project is <code>METERS</code> which is defined by <code>DEFAULT</code>
  */
-public enum DistanceUnit implements Writeable {
+public enum DistanceUnit {
     INCH(0.0254, "in", "inch"),
     YARD(0.9144, "yd", "yards"),
     FEET(0.3048, "ft", "feet"),
@@ -211,6 +210,34 @@ public enum DistanceUnit implements Writeable {
     }
 
     /**
+     * Write a {@link DistanceUnit} to a {@link StreamOutput}
+     * 
+     * @param out {@link StreamOutput} to write to
+     * @param unit {@link DistanceUnit} to write 
+     */
+    public static void writeDistanceUnit(StreamOutput out, DistanceUnit unit) throws IOException {
+        out.writeByte((byte) unit.ordinal());
+    }
+
+    /**
+     * Read a {@link DistanceUnit} from a {@link StreamInput} 
+     * 
+     * @param in {@link StreamInput} to read the {@link DistanceUnit} from
+     * @return {@link DistanceUnit} read from the {@link StreamInput}
+     * @throws IOException if no unit can be read from the {@link StreamInput}
+     * @throws IllegalArgumentException if no matching {@link DistanceUnit} can be found
+     */
+    public static DistanceUnit readDistanceUnit(StreamInput in) throws IOException {
+        byte b = in.readByte();
+
+        if(b<0 || b>=values().length) {
+            throw new IllegalArgumentException("No type for distance unit matching [" + b + "]");
+        } else {
+            return values()[b];
+        }
+    }
+
+    /**
      * This class implements a value+unit tuple.
      */
     public static class Distance implements Comparable<Distance> {
@@ -294,32 +321,5 @@ public enum DistanceUnit implements Writeable {
             }
             return new Distance(Double.parseDouble(distance), defaultUnit);
         }
-    }
-
-    /**
-     * Read a {@link DistanceUnit} from a {@link StreamInput}.
-     *
-     * @param in {@link StreamInput} to read the {@link DistanceUnit} from
-     * @return {@link DistanceUnit} read from the {@link StreamInput}
-     * @throws IOException if no unit can be read from the {@link StreamInput}
-     * @throws IllegalArgumentException if no matching {@link DistanceUnit} can be found
-     */
-    public static DistanceUnit readFromStream(StreamInput in) throws IOException {
-        byte b = in.readByte();
-
-        if (b < 0 || b >= values().length) {
-            throw new IllegalArgumentException("No type for distance unit matching [" + b + "]");
-        }
-        return values()[b];
-    }
-
-    /**
-     * Write a {@link DistanceUnit} to a {@link StreamOutput}.
-     *
-     * @param out {@link StreamOutput} to write to
-     */
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeByte((byte) this.ordinal());
     }
 }

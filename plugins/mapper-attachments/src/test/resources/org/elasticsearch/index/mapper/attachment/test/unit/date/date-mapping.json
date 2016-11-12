@@ -4,7 +4,7 @@
             "file": {
                 "type": "attachment",
                 "fields": {
-                    "date": { "type": "text" }
+                    "date": { "type": "string" }
                 }
             }
         }

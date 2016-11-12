@@ -21,14 +21,13 @@ package org.elasticsearch.search.aggregations.metrics;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Scorer;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.plugins.ScriptPlugin;
 import org.elasticsearch.script.CompiledScript;
 import org.elasticsearch.script.ExecutableScript;
 import org.elasticsearch.script.LeafSearchScript;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.script.ScriptEngineService;
+import org.elasticsearch.script.ScriptModule;
 import org.elasticsearch.script.ScriptService.ScriptType;
 import org.elasticsearch.script.SearchScript;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
@@ -72,16 +71,16 @@ public class AvgIT extends AbstractNumericTestCase {
                 ExtractFieldScriptPlugin.class,
                 FieldValueScriptPlugin.class);
     }
-
+    
     @Override
     public void testEmptyAggregation() throws Exception {
 
         SearchResponse searchResponse = client().prepareSearch("empty_bucket_idx")
                 .setQuery(matchAllQuery())
-                .addAggregation(histogram("histo").field("value").interval(1L).minDocCount(0).subAggregation(avg("avg").field("value")))
+                .addAggregation(histogram("histo").field("value").interval(1l).minDocCount(0).subAggregation(avg("avg")))
                 .execute().actionGet();
 
-        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2L));
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(2l));
         Histogram histo = searchResponse.getAggregations().get("histo");
         assertThat(histo, notNullValue());
         Histogram.Bucket bucket = histo.getBuckets().get(1);
@@ -100,7 +99,7 @@ public class AvgIT extends AbstractNumericTestCase {
                 .addAggregation(avg("avg").field("value"))
                 .execute().actionGet();
 
-        assertThat(searchResponse.getHits().getTotalHits(), equalTo(0L));
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(0l));
 
         Avg avg = searchResponse.getAggregations().get("avg");
         assertThat(avg, notNullValue());
@@ -109,6 +108,7 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
+    
     public void testSingleValuedField() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
@@ -124,7 +124,8 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testSingleValuedFieldGetProperty() throws Exception {
+    
+    public void testSingleValuedField_getProperty() throws Exception {
 
         SearchResponse searchResponse = client().prepareSearch("idx").setQuery(matchAllQuery())
                 .addAggregation(global("global").subAggregation(avg("avg").field("value"))).execute().actionGet();
@@ -134,7 +135,7 @@ public class AvgIT extends AbstractNumericTestCase {
         Global global = searchResponse.getAggregations().get("global");
         assertThat(global, notNullValue());
         assertThat(global.getName(), equalTo("global"));
-        assertThat(global.getDocCount(), equalTo(10L));
+        assertThat(global.getDocCount(), equalTo(10l));
         assertThat(global.getAggregations(), notNullValue());
         assertThat(global.getAggregations().asMap().size(), equalTo(1));
 
@@ -149,7 +150,7 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testSingleValuedFieldPartiallyUnmapped() throws Exception {
+    public void testSingleValuedField_PartiallyUnmapped() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx", "idx_unmapped")
                 .setQuery(matchAllQuery())
                 .addAggregation(avg("avg").field("value"))
@@ -164,7 +165,8 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testSingleValuedFieldWithValueScript() throws Exception {
+    
+    public void testSingleValuedField_WithValueScript() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(avg("avg").field("value")
@@ -180,8 +182,8 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testSingleValuedFieldWithValueScriptWithParams() throws Exception {
-        Map<String, Object> params = Collections.singletonMap("inc", 1);
+    public void testSingleValuedField_WithValueScript_WithParams() throws Exception {
+        Map<String, Object> params = Collections.<String,Object>singletonMap("inc", 1);
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(avg("avg").field("value")
@@ -210,6 +212,7 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
+    
     public void testMultiValuedField() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
@@ -225,7 +228,8 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testMultiValuedFieldWithValueScript() throws Exception {
+    
+    public void testMultiValuedField_WithValueScript() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(avg("avg").field("values")
@@ -241,8 +245,8 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testMultiValuedFieldWithValueScriptWithParams() throws Exception {
-        Map<String, Object> params = Collections.singletonMap("inc", 1);
+    public void testMultiValuedField_WithValueScript_WithParams() throws Exception {
+        Map<String, Object> params = Collections.<String,Object>singletonMap("inc", 1);
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(avg("avg").field("values")
@@ -258,7 +262,8 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testScriptSingleValued() throws Exception {
+    
+    public void testScript_SingleValued() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(avg("avg")
@@ -274,8 +279,8 @@ public class AvgIT extends AbstractNumericTestCase {
     }
 
     @Override
-    public void testScriptSingleValuedWithParams() throws Exception {
-        Map<String, Object> params = Collections.singletonMap("inc", 1);
+    public void testScript_SingleValued_WithParams() throws Exception {
+        Map<String, Object> params = Collections.<String,Object>singletonMap("inc", 1);
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(avg("avg")
@@ -308,7 +313,7 @@ public class AvgIT extends AbstractNumericTestCase {
 
     @Override
     public void testScriptMultiValuedWithParams() throws Exception {
-        Map<String, Object> params = Collections.singletonMap("inc", 1);
+        Map<String, Object> params = Collections.<String,Object>singletonMap("inc", 1);
         SearchResponse searchResponse = client().prepareSearch("idx")
                 .setQuery(matchAllQuery())
                 .addAggregation(avg("avg")
@@ -327,7 +332,7 @@ public class AvgIT extends AbstractNumericTestCase {
     public void testOrderByEmptyAggregation() throws Exception {
         SearchResponse searchResponse = client().prepareSearch("idx").setQuery(matchAllQuery())
                 .addAggregation(terms("terms").field("value").order(Order.compound(Order.aggregation("filter>avg", true)))
-                        .subAggregation(filter("filter", termQuery("value", 100)).subAggregation(avg("avg").field("value"))))
+                        .subAggregation(filter("filter").filter(termQuery("value", 100)).subAggregation(avg("avg").field("value"))))
                 .get();
 
         assertHitCount(searchResponse, 10);
@@ -341,7 +346,7 @@ public class AvgIT extends AbstractNumericTestCase {
         for (int i = 0; i < 10; i++) {
             Terms.Bucket bucket = buckets.get(i);
             assertThat(bucket, notNullValue());
-            assertThat(bucket.getKeyAsNumber(), equalTo((long) i + 1));
+            assertThat(bucket.getKeyAsNumber(), equalTo((Number) Long.valueOf(i + 1)));
             assertThat(bucket.getDocCount(), equalTo(1L));
             Filter filter = bucket.getAggregations().get("filter");
             assertThat(filter, notNullValue());
@@ -356,11 +361,22 @@ public class AvgIT extends AbstractNumericTestCase {
     /**
      * Mock plugin for the {@link ExtractFieldScriptEngine}
      */
-    public static class ExtractFieldScriptPlugin extends Plugin implements ScriptPlugin {
+    public static class ExtractFieldScriptPlugin extends Plugin {
+
         @Override
-        public ScriptEngineService getScriptEngineService(Settings settings) {
-            return new ExtractFieldScriptEngine();
+        public String name() {
+            return ExtractFieldScriptEngine.NAME;
         }
+
+        @Override
+        public String description() {
+            return "Mock script engine for " + AvgIT.class;
+        }
+
+        public void onModule(ScriptModule module) {
+            module.addScriptEngine(ExtractFieldScriptEngine.class);
+        }
+
     }
 
     /**
@@ -375,18 +391,23 @@ public class AvgIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public String getType() {
-            return NAME;
+        public String[] types() {
+            return new String[] { NAME };
         }
 
         @Override
-        public String getExtension() {
-            return NAME;
+        public String[] extensions() {
+            return types();
         }
 
         @Override
-        public Object compile(String scriptName, String scriptSource, Map<String, String> params) {
-            return scriptSource;
+        public boolean sandboxed() {
+            return true;
+        }
+
+        @Override
+        public Object compile(String script, Map<String, String> params) {
+            return script;
         }
 
         @Override
@@ -394,7 +415,7 @@ public class AvgIT extends AbstractNumericTestCase {
             throw new UnsupportedOperationException();
         }
         @Override
-        public SearchScript search(CompiledScript compiledScript, SearchLookup lookup, Map<String, Object> vars) {
+        public SearchScript search(final CompiledScript compiledScript, final SearchLookup lookup, Map<String, Object> vars) {
             final long inc;
             if (vars == null || vars.containsKey("inc") == false) {
                 inc = 0;
@@ -409,6 +430,12 @@ public class AvgIT extends AbstractNumericTestCase {
                     final LeafSearchLookup leafLookup = lookup.getLeafSearchLookup(context);
 
                     return new LeafSearchScript() {
+
+                        @Override
+                        public Object unwrap(Object value) {
+                            return null;
+                        }
+
                         @Override
                         public void setNextVar(String name, Object value) {
                         }
@@ -444,6 +471,11 @@ public class AvgIT extends AbstractNumericTestCase {
                         }
 
                         @Override
+                        public float runAsFloat() {
+                            throw new UnsupportedOperationException();
+                        }
+
+                        @Override
                         public double runAsDouble() {
                             throw new UnsupportedOperationException();
                         }
@@ -456,16 +488,31 @@ public class AvgIT extends AbstractNumericTestCase {
                 }
             };
         }
+
+        @Override
+        public void scriptRemoved(CompiledScript script) {
+        }
     }
 
     /**
      * Mock plugin for the {@link FieldValueScriptEngine}
      */
-    public static class FieldValueScriptPlugin extends Plugin implements ScriptPlugin {
+    public static class FieldValueScriptPlugin extends Plugin {
+
         @Override
-        public ScriptEngineService getScriptEngineService(Settings settings) {
-            return new FieldValueScriptEngine();
+        public String name() {
+            return FieldValueScriptEngine.NAME;
         }
+
+        @Override
+        public String description() {
+            return "Mock script engine for " + AvgIT.class;
+        }
+
+        public void onModule(ScriptModule module) {
+            module.addScriptEngine(FieldValueScriptEngine.class);
+        }
+
     }
 
     /**
@@ -480,18 +527,23 @@ public class AvgIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public String getType() {
-            return NAME;
+        public String[] types() {
+            return new String[] { NAME };
         }
 
         @Override
-        public String getExtension() {
-            return NAME;
+        public String[] extensions() {
+            return types();
         }
 
         @Override
-        public Object compile(String scriptName, String scriptSource, Map<String, String> params) {
-            return scriptSource;
+        public boolean sandboxed() {
+            return true;
+        }
+
+        @Override
+        public Object compile(String script, Map<String, String> params) {
+            return script;
         }
 
         @Override
@@ -499,7 +551,7 @@ public class AvgIT extends AbstractNumericTestCase {
             throw new UnsupportedOperationException();
         }
         @Override
-        public SearchScript search(CompiledScript compiledScript, SearchLookup lookup, Map<String, Object> vars) {
+        public SearchScript search(CompiledScript compiledScript, final SearchLookup lookup, Map<String, Object> vars) {
             final long inc;
             if (vars == null || vars.containsKey("inc") == false) {
                 inc = 0;
@@ -508,7 +560,7 @@ public class AvgIT extends AbstractNumericTestCase {
             }
             return new SearchScript() {
 
-                private Map<String, Object> vars = new HashMap<>(2);
+                private final Map<String, Object> vars = new HashMap<>(2);
 
                 @Override
                 public LeafSearchScript getLeafSearchScript(LeafReaderContext context) throws IOException {
@@ -516,6 +568,12 @@ public class AvgIT extends AbstractNumericTestCase {
                     final LeafSearchLookup leafLookup = lookup.getLeafSearchLookup(context);
 
                     return new LeafSearchScript() {
+
+                        @Override
+                        public Object unwrap(Object value) {
+                            throw new UnsupportedOperationException();
+                        }
+
                         @Override
                         public void setNextVar(String name, Object value) {
                             vars.put(name, value);
@@ -547,6 +605,11 @@ public class AvgIT extends AbstractNumericTestCase {
                         }
 
                         @Override
+                        public float runAsFloat() {
+                            throw new UnsupportedOperationException();
+                        }
+
+                        @Override
                         public double runAsDouble() {
                             return ((Number) vars.get("_value")).doubleValue() + inc;
                         }
@@ -561,8 +624,7 @@ public class AvgIT extends AbstractNumericTestCase {
         }
 
         @Override
-        public boolean isInlineScriptEnabled() {
-            return true;
+        public void scriptRemoved(CompiledScript script) {
         }
     }
 }

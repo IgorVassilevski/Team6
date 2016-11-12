@@ -29,21 +29,21 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TwoPhaseIterator;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.NumericUtils;
 import org.elasticsearch.common.geo.GeoDistance;
 import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.unit.DistanceUnit;
 import org.elasticsearch.index.fielddata.IndexGeoPointFieldData;
 import org.elasticsearch.index.fielddata.MultiGeoPointValues;
-import org.elasticsearch.index.mapper.LegacyGeoPointFieldMapper;
+import org.elasticsearch.index.mapper.geo.GeoPointFieldMapper;
+import org.elasticsearch.index.mapper.geo.GeoPointFieldMapperLegacy;
 
 import java.io.IOException;
 
 /**
- * Query geo_point fields by distance ranges. Used for indexes created prior to 2.2
- * @deprecated
+ *
  */
-@Deprecated
 public class GeoDistanceRangeQuery extends Query {
 
     private final double lat;
@@ -60,7 +60,7 @@ public class GeoDistanceRangeQuery extends Query {
     private final IndexGeoPointFieldData indexFieldData;
 
     public GeoDistanceRangeQuery(GeoPoint point, Double lowerVal, Double upperVal, boolean includeLower,
-                                 boolean includeUpper, GeoDistance geoDistance, LegacyGeoPointFieldMapper.GeoPointFieldType fieldType,
+                                 boolean includeUpper, GeoDistance geoDistance, GeoPointFieldMapperLegacy.GeoPointFieldType fieldType,
                                  IndexGeoPointFieldData indexFieldData, String optimizeBbox) {
         this.lat = point.lat();
         this.lon = point.lon();
@@ -93,8 +93,7 @@ public class GeoDistanceRangeQuery extends Query {
             if ("memory".equals(optimizeBbox)) {
                 boundingBoxFilter = null;
             } else if ("indexed".equals(optimizeBbox)) {
-                boundingBoxFilter = LegacyIndexedGeoBoundingBoxQuery.create(distanceBoundingCheck.topLeft(),
-                    distanceBoundingCheck.bottomRight(), fieldType);
+                boundingBoxFilter = IndexedGeoBoundingBoxQuery.create(distanceBoundingCheck.topLeft(), distanceBoundingCheck.bottomRight(), fieldType);
                 distanceBoundingCheck = GeoDistance.ALWAYS_INSTANCE; // fine, we do the bounding box check using the filter
             } else {
                 throw new IllegalArgumentException("type [" + optimizeBbox + "] for bounding box optimization not supported");
@@ -126,7 +125,7 @@ public class GeoDistanceRangeQuery extends Query {
     }
 
     public String fieldName() {
-        return indexFieldData.getFieldName();
+        return indexFieldData.getFieldNames().indexName();
     }
 
     @Override
@@ -193,7 +192,7 @@ public class GeoDistanceRangeQuery extends Query {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (sameClassAs(o) == false) return false;
+        if (super.equals(o) == false) return false;
 
         GeoDistanceRangeQuery filter = (GeoDistanceRangeQuery) o;
 
@@ -201,7 +200,7 @@ public class GeoDistanceRangeQuery extends Query {
         if (Double.compare(filter.inclusiveUpperPoint, inclusiveUpperPoint) != 0) return false;
         if (Double.compare(filter.lat, lat) != 0) return false;
         if (Double.compare(filter.lon, lon) != 0) return false;
-        if (!indexFieldData.getFieldName().equals(filter.indexFieldData.getFieldName()))
+        if (!indexFieldData.getFieldNames().indexName().equals(filter.indexFieldData.getFieldNames().indexName()))
             return false;
         if (geoDistance != filter.geoDistance) return false;
 
@@ -210,24 +209,23 @@ public class GeoDistanceRangeQuery extends Query {
 
     @Override
     public String toString(String field) {
-        return "GeoDistanceRangeQuery(" + indexFieldData.getFieldName() + ", " + geoDistance + ", ["
-            + inclusiveLowerPoint + " - " + inclusiveUpperPoint + "], " + lat + ", " + lon + ")";
+        return "GeoDistanceRangeQuery(" + indexFieldData.getFieldNames().indexName() + ", " + geoDistance + ", [" + inclusiveLowerPoint + " - " + inclusiveUpperPoint + "], " + lat + ", " + lon + ")";
     }
 
     @Override
     public int hashCode() {
-        int result = classHash();
+        int result = super.hashCode();
         long temp;
         temp = lat != +0.0d ? Double.doubleToLongBits(lat) : 0L;
-        result = 31 * result + Long.hashCode(temp);
+        result = 31 * result + (int) (temp ^ (temp >>> 32));
         temp = lon != +0.0d ? Double.doubleToLongBits(lon) : 0L;
-        result = 31 * result + Long.hashCode(temp);
+        result = 31 * result + (int) (temp ^ (temp >>> 32));
         temp = inclusiveLowerPoint != +0.0d ? Double.doubleToLongBits(inclusiveLowerPoint) : 0L;
-        result = 31 * result + Long.hashCode(temp);
+        result = 31 * result + (int) (temp ^ (temp >>> 32));
         temp = inclusiveUpperPoint != +0.0d ? Double.doubleToLongBits(inclusiveUpperPoint) : 0L;
-        result = 31 * result + Long.hashCode(temp);
+        result = 31 * result + (int) (temp ^ (temp >>> 32));
         result = 31 * result + (geoDistance != null ? geoDistance.hashCode() : 0);
-        result = 31 * result + indexFieldData.getFieldName().hashCode();
+        result = 31 * result + indexFieldData.getFieldNames().indexName().hashCode();
         return result;
     }
 

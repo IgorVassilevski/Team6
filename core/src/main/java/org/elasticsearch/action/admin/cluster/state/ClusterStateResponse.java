@@ -54,7 +54,7 @@ public class ClusterStateResponse extends ActionResponse {
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
-        clusterName = new ClusterName(in);
+        clusterName = ClusterName.readClusterName(in);
         clusterState = ClusterState.Builder.readFrom(in, null);
     }
 

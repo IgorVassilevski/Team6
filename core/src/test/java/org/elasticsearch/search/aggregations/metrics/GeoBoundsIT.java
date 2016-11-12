@@ -28,6 +28,7 @@ import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
 import org.elasticsearch.search.aggregations.metrics.geobounds.GeoBounds;
 import org.elasticsearch.search.aggregations.metrics.geobounds.GeoBoundsAggregator;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.util.List;
 
@@ -36,19 +37,18 @@ import static org.elasticsearch.search.aggregations.AggregationBuilders.geoBound
 import static org.elasticsearch.search.aggregations.AggregationBuilders.global;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.terms;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertSearchResponse;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.closeTo;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.sameInstance;
+import static org.hamcrest.Matchers.*;
 
+/**
+ *
+ */
 @ESIntegTestCase.SuiteScopeTestCase
 public class GeoBoundsIT extends AbstractGeoTestCase {
+
     private static final String aggName = "geoBounds";
 
-    public void testSingleValuedField() throws Exception {
+    @Test
+    public void singleValuedField() throws Exception {
         SearchResponse response = client().prepareSearch(IDX_NAME)
                 .addAggregation(geoBounds(aggName).field(SINGLE_VALUED_FIELD_NAME)
                         .wrapLongitude(false))
@@ -67,6 +67,7 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         assertThat(bottomRight.lon(), closeTo(singleBottomRight.lon(), GEOHASH_TOLERANCE));
     }
 
+    @Test
     public void testSingleValuedField_getProperty() throws Exception {
         SearchResponse searchResponse = client()
                 .prepareSearch(IDX_NAME)
@@ -100,7 +101,8 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         assertThat((double) global.getProperty(aggName + ".right"), closeTo(singleBottomRight.lon(), GEOHASH_TOLERANCE));
     }
 
-    public void testMultiValuedField() throws Exception {
+    @Test
+    public void multiValuedField() throws Exception {
         SearchResponse response = client().prepareSearch(IDX_NAME)
                 .addAggregation(geoBounds(aggName).field(MULTI_VALUED_FIELD_NAME)
                         .wrapLongitude(false))
@@ -120,7 +122,8 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         assertThat(bottomRight.lon(), closeTo(multiBottomRight.lon(), GEOHASH_TOLERANCE));
     }
 
-    public void testUnmapped() throws Exception {
+    @Test
+    public void unmapped() throws Exception {
         SearchResponse response = client().prepareSearch(UNMAPPED_IDX_NAME)
                 .addAggregation(geoBounds(aggName).field(SINGLE_VALUED_FIELD_NAME)
                         .wrapLongitude(false))
@@ -137,7 +140,8 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         assertThat(bottomRight, equalTo(null));
     }
 
-    public void testPartiallyUnmapped() throws Exception {
+    @Test
+    public void partiallyUnmapped() throws Exception {
         SearchResponse response = client().prepareSearch(IDX_NAME, UNMAPPED_IDX_NAME)
                 .addAggregation(geoBounds(aggName).field(SINGLE_VALUED_FIELD_NAME)
                         .wrapLongitude(false))
@@ -156,14 +160,15 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         assertThat(bottomRight.lon(), closeTo(singleBottomRight.lon(), GEOHASH_TOLERANCE));
     }
 
-    public void testEmptyAggregation() throws Exception {
+    @Test
+    public void emptyAggregation() throws Exception {
         SearchResponse searchResponse = client().prepareSearch(EMPTY_IDX_NAME)
                 .setQuery(matchAllQuery())
                 .addAggregation(geoBounds(aggName).field(SINGLE_VALUED_FIELD_NAME)
                         .wrapLongitude(false))
                 .execute().actionGet();
 
-        assertThat(searchResponse.getHits().getTotalHits(), equalTo(0L));
+        assertThat(searchResponse.getHits().getTotalHits(), equalTo(0l));
         GeoBounds geoBounds = searchResponse.getAggregations().get(aggName);
         assertThat(geoBounds, notNullValue());
         assertThat(geoBounds.getName(), equalTo(aggName));
@@ -173,7 +178,8 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         assertThat(bottomRight, equalTo(null));
     }
 
-    public void testSingleValuedFieldNearDateLine() throws Exception {
+    @Test
+    public void singleValuedFieldNearDateLine() throws Exception {
         SearchResponse response = client().prepareSearch(DATELINE_IDX_NAME)
                 .addAggregation(geoBounds(aggName).field(SINGLE_VALUED_FIELD_NAME)
                         .wrapLongitude(false))
@@ -195,10 +201,12 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         assertThat(bottomRight.lon(), closeTo(geoValuesBottomRight.lon(), GEOHASH_TOLERANCE));
     }
 
-    public void testSingleValuedFieldNearDateLineWrapLongitude() throws Exception {
+    @Test
+    public void singleValuedFieldNearDateLineWrapLongitude() throws Exception {
 
         GeoPoint geoValuesTopLeft = new GeoPoint(38, 170);
         GeoPoint geoValuesBottomRight = new GeoPoint(-24, -175);
+
         SearchResponse response = client().prepareSearch(DATELINE_IDX_NAME)
                 .addAggregation(geoBounds(aggName).field(SINGLE_VALUED_FIELD_NAME).wrapLongitude(true))
                 .execute().actionGet();
@@ -219,7 +227,8 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
     /**
      * This test forces the {@link GeoBoundsAggregator} to resize the {@link BigArray}s it uses to ensure they are resized correctly
      */
-    public void testSingleValuedFieldAsSubAggToHighCardTermsAgg() {
+    @Test
+    public void singleValuedFieldAsSubAggToHighCardTermsAgg() {
         SearchResponse response = client().prepareSearch(HIGH_CARD_IDX_NAME)
                 .addAggregation(terms("terms").field(NUMBER_FIELD_NAME).subAggregation(geoBounds(aggName).field(SINGLE_VALUED_FIELD_NAME)
                         .wrapLongitude(false)))
@@ -235,7 +244,7 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         for (int i = 0; i < 10; i++) {
             Bucket bucket = buckets.get(i);
             assertThat(bucket, notNullValue());
-            assertThat("InternalBucket " + bucket.getKey() + " has wrong number of documents", bucket.getDocCount(), equalTo(1L));
+            assertThat("Bucket " + bucket.getKey() + " has wrong number of documents", bucket.getDocCount(), equalTo(1l));
             GeoBounds geoBounds = bucket.getAggregations().get(aggName);
             assertThat(geoBounds, notNullValue());
             assertThat(geoBounds.getName(), equalTo(aggName));
@@ -246,7 +255,8 @@ public class GeoBoundsIT extends AbstractGeoTestCase {
         }
     }
 
-    public void testSingleValuedFieldWithZeroLon() throws Exception {
+    @Test
+    public void singleValuedFieldWithZeroLon() throws Exception {
         SearchResponse response = client().prepareSearch(IDX_ZERO_NAME)
                 .addAggregation(geoBounds(aggName).field(SINGLE_VALUED_FIELD_NAME).wrapLongitude(false)).execute().actionGet();
 

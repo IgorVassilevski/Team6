@@ -19,9 +19,11 @@
 
 package org.elasticsearch.common.util;
 
+import com.google.common.base.Preconditions;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.RamUsageEstimator;
+import org.elasticsearch.cache.recycler.PageCacheRecycler;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.breaker.CircuitBreakingException;
@@ -29,21 +31,20 @@ import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.lease.Releasable;
 import org.elasticsearch.common.lease.Releasables;
 import org.elasticsearch.common.recycler.Recycler;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.indices.breaker.CircuitBreakerService;
 
 import java.util.Arrays;
 
 /** Utility class to work with arrays. */
-public class BigArrays implements Releasable {
+public class BigArrays {
 
-    public static final BigArrays NON_RECYCLING_INSTANCE = new BigArrays(null, null, false);
+    public static final BigArrays NON_RECYCLING_INSTANCE = new BigArrays(null, null);
 
     /** Page size in bytes: 16KB */
     public static final int PAGE_SIZE_IN_BYTES = 1 << 14;
-    public static final int BYTE_PAGE_SIZE = BigArrays.PAGE_SIZE_IN_BYTES;
-    public static final int INT_PAGE_SIZE = BigArrays.PAGE_SIZE_IN_BYTES / Integer.BYTES;
-    public static final int LONG_PAGE_SIZE = BigArrays.PAGE_SIZE_IN_BYTES / Long.BYTES;
+    public static final int BYTE_PAGE_SIZE = BigArrays.PAGE_SIZE_IN_BYTES / RamUsageEstimator.NUM_BYTES_BYTE;
+    public static final int INT_PAGE_SIZE = BigArrays.PAGE_SIZE_IN_BYTES / RamUsageEstimator.NUM_BYTES_INT;
+    public static final int LONG_PAGE_SIZE = BigArrays.PAGE_SIZE_IN_BYTES / RamUsageEstimator.NUM_BYTES_LONG;
     public static final int OBJECT_PAGE_SIZE = BigArrays.PAGE_SIZE_IN_BYTES / RamUsageEstimator.NUM_BYTES_OBJECT_REF;
 
     /** Returns the next size to grow when working with parallel arrays that may have different page sizes or number of bytes per element. */
@@ -54,15 +55,9 @@ public class BigArrays implements Releasable {
     /** Return the next size to grow to that is &gt;= <code>minTargetSize</code>.
      *  Inspired from {@link ArrayUtil#oversize(int, int)} and adapted to play nicely with paging. */
     public static long overSize(long minTargetSize, int pageSize, int bytesPerElement) {
-        if (minTargetSize < 0) {
-            throw new IllegalArgumentException("minTargetSize must be >= 0");
-        }
-        if (pageSize < 0) {
-            throw new IllegalArgumentException("pageSize must be > 0");
-        }
-        if (bytesPerElement <= 0) {
-            throw new IllegalArgumentException("bytesPerElement must be > 0");
-        }
+        Preconditions.checkArgument(minTargetSize >= 0, "minTargetSize must be >= 0");
+        Preconditions.checkArgument(pageSize >= 0, "pageSize must be > 0");
+        Preconditions.checkArgument(bytesPerElement > 0, "bytesPerElement must be > 0");
 
         long newSize;
         if (minTargetSize < pageSize) {
@@ -84,12 +79,7 @@ public class BigArrays implements Releasable {
         return index == (int) index;
     }
 
-    @Override
-    public void close() {
-        recycler.close();
-    }
-
-    private abstract static class AbstractArrayWrapper extends AbstractArray implements BigArray {
+    private static abstract class AbstractArrayWrapper extends AbstractArray implements BigArray {
 
         protected static final long SHALLOW_SIZE = RamUsageEstimator.shallowSizeOfInstance(ByteArrayWrapper.class);
 
@@ -373,11 +363,12 @@ public class BigArrays implements Releasable {
     final boolean checkBreaker;
     private final BigArrays circuitBreakingInstance;
 
-    public BigArrays(Settings settings, @Nullable final CircuitBreakerService breakerService) {
+    @Inject
+    public BigArrays(PageCacheRecycler recycler, @Nullable final CircuitBreakerService breakerService) {
         // Checking the breaker is disabled if not specified
-        this(new PageCacheRecycler(settings), breakerService, false);
+        this(recycler, breakerService, false);
     }
-    // public for tests
+
     public BigArrays(PageCacheRecycler recycler, @Nullable final CircuitBreakerService breakerService, boolean checkBreaker) {
         this.checkBreaker = checkBreaker;
         this.recycler = recycler;
@@ -427,10 +418,6 @@ public class BigArrays implements Releasable {
      */
     public BigArrays withCircuitBreaking() {
         return this.circuitBreakingInstance;
-    }
-
-    public CircuitBreakerService breakerService() {
-        return this.circuitBreakingInstance.breakerService;
     }
 
     private <T extends AbstractBigArray> T resizeInPlace(T array, long newSize) {
@@ -498,7 +485,7 @@ public class BigArrays implements Releasable {
         if (minSize <= array.size()) {
             return array;
         }
-        final long newSize = overSize(minSize, BYTE_PAGE_SIZE, 1);
+        final long newSize = overSize(minSize, BYTE_PAGE_SIZE, RamUsageEstimator.NUM_BYTES_BYTE);
         return resize(array, newSize);
     }
 
@@ -581,7 +568,7 @@ public class BigArrays implements Releasable {
         if (minSize <= array.size()) {
             return array;
         }
-        final long newSize = overSize(minSize, INT_PAGE_SIZE, Integer.BYTES);
+        final long newSize = overSize(minSize, INT_PAGE_SIZE, RamUsageEstimator.NUM_BYTES_INT);
         return resize(array, newSize);
     }
 
@@ -631,7 +618,7 @@ public class BigArrays implements Releasable {
         if (minSize <= array.size()) {
             return array;
         }
-        final long newSize = overSize(minSize, LONG_PAGE_SIZE, Long.BYTES);
+        final long newSize = overSize(minSize, LONG_PAGE_SIZE, RamUsageEstimator.NUM_BYTES_LONG);
         return resize(array, newSize);
     }
 
@@ -678,7 +665,7 @@ public class BigArrays implements Releasable {
         if (minSize <= array.size()) {
             return array;
         }
-        final long newSize = overSize(minSize, LONG_PAGE_SIZE, Long.BYTES);
+        final long newSize = overSize(minSize, LONG_PAGE_SIZE, RamUsageEstimator.NUM_BYTES_LONG);
         return resize(array, newSize);
     }
 
@@ -725,7 +712,7 @@ public class BigArrays implements Releasable {
         if (minSize <= array.size()) {
             return array;
         }
-        final long newSize = overSize(minSize, INT_PAGE_SIZE, Float.BYTES);
+        final long newSize = overSize(minSize, INT_PAGE_SIZE, RamUsageEstimator.NUM_BYTES_FLOAT);
         return resize(array, newSize);
     }
 

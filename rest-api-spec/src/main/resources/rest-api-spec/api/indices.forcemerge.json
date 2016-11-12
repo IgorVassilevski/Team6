@@ -1,7 +1,7 @@
 {
   "indices.forcemerge": {
-    "documentation": "http://www.elastic.co/guide/en/elasticsearch/reference/master/indices-forcemerge.html",
-    "methods": ["POST"],
+    "documentation": "http://www.elastic.co/guide/en/elasticsearch/reference/2.3/indices-forcemerge.html",
+    "methods": ["POST", "GET"],
     "url": {
       "path": "/_forcemerge",
       "paths": ["/_forcemerge", "/{index}/_forcemerge"],

@@ -20,11 +20,12 @@
 package org.elasticsearch.search.internal;
 
 import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.common.HasContext;
+import org.elasticsearch.common.HasContextAndHeaders;
+import org.elasticsearch.common.HasHeaders;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.index.query.QueryShardContext;
-import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.script.Template;
 import org.elasticsearch.search.Scroll;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
 
 import java.io.IOException;
 
@@ -33,15 +34,19 @@ import java.io.IOException;
  * It provides all the methods that the {@link org.elasticsearch.search.internal.SearchContext} needs.
  * Provides a cache key based on its content that can be used to cache shard level response.
  */
-public interface ShardSearchRequest {
+public interface ShardSearchRequest extends HasContextAndHeaders {
 
-    ShardId shardId();
+    String index();
+
+    int shardId();
 
     String[] types();
 
-    SearchSourceBuilder source();
+    BytesReference source();
 
-    void source(SearchSourceBuilder source);
+    void source(BytesReference source);
+
+    BytesReference extraSource();
 
     int numberOfShards();
 
@@ -50,6 +55,10 @@ public interface ShardSearchRequest {
     String[] filteringAliases();
 
     long nowInMillis();
+
+    Template template();
+
+    BytesReference templateSource();
 
     Boolean requestCache();
 
@@ -70,10 +79,4 @@ public interface ShardSearchRequest {
      * Returns the cache key for this shard search request, based on its content
      */
     BytesReference cacheKey() throws IOException;
-
-    /**
-     * Rewrites this request into its primitive form. e.g. by rewriting the
-     * QueryBuilder.
-     */
-    void rewrite(QueryShardContext context) throws IOException;
 }

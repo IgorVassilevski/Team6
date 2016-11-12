@@ -19,43 +19,43 @@
 
 package org.elasticsearch.search.internal;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.compress.CompressorFactory;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.text.Text;
+import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.common.xcontent.XContentHelper;
-import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.SearchShardTarget;
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
+import org.elasticsearch.search.highlight.HighlightField;
 import org.elasticsearch.search.internal.InternalSearchHits.StreamContext.ShardTargetType;
 import org.elasticsearch.search.lookup.SourceLookup;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonMap;
-import static java.util.Collections.unmodifiableMap;
 import static org.elasticsearch.common.lucene.Lucene.readExplanation;
 import static org.elasticsearch.common.lucene.Lucene.writeExplanation;
-import static org.elasticsearch.search.fetch.subphase.highlight.HighlightField.readHighlightField;
+import static org.elasticsearch.search.SearchShardTarget.readSearchShardTarget;
+import static org.elasticsearch.search.highlight.HighlightField.readHighlightField;
 import static org.elasticsearch.search.internal.InternalSearchHitField.readSearchHitField;
 
 /**
@@ -78,7 +78,7 @@ public class InternalSearchHit implements SearchHit {
 
     private BytesReference source;
 
-    private Map<String, SearchHitField> fields = emptyMap();
+    private Map<String, SearchHitField> fields = ImmutableMap.of();
 
     private Map<String, HighlightField> highlightFields = null;
 
@@ -100,17 +100,9 @@ public class InternalSearchHit implements SearchHit {
 
     }
 
-    public InternalSearchHit(int docId) {
-        this(docId, null, null, null);
-    }
-
     public InternalSearchHit(int docId, String id, Text type, Map<String, SearchHitField> fields) {
         this.docId = docId;
-        if (id != null) {
-            this.id = new Text(id);
-        } else {
-            this.id = null;
-        }
+        this.id = new Text(id);
         this.type = type;
         this.fields = fields;
     }
@@ -176,7 +168,7 @@ public class InternalSearchHit implements SearchHit {
 
     @Override
     public String id() {
-        return id != null ? id.string() : null;
+        return id.string();
     }
 
     @Override
@@ -186,7 +178,7 @@ public class InternalSearchHit implements SearchHit {
 
     @Override
     public String type() {
-        return type != null ? type.string() : null;
+        return type.string();
     }
 
     @Override
@@ -243,12 +235,12 @@ public class InternalSearchHit implements SearchHit {
         if (sourceAsBytes != null) {
             return sourceAsBytes;
         }
-        this.sourceAsBytes = BytesReference.toBytes(sourceRef());
+        this.sourceAsBytes = sourceRef().toBytes();
         return this.sourceAsBytes;
     }
 
     @Override
-    public boolean hasSource() {
+    public boolean isSourceEmpty() {
         return source == null;
     }
 
@@ -300,12 +292,15 @@ public class InternalSearchHit implements SearchHit {
 
     @Override
     public Map<String, SearchHitField> fields() {
-        return fields == null ? emptyMap() : fields;
+        if (fields == null) {
+            return ImmutableMap.of();
+        }
+        return fields;
     }
 
     // returns the fields without handling null cases
     public Map<String, SearchHitField> fieldsOrNull() {
-        return fields;
+        return this.fields;
     }
 
     @Override
@@ -323,7 +318,10 @@ public class InternalSearchHit implements SearchHit {
 
     @Override
     public Map<String, HighlightField> highlightFields() {
-        return highlightFields == null ? emptyMap() : highlightFields;
+        if (highlightFields == null) {
+            return ImmutableMap.of();
+        }
+        return this.highlightFields;
     }
 
     @Override
@@ -335,13 +333,21 @@ public class InternalSearchHit implements SearchHit {
         this.highlightFields = highlightFields;
     }
 
-    public void sortValues(Object[] sortValues, DocValueFormat[] sortValueFormats) {
-        this.sortValues = Arrays.copyOf(sortValues, sortValues.length);
-        for (int i = 0; i < sortValues.length; ++i) {
-            if (this.sortValues[i] instanceof BytesRef) {
-                this.sortValues[i] = sortValueFormats[i].format((BytesRef) sortValues[i]);
+    public void sortValues(Object[] sortValues) {
+        // LUCENE 4 UPGRADE: There must be a better way
+        // we want to convert to a Text object here, and not BytesRef
+
+        // Don't write into sortValues! Otherwise the fields in FieldDoc is modified, which may be used in other places. (SearchContext#lastEmitedDoc)
+        Object[] sortValuesCopy = new Object[sortValues.length];
+        System.arraycopy(sortValues, 0, sortValuesCopy, 0, sortValues.length);
+        if (sortValues != null) {
+            for (int i = 0; i < sortValues.length; i++) {
+                if (sortValues[i] instanceof BytesRef) {
+                    sortValuesCopy[i] = new Text(new BytesArray((BytesRef) sortValues[i]));
+                }
             }
         }
+        this.sortValues = sortValuesCopy;
     }
 
     @Override
@@ -407,24 +413,24 @@ public class InternalSearchHit implements SearchHit {
     }
 
     public static class Fields {
-        static final String _INDEX = "_index";
-        static final String _TYPE = "_type";
-        static final String _ID = "_id";
-        static final String _VERSION = "_version";
-        static final String _SCORE = "_score";
-        static final String FIELDS = "fields";
-        static final String HIGHLIGHT = "highlight";
-        static final String SORT = "sort";
-        static final String MATCHED_QUERIES = "matched_queries";
-        static final String _EXPLANATION = "_explanation";
-        static final String VALUE = "value";
-        static final String DESCRIPTION = "description";
-        static final String DETAILS = "details";
-        static final String INNER_HITS = "inner_hits";
+        static final XContentBuilderString _INDEX = new XContentBuilderString("_index");
+        static final XContentBuilderString _TYPE = new XContentBuilderString("_type");
+        static final XContentBuilderString _ID = new XContentBuilderString("_id");
+        static final XContentBuilderString _VERSION = new XContentBuilderString("_version");
+        static final XContentBuilderString _SCORE = new XContentBuilderString("_score");
+        static final XContentBuilderString FIELDS = new XContentBuilderString("fields");
+        static final XContentBuilderString HIGHLIGHT = new XContentBuilderString("highlight");
+        static final XContentBuilderString SORT = new XContentBuilderString("sort");
+        static final XContentBuilderString MATCHED_QUERIES = new XContentBuilderString("matched_queries");
+        static final XContentBuilderString _EXPLANATION = new XContentBuilderString("_explanation");
+        static final XContentBuilderString VALUE = new XContentBuilderString("value");
+        static final XContentBuilderString DESCRIPTION = new XContentBuilderString("description");
+        static final XContentBuilderString DETAILS = new XContentBuilderString("details");
+        static final XContentBuilderString INNER_HITS = new XContentBuilderString("inner_hits");
     }
 
-    // public because we render hit as part of completion suggestion option
-    public XContentBuilder toInnerXContent(XContentBuilder builder, Params params) throws IOException {
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         List<SearchHitField> metaFields = new ArrayList<>();
         List<SearchHitField> otherFields = new ArrayList<>();
         if (fields != null && !fields.isEmpty()) {
@@ -440,24 +446,20 @@ public class InternalSearchHit implements SearchHit {
             }
         }
 
+        builder.startObject();
         // For inner_hit hits shard is null and that is ok, because the parent search hit has all this information.
         // Even if this was included in the inner_hit hits this would be the same, so better leave it out.
         if (explanation() != null && shard != null) {
             builder.field("_shard", shard.shardId());
             builder.field("_node", shard.nodeIdText());
         }
+        if (shard != null) {
+            builder.field(Fields._INDEX, shard.indexText());
+        }
+        builder.field(Fields._TYPE, type);
+        builder.field(Fields._ID, id);
         if (nestedIdentity != null) {
             nestedIdentity.toXContent(builder, params);
-        } else {
-            if (shard != null) {
-                builder.field(Fields._INDEX, shard.indexText());
-            }
-            if (type != null) {
-                builder.field(Fields._TYPE, type);
-            }
-            if (id != null) {
-                builder.field(Fields._ID, id);
-            }
         }
         if (version != -1) {
             builder.field(Fields._VERSION, version);
@@ -468,7 +470,7 @@ public class InternalSearchHit implements SearchHit {
             builder.field(Fields._SCORE, score);
         }
         for (SearchHitField field : metaFields) {
-            builder.field(field.name(), (Object) field.value());
+            builder.field(field.name(), field.value());
         }
         if (source != null) {
             XContentHelper.writeRawField("_source", source, builder, params);
@@ -527,6 +529,7 @@ public class InternalSearchHit implements SearchHit {
             }
             builder.endObject();
         }
+        builder.endObject();
         return builder;
     }
 
@@ -543,15 +546,6 @@ public class InternalSearchHit implements SearchHit {
             builder.endArray();
         }
         builder.endObject();
-
-    }
-
-    @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        toInnerXContent(builder, params);
-        builder.endObject();
-        return builder;
     }
 
     public static InternalSearchHit readSearchHit(StreamInput in, InternalSearchHits.StreamContext context) throws IOException {
@@ -567,9 +561,9 @@ public class InternalSearchHit implements SearchHit {
 
     public void readFrom(StreamInput in, InternalSearchHits.StreamContext context) throws IOException {
         score = in.readFloat();
-        id = in.readOptionalText();
-        type = in.readOptionalText();
-        nestedIdentity = in.readOptionalStreamable(InternalNestedIdentity::new);
+        id = in.readText();
+        type = in.readText();
+        nestedIdentity = in.readOptionalStreamable(new InternalNestedIdentity());
         version = in.readLong();
         source = in.readBytesReference();
         if (source.length() == 0) {
@@ -580,32 +574,69 @@ public class InternalSearchHit implements SearchHit {
         }
         int size = in.readVInt();
         if (size == 0) {
-            fields = emptyMap();
+            fields = ImmutableMap.of();
         } else if (size == 1) {
             SearchHitField hitField = readSearchHitField(in);
-            fields = singletonMap(hitField.name(), hitField);
+            fields = ImmutableMap.of(hitField.name(), hitField);
+        } else if (size == 2) {
+            SearchHitField hitField1 = readSearchHitField(in);
+            SearchHitField hitField2 = readSearchHitField(in);
+            fields = ImmutableMap.of(hitField1.name(), hitField1, hitField2.name(), hitField2);
+        } else if (size == 3) {
+            SearchHitField hitField1 = readSearchHitField(in);
+            SearchHitField hitField2 = readSearchHitField(in);
+            SearchHitField hitField3 = readSearchHitField(in);
+            fields = ImmutableMap.of(hitField1.name(), hitField1, hitField2.name(), hitField2, hitField3.name(), hitField3);
+        } else if (size == 4) {
+            SearchHitField hitField1 = readSearchHitField(in);
+            SearchHitField hitField2 = readSearchHitField(in);
+            SearchHitField hitField3 = readSearchHitField(in);
+            SearchHitField hitField4 = readSearchHitField(in);
+            fields = ImmutableMap.of(hitField1.name(), hitField1, hitField2.name(), hitField2, hitField3.name(), hitField3, hitField4.name(), hitField4);
+        } else if (size == 5) {
+            SearchHitField hitField1 = readSearchHitField(in);
+            SearchHitField hitField2 = readSearchHitField(in);
+            SearchHitField hitField3 = readSearchHitField(in);
+            SearchHitField hitField4 = readSearchHitField(in);
+            SearchHitField hitField5 = readSearchHitField(in);
+            fields = ImmutableMap.of(hitField1.name(), hitField1, hitField2.name(), hitField2, hitField3.name(), hitField3, hitField4.name(), hitField4, hitField5.name(), hitField5);
         } else {
-            Map<String, SearchHitField> fields = new HashMap<>();
+            ImmutableMap.Builder<String, SearchHitField> builder = ImmutableMap.builder();
             for (int i = 0; i < size; i++) {
                 SearchHitField hitField = readSearchHitField(in);
-                fields.put(hitField.name(), hitField);
+                builder.put(hitField.name(), hitField);
             }
-            this.fields = unmodifiableMap(fields);
+            fields = builder.build();
         }
 
         size = in.readVInt();
         if (size == 0) {
-            highlightFields = emptyMap();
+            highlightFields = ImmutableMap.of();
         } else if (size == 1) {
             HighlightField field = readHighlightField(in);
-            highlightFields = singletonMap(field.name(), field);
+            highlightFields = ImmutableMap.of(field.name(), field);
+        } else if (size == 2) {
+            HighlightField field1 = readHighlightField(in);
+            HighlightField field2 = readHighlightField(in);
+            highlightFields = ImmutableMap.of(field1.name(), field1, field2.name(), field2);
+        } else if (size == 3) {
+            HighlightField field1 = readHighlightField(in);
+            HighlightField field2 = readHighlightField(in);
+            HighlightField field3 = readHighlightField(in);
+            highlightFields = ImmutableMap.of(field1.name(), field1, field2.name(), field2, field3.name(), field3);
+        } else if (size == 4) {
+            HighlightField field1 = readHighlightField(in);
+            HighlightField field2 = readHighlightField(in);
+            HighlightField field3 = readHighlightField(in);
+            HighlightField field4 = readHighlightField(in);
+            highlightFields = ImmutableMap.of(field1.name(), field1, field2.name(), field2, field3.name(), field3, field4.name(), field4);
         } else {
-            Map<String, HighlightField> highlightFields = new HashMap<>();
+            ImmutableMap.Builder<String, HighlightField> builder = ImmutableMap.builder();
             for (int i = 0; i < size; i++) {
                 HighlightField field = readHighlightField(in);
-                highlightFields.put(field.name(), field);
+                builder.put(field.name(), field);
             }
-            this.highlightFields = unmodifiableMap(highlightFields);
+            highlightFields = builder.build();
         }
 
         size = in.readVInt();
@@ -631,6 +662,8 @@ public class InternalSearchHit implements SearchHit {
                     sortValues[i] = in.readShort();
                 } else if (type == 8) {
                     sortValues[i] = in.readBoolean();
+                } else if (type == 9) {
+                    sortValues[i] = in.readText();
                 } else {
                     throw new IOException("Can't match type [" + type + "]");
                 }
@@ -647,7 +680,7 @@ public class InternalSearchHit implements SearchHit {
 
         if (context.streamShardTarget() == ShardTargetType.STREAM) {
             if (in.readBoolean()) {
-                shard = new SearchShardTarget(in);
+                shard = readSearchShardTarget(in);
             }
         } else if (context.streamShardTarget() == ShardTargetType.LOOKUP) {
             int lookupId = in.readVInt();
@@ -676,8 +709,8 @@ public class InternalSearchHit implements SearchHit {
 
     public void writeTo(StreamOutput out, InternalSearchHits.StreamContext context) throws IOException {
         out.writeFloat(score);
-        out.writeOptionalText(id);
-        out.writeOptionalText(type);
+        out.writeText(id);
+        out.writeText(type);
         out.writeOptionalStreamable(nestedIdentity);
         out.writeLong(version);
         out.writeBytesReference(source);
@@ -737,6 +770,9 @@ public class InternalSearchHit implements SearchHit {
                     } else if (type == Boolean.class) {
                         out.writeByte((byte) 8);
                         out.writeBoolean((Boolean) sortValue);
+                    } else if (sortValue instanceof Text) {
+                        out.writeByte((byte) 9);
+                        out.writeText((Text) sortValue);
                     } else {
                         throw new IOException("Can't handle sort field value of type [" + type + "]");
                     }
@@ -781,7 +817,7 @@ public class InternalSearchHit implements SearchHit {
         }
     }
 
-    public static final class InternalNestedIdentity implements NestedIdentity, Streamable, ToXContent {
+    public final static class InternalNestedIdentity implements NestedIdentity, Streamable, ToXContent {
 
         private Text field;
         private int offset;
@@ -815,7 +851,7 @@ public class InternalSearchHit implements SearchHit {
         public void readFrom(StreamInput in) throws IOException {
             field = in.readOptionalText();
             offset = in.readInt();
-            child = in.readOptionalStreamable(InternalNestedIdentity::new);
+            child = in.readOptionalStreamable(new InternalNestedIdentity());
         }
 
         @Override
@@ -843,9 +879,9 @@ public class InternalSearchHit implements SearchHit {
 
         public static class Fields {
 
-            static final String _NESTED = "_nested";
-            static final String _NESTED_FIELD = "field";
-            static final String _NESTED_OFFSET = "offset";
+            static final XContentBuilderString _NESTED = new XContentBuilderString("_nested");
+            static final XContentBuilderString _NESTED_FIELD = new XContentBuilderString("field");
+            static final XContentBuilderString _NESTED_OFFSET = new XContentBuilderString("offset");
 
         }
     }

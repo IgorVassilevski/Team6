@@ -19,10 +19,11 @@
 
 package org.elasticsearch.index.engine;
 
-import org.apache.logging.log4j.Logger;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.store.AlreadyClosedException;
+import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.index.store.Store;
 
 import java.io.IOException;
@@ -35,9 +36,9 @@ public class EngineSearcher extends Engine.Searcher {
     private final SearcherManager manager;
     private final AtomicBoolean released = new AtomicBoolean(false);
     private final Store store;
-    private final Logger logger;
+    private final ESLogger logger;
 
-    public EngineSearcher(String source, IndexSearcher searcher, SearcherManager manager, Store store, Logger logger) {
+    public EngineSearcher(String source, IndexSearcher searcher, SearcherManager manager, Store store, ESLogger logger) {
         super(source, searcher);
         this.manager = manager;
         this.store = store;
@@ -59,8 +60,9 @@ public class EngineSearcher extends Engine.Searcher {
         } catch (IOException e) {
             throw new IllegalStateException("Cannot close", e);
         } catch (AlreadyClosedException e) {
-            // This means there's a bug somewhere: don't suppress it
-            throw new AssertionError(e);
+                /* this one can happen if we already closed the
+                 * underlying store / directory and we call into the
+                 * IndexWriter to free up pending files. */
         } finally {
             store.decRef();
         }

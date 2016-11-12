@@ -18,8 +18,7 @@
  */
 package org.elasticsearch.common.lucene.index;
 
-import org.apache.lucene.index.FilterLeafReader;
-import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.*;
 import org.elasticsearch.index.shard.ShardId;
 
 /**

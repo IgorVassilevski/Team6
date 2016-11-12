@@ -25,6 +25,7 @@ import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.metrics.sum.Sum;
 import org.elasticsearch.search.aggregations.pipeline.bucketmetrics.InternalBucketMetricValue;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.List;
@@ -34,15 +35,14 @@ import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.sum;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.terms;
 import static org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorBuilders.maxBucket;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertSearchResponse;
 
 
 public class MetaDataIT extends ESIntegTestCase {
 
-    public void testMetaDataSetOnAggregationResult() throws Exception {
-        assertAcked(client().admin().indices().prepareCreate("idx")
-                .addMapping("type", "name", "type=keyword").get());
+    @Test
+    public void meta_data_set_on_aggregation_result() throws Exception {
+        createIndex("idx");
         IndexRequestBuilder[] builders = new IndexRequestBuilder[randomInt(30)];
         for (int i = 0; i < builders.length; i++) {
             String name = "name_" + randomIntBetween(1, 10);
@@ -77,7 +77,11 @@ public class MetaDataIT extends ESIntegTestCase {
                                 .field("value")
                             )
                 )
-                .addAggregation(maxBucket("the_max_bucket", "the_terms>the_sum").setMetaData(metaData))
+                .addAggregation(
+                    maxBucket("the_max_bucket")
+                        .setMetaData(metaData)
+                        .setBucketsPaths("the_terms>the_sum")
+                )
                 .execute().actionGet();
 
         assertSearchResponse(response);
@@ -117,4 +121,6 @@ public class MetaDataIT extends ESIntegTestCase {
         Map<String, Object> nestedMap = (Map<String, Object>)nestedObject;
         assertEquals("value", nestedMap.get("nested"));
     }
+
+
 }

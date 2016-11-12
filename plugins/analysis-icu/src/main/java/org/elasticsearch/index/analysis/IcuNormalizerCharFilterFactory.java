@@ -22,9 +22,11 @@ package org.elasticsearch.index.analysis;
 
 import com.ibm.icu.text.Normalizer2;
 import org.apache.lucene.analysis.icu.ICUNormalizer2CharFilter;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
 import java.io.Reader;
 
@@ -34,14 +36,16 @@ import java.io.Reader;
  * <p>The <tt>name</tt> can be used to provide the type of normalization to perform.</p>
  * <p>The <tt>mode</tt> can be used to provide 'compose' or 'decompose'. Default is compose.</p>
  */
-public class IcuNormalizerCharFilterFactory extends AbstractCharFilterFactory implements MultiTermAwareComponent {
+public class IcuNormalizerCharFilterFactory extends AbstractCharFilterFactory {
 
     private final String name;
 
     private final Normalizer2 normalizer;
 
-    public IcuNormalizerCharFilterFactory(IndexSettings indexSettings, Environment environment, String name, Settings settings) {
-        super(indexSettings, name);
+
+    @Inject
+    public IcuNormalizerCharFilterFactory(Index index, IndexSettingsService indexSettingsService, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name);
         this.name = settings.get("name", "nfkc_cf");
         String mode = settings.get("mode");
         if (!"compose".equals(mode) && !"decompose".equals(mode)) {
@@ -54,10 +58,5 @@ public class IcuNormalizerCharFilterFactory extends AbstractCharFilterFactory im
     @Override
     public Reader create(Reader reader) {
         return new ICUNormalizer2CharFilter(reader, normalizer);
-    }
-
-    @Override
-    public Object getMultiTermComponent() {
-        return this;
     }
 }

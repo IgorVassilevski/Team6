@@ -20,16 +20,11 @@
 package org.elasticsearch.common.lucene.search;
 
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.*;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.ConstantScoreQuery;
-import org.apache.lucene.search.MatchAllDocsQuery;
-import org.apache.lucene.search.PrefixQuery;
-import org.apache.lucene.search.Query;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.index.mapper.TypeFieldMapper;
+import org.elasticsearch.index.mapper.internal.TypeFieldMapper;
 
 import java.util.List;
 import java.util.regex.Pattern;
@@ -44,8 +39,8 @@ public class Queries {
     }
 
     /** Return a query that matches no document. */
-    public static Query newMatchNoDocsQuery(String reason) {
-        return new MatchNoDocsQuery(reason);
+    public static Query newMatchNoDocsQuery() {
+        return new BooleanQuery.Builder().build();
     }
 
     public static Query newNestedFilter() {
@@ -75,7 +70,7 @@ public class Queries {
             .build();
     }
 
-    private static boolean isNegativeQuery(Query q) {
+    public static boolean isNegativeQuery(Query q) {
         if (!(q instanceof BooleanQuery)) {
             return false;
         }
@@ -112,10 +107,11 @@ public class Queries {
         return false;
     }
 
-    public static Query applyMinimumShouldMatch(BooleanQuery query, @Nullable String minimumShouldMatch) {
+    public static BooleanQuery applyMinimumShouldMatch(BooleanQuery query, @Nullable String minimumShouldMatch) {
         if (minimumShouldMatch == null) {
             return query;
         }
+
         int optionalClauses = 0;
         for (BooleanClause c : query.clauses()) {
             if (c.getOccur() == BooleanClause.Occur.SHOULD) {
@@ -131,10 +127,11 @@ public class Queries {
                 builder.add(clause);
             }
             builder.setMinimumNumberShouldMatch(msm);
-            return builder.build();
-        } else {
-            return query;
+            BooleanQuery bq = builder.build();
+            bq.setBoost(query.getBoost());
+            query = bq;
         }
+        return query;
     }
 
     private static Pattern spaceAroundLessThanPattern = Pattern.compile("(\\s+<\\s*)|(\\s*<\\s+)");
@@ -174,6 +171,8 @@ public class Queries {
             result = calc < 0 ? result + calc : calc;
         }
 
-        return result < 0 ? 0 : result;
+        return (optionalClauseCount < result ?
+                optionalClauseCount : (result < 0 ? 0 : result));
+
     }
 }

@@ -32,8 +32,7 @@ Now, we can execute a script that would increment the counter:
 --------------------------------------------------
 curl -XPOST 'localhost:9200/test/type1/1/_update' -d '{
     "script" : {
-        "inline": "ctx._source.counter += params.count",
-        "lang": "painless",
+        "inline": "ctx._source.counter += count",
         "params" : {
             "count" : 4
         }
@@ -48,8 +47,7 @@ will still add it, since its a list):
 --------------------------------------------------
 curl -XPOST 'localhost:9200/test/type1/1/_update' -d '{
     "script" : {
-        "inline": "ctx._source.tags.add(params.tag)",
-        "lang": "painless",
+        "inline": "ctx._source.tags += tag",
         "params" : {
             "tag" : "blue"
         }
@@ -59,7 +57,7 @@ curl -XPOST 'localhost:9200/test/type1/1/_update' -d '{
 
 In addition to `_source`, the following variables are available through
 the `ctx` map: `_index`, `_type`, `_id`, `_version`, `_routing`,
-`_parent`.
+`_parent`, `_timestamp`, `_ttl`.
 
 We can also add a new field to the document:
 
@@ -87,8 +85,7 @@ the doc if the `tags` field contain `blue`, otherwise it does nothing
 --------------------------------------------------
 curl -XPOST 'localhost:9200/test/type1/1/_update' -d '{
     "script" : {
-        "inline": "ctx._source.tags.contains(params.tag) ? ctx.op = \"delete\" : ctx.op = \"none\"",
-        "lang": "painless",
+        "inline": "ctx._source.tags.contains(tag) ? ctx.op = \"delete\" : ctx.op = \"none\"",
         "params" : {
             "tag" : "blue"
         }
@@ -132,20 +129,8 @@ curl -XPOST 'localhost:9200/test/type1/1/_update' -d '{
 }'
 --------------------------------------------------
 
-If `name` was `new_name` before the request was sent then the entire update
-request is ignored. The `result` element in the response returns `noop` if
-the request was ignored.
-
-[source,js]
---------------------------------------------------
-{
-   "_index": "test",
-   "_type": "type1",
-   "_id": "1",
-   "_version": 1,
-   "result": noop
-}
---------------------------------------------------
+If `name` was `new_name` before the request was sent then document is still
+reindexed.
 
 [[upserts]]
 [float]
@@ -159,8 +144,7 @@ will be inserted as a new document.  If the document does exist, then the
 --------------------------------------------------
 curl -XPOST 'localhost:9200/test/type1/1/_update' -d '{
     "script" : {
-        "inline": "ctx._source.counter += params.count",
-        "lang": "painless",
+        "inline": "ctx._source.counter += count",
         "params" : {
             "count" : 4
         }
@@ -239,21 +223,20 @@ Can't be used to update the routing of an existing document.
 Parent is used to route the update request to the right shard and sets the
 parent for the upsert request if the document being updated doesn't exist.
 Can't be used to update the `parent` of an existing document.
-If an alias index routing is specified then it overrides the parent routing and it is used to route the request.
 
 `timeout`::
 
 Timeout waiting for a shard to become available.
 
-`wait_for_active_shards`::
+`consistency`::
 
-The number of shard copies required to be active before proceeding with the update operation.
-See <<index-wait-for-active-shards,here>> for details.
+The write consistency of the index/delete operation.
 
 `refresh`::
 
-Control when the changes made by this request are visible to search. See
-<<docs-refresh>>.
+Refresh the relevant primary and replica shards (not the whole index)
+immediately after the operation occurs, so that the updated document appears
+in search results  immediately.
 
 `fields`::
 

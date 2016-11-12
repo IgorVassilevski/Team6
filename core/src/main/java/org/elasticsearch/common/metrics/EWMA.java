@@ -19,12 +19,13 @@
 
 package org.elasticsearch.common.metrics;
 
+import com.twitter.jsr166e.LongAdder;
+
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.LongAdder;
 
 /**
  * An exponentially-weighted moving average.
- *
+ * 
  * <p>
  * Taken from codahale metric module, changed to use LongAdder
  *

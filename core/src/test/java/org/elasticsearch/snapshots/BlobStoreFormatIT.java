@@ -32,29 +32,19 @@ import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.compress.CompressorFactory;
 import org.elasticsearch.common.io.Streams;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
-import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.FromXContentBuilder;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.common.xcontent.*;
 import org.elasticsearch.index.translog.BufferedChecksumStreamOutput;
 import org.elasticsearch.repositories.blobstore.ChecksumBlobStoreFormat;
 import org.elasticsearch.repositories.blobstore.LegacyBlobStoreFormat;
+import org.junit.Test;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThan;
@@ -109,7 +99,6 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
             return new BlobObj(text);
         }
 
-        @Override
         public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
             builder.field("text", getText());
             return builder;
@@ -133,15 +122,13 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
 
         public void write(T obj, BlobContainer blobContainer, String blobName) throws IOException {
             BytesReference bytes = write(obj);
-            try (StreamInput stream = bytes.streamInput()) {
-                blobContainer.writeBlob(blobName, stream, bytes.length());
-            }
+            blobContainer.writeBlob(blobName, bytes);
         }
 
         private BytesReference write(T obj) throws IOException {
             try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
                 if (compress) {
-                    try (StreamOutput compressedStreamOutput = CompressorFactory.COMPRESSOR.streamOutput(bytesStreamOutput)) {
+                    try (StreamOutput compressedStreamOutput = CompressorFactory.defaultCompressor().streamOutput(bytesStreamOutput)) {
                         write(obj, compressedStreamOutput);
                     }
                 } else {
@@ -160,6 +147,7 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
         }
     }
 
+    @Test
     public void testBlobStoreOperations() throws IOException {
         BlobStore blobStore = createTestBlobStore();
         BlobContainer blobContainer = blobStore.blobContainer(BlobPath.cleanPath());
@@ -195,6 +183,8 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
         assertEquals(legacySMILE.read(blobContainer, "legacy-smile-comp").getText(), "legacy smile compressed");
     }
 
+
+    @Test
     public void testCompressionIsApplied() throws IOException {
         BlobStore blobStore = createTestBlobStore();
         BlobContainer blobContainer = blobStore.blobContainer(BlobPath.cleanPath());
@@ -212,6 +202,7 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
         assertThat(blobs.get("blob-not-comp").length(), greaterThan(blobs.get("blob-comp").length()));
     }
 
+    @Test
     public void testBlobCorruption() throws IOException {
         BlobStore blobStore = createTestBlobStore();
         BlobContainer blobContainer = blobStore.blobContainer(BlobPath.cleanPath());
@@ -286,11 +277,7 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
             int location = randomIntBetween(0, buffer.length - 1);
             buffer[location] = (byte) (buffer[location] ^ 42);
         } while (originalChecksum == checksum(buffer));
-        blobContainer.deleteBlob(blobName); // delete original before writing new blob
-        BytesArray bytesArray = new BytesArray(buffer);
-        try (StreamInput stream = bytesArray.streamInput()) {
-            blobContainer.writeBlob(blobName, stream, bytesArray.length());
-        }
+        blobContainer.writeBlob(blobName, new BytesArray(buffer));
     }
 
     private long checksum(byte[] buffer) throws IOException {

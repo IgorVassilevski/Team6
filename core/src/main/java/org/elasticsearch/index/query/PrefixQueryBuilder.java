@@ -19,80 +19,44 @@
 
 package org.elasticsearch.index.query;
 
-import org.apache.lucene.index.Term;
-import org.apache.lucene.search.MultiTermQuery;
-import org.apache.lucene.search.PrefixQuery;
-import org.apache.lucene.search.Query;
-import org.elasticsearch.common.ParseField;
-import org.elasticsearch.common.ParsingException;
-import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.lucene.BytesRefs;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.mapper.MappedFieldType;
-import org.elasticsearch.index.query.support.QueryParsers;
 
 import java.io.IOException;
-import java.util.Objects;
-import java.util.Optional;
 
 /**
  * A Query that matches documents containing terms with a specified prefix.
  */
-public class PrefixQueryBuilder extends AbstractQueryBuilder<PrefixQueryBuilder> implements MultiTermQueryBuilder {
-    public static final String NAME = "prefix";
+public class PrefixQueryBuilder extends MultiTermQueryBuilder implements BoostableQueryBuilder<PrefixQueryBuilder> {
 
-    private static final ParseField PREFIX_FIELD = new ParseField("value", "prefix");
-    private static final ParseField REWRITE_FIELD = new ParseField("rewrite");
+    private final String name;
 
-    private final String fieldName;
+    private final String prefix;
 
-    private final String value;
+    private float boost = -1;
 
     private String rewrite;
+
+    private String queryName;
 
     /**
      * A Query that matches documents containing terms with a specified prefix.
      *
-     * @param fieldName The name of the field
-     * @param value The prefix query
+     * @param name   The name of the field
+     * @param prefix The prefix query
      */
-    public PrefixQueryBuilder(String fieldName, String value) {
-        if (Strings.isEmpty(fieldName)) {
-            throw new IllegalArgumentException("field name is null or empty");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value cannot be null");
-        }
-        this.fieldName = fieldName;
-        this.value = value;
+    public PrefixQueryBuilder(String name, String prefix) {
+        this.name = name;
+        this.prefix = prefix;
     }
 
     /**
-     * Read from a stream.
+     * Sets the boost for this query.  Documents matching this query will (in addition to the normal
+     * weightings) have their score multiplied by the boost provided.
      */
-    public PrefixQueryBuilder(StreamInput in) throws IOException {
-        super(in);
-        fieldName = in.readString();
-        value = in.readString();
-        rewrite = in.readOptionalString();
-    }
-
     @Override
-    protected void doWriteTo(StreamOutput out) throws IOException {
-        out.writeString(fieldName);
-        out.writeString(value);
-        out.writeOptionalString(rewrite);
-    }
-
-    public String fieldName() {
-        return this.fieldName;
-    }
-
-    public String value() {
-        return this.value;
+    public PrefixQueryBuilder boost(float boost) {
+        this.boost = boost;
+        return this;
     }
 
     public PrefixQueryBuilder rewrite(String rewrite) {
@@ -100,107 +64,33 @@ public class PrefixQueryBuilder extends AbstractQueryBuilder<PrefixQueryBuilder>
         return this;
     }
 
-    public String rewrite() {
-        return this.rewrite;
+    /**
+     * Sets the query name for the filter that can be used when searching for matched_filters per hit.
+     */
+    public PrefixQueryBuilder queryName(String queryName) {
+        this.queryName = queryName;
+        return this;
     }
 
     @Override
     public void doXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(NAME);
-        builder.startObject(fieldName);
-        builder.field(PREFIX_FIELD.getPreferredName(), this.value);
-        if (rewrite != null) {
-            builder.field(REWRITE_FIELD.getPreferredName(), rewrite);
-        }
-        printBoostAndQueryName(builder);
-        builder.endObject();
-        builder.endObject();
-    }
-
-    public static Optional<PrefixQueryBuilder> fromXContent(QueryParseContext parseContext) throws IOException {
-        XContentParser parser = parseContext.parser();
-
-        String fieldName = null;
-        String value = null;
-        String rewrite = null;
-
-        String queryName = null;
-        float boost = AbstractQueryBuilder.DEFAULT_BOOST;
-        String currentFieldName = null;
-        XContentParser.Token token;
-        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-            if (token == XContentParser.Token.FIELD_NAME) {
-                currentFieldName = parser.currentName();
-            } else if (parseContext.isDeprecatedSetting(currentFieldName)) {
-                // skip
-            } else if (token == XContentParser.Token.START_OBJECT) {
-                throwParsingExceptionOnMultipleFields(NAME, parser.getTokenLocation(), fieldName, currentFieldName);
-                fieldName = currentFieldName;
-                while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                    if (token == XContentParser.Token.FIELD_NAME) {
-                        currentFieldName = parser.currentName();
-                    } else {
-                        if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.NAME_FIELD)) {
-                            queryName = parser.text();
-                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, PREFIX_FIELD)) {
-                            value = parser.textOrNull();
-                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.BOOST_FIELD)) {
-                            boost = parser.floatValue();
-                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, REWRITE_FIELD)) {
-                            rewrite = parser.textOrNull();
-                        } else {
-                            throw new ParsingException(parser.getTokenLocation(),
-                                    "[prefix] query does not support [" + currentFieldName + "]");
-                        }
-                    }
-                }
-            } else {
-                throwParsingExceptionOnMultipleFields(NAME, parser.getTokenLocation(), fieldName, parser.currentName());
-                fieldName = currentFieldName;
-                value = parser.textOrNull();
+        builder.startObject(PrefixQueryParser.NAME);
+        if (boost == -1 && rewrite == null && queryName == null) {
+            builder.field(name, prefix);
+        } else {
+            builder.startObject(name);
+            builder.field("prefix", prefix);
+            if (boost != -1) {
+                builder.field("boost", boost);
             }
-        }
-
-        return Optional.of(new PrefixQueryBuilder(fieldName, value)
-                .rewrite(rewrite)
-                .boost(boost)
-                .queryName(queryName));
-    }
-
-    @Override
-    public String getWriteableName() {
-        return NAME;
-    }
-
-    @Override
-    protected Query doToQuery(QueryShardContext context) throws IOException {
-        MultiTermQuery.RewriteMethod method = QueryParsers.parseRewriteMethod(context.getParseFieldMatcher(), rewrite, null);
-
-        Query query = null;
-        MappedFieldType fieldType = context.fieldMapper(fieldName);
-        if (fieldType != null) {
-            query = fieldType.prefixQuery(value, method, context);
-        }
-        if (query == null) {
-            PrefixQuery prefixQuery = new PrefixQuery(new Term(fieldName, BytesRefs.toBytesRef(value)));
-            if (method != null) {
-                prefixQuery.setRewriteMethod(method);
+            if (rewrite != null) {
+                builder.field("rewrite", rewrite);
             }
-            query = prefixQuery;
+            if (queryName != null) {
+                builder.field("_name", queryName);
+            }
+            builder.endObject();
         }
-
-        return query;
-    }
-
-    @Override
-    protected final int doHashCode() {
-        return Objects.hash(fieldName, value, rewrite);
-    }
-
-    @Override
-    protected boolean doEquals(PrefixQueryBuilder other) {
-        return Objects.equals(fieldName, other.fieldName) &&
-                Objects.equals(value, other.value) &&
-                Objects.equals(rewrite, other.rewrite);
+        builder.endObject();
     }
 }

@@ -16,6 +16,8 @@
 
 package org.elasticsearch.common.inject;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import org.elasticsearch.common.Classes;
 import org.elasticsearch.common.inject.internal.Annotations;
 import org.elasticsearch.common.inject.internal.BindingImpl;
@@ -34,6 +36,7 @@ import org.elasticsearch.common.inject.internal.ToStringBuilder;
 import org.elasticsearch.common.inject.spi.BindingTargetVisitor;
 import org.elasticsearch.common.inject.spi.ConvertedConstantBinding;
 import org.elasticsearch.common.inject.spi.Dependency;
+import org.elasticsearch.common.inject.spi.InjectionPoint;
 import org.elasticsearch.common.inject.spi.ProviderBinding;
 import org.elasticsearch.common.inject.spi.ProviderKeyBinding;
 import org.elasticsearch.common.inject.util.Providers;
@@ -47,13 +50,10 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singleton;
 import static org.elasticsearch.common.inject.internal.Annotations.findScopeAnnotation;
 
 /**
@@ -64,6 +64,7 @@ import static org.elasticsearch.common.inject.internal.Annotations.findScopeAnno
  */
 class InjectorImpl implements Injector, Lookups {
     final State state;
+    final InjectorImpl parent;
     boolean readOnly;
     BindingsMultimap bindingsMultimap = new BindingsMultimap();
     final Initializer initializer;
@@ -71,14 +72,20 @@ class InjectorImpl implements Injector, Lookups {
     /**
      * Just-in-time binding cache. Guarded by state.lock()
      */
-    Map<Key<?>, BindingImpl<?>> jitBindings = new HashMap<>();
+    Map<Key<?>, BindingImpl<?>> jitBindings = Maps.newHashMap();
 
     Lookups lookups = new DeferredLookups(this);
 
-    InjectorImpl(State state, Initializer initializer) {
+    InjectorImpl(@Nullable InjectorImpl parent, State state, Initializer initializer) {
+        this.parent = parent;
         this.state = state;
         this.initializer = initializer;
-        localContext = new ThreadLocal<>();
+
+        if (parent != null) {
+            localContext = parent.localContext;
+        } else {
+            localContext = new ThreadLocal<>();
+        }
     }
 
     /**
@@ -100,6 +107,21 @@ class InjectorImpl implements Injector, Lookups {
     }
 
     /**
+     * Returns the binding for {@code key}
+     */
+    @Override
+    public <T> BindingImpl<T> getBinding(Key<T> key) {
+        Errors errors = new Errors(key);
+        try {
+            BindingImpl<T> result = getBindingOrThrow(key, errors);
+            errors.throwConfigurationExceptionIfErrorsExist();
+            return result;
+        } catch (ErrorsException e) {
+            throw new ConfigurationException(errors.merge(e.getErrors()).getMessages());
+        }
+    }
+
+    /**
      * Gets a binding implementation.  First, it check to see if the parent has a binding.  If the
      * parent has a binding and the binding is scoped, it will use that binding.  Otherwise, this
      * checks for an explicit binding. If no explicit binding is found, it looks for a just-in-time
@@ -117,6 +139,29 @@ class InjectorImpl implements Injector, Lookups {
         return getJustInTimeBinding(key, errors);
     }
 
+    @Override
+    public <T> Binding<T> getBinding(Class<T> type) {
+        return getBinding(Key.get(type));
+    }
+
+    @Override
+    public Injector getParent() {
+        return parent;
+    }
+
+    @Override
+    public Injector createChildInjector(Iterable<? extends Module> modules) {
+        return new InjectorBuilder()
+                .parentInjector(this)
+                .addModules(modules)
+                .build();
+    }
+
+    @Override
+    public Injector createChildInjector(Module... modules) {
+        return createChildInjector(Arrays.asList(modules));
+    }
+
     /**
      * Returns a just-in-time binding for {@code key}, creating it if necessary.
      *
@@ -126,11 +171,13 @@ class InjectorImpl implements Injector, Lookups {
             throws ErrorsException {
         synchronized (state.lock()) {
             // first try to find a JIT binding that we've already created
-            @SuppressWarnings("unchecked") // we only store bindings that match their key
-            BindingImpl<T> binding = (BindingImpl<T>) jitBindings.get(key);
+            for (InjectorImpl injector = this; injector != null; injector = injector.parent) {
+                @SuppressWarnings("unchecked") // we only store bindings that match their key
+                        BindingImpl<T> binding = (BindingImpl<T>) injector.jitBindings.get(key);
 
-            if (binding != null) {
-                return binding;
+                if (binding != null) {
+                    return binding;
+                }
             }
 
             return createJustInTimeBindingRecursive(key, errors);
@@ -169,7 +216,7 @@ class InjectorImpl implements Injector, Lookups {
 
 
         return new InstanceBindingImpl<>(this, key, SourceProvider.UNKNOWN_SOURCE,
-                factory, emptySet(), membersInjector);
+                factory, ImmutableSet.<InjectionPoint>of(), membersInjector);
     }
 
     /**
@@ -327,7 +374,7 @@ class InjectorImpl implements Injector, Lookups {
 
         @Override
         public Set<Dependency<?>> getDependencies() {
-            return singleton(Dependency.get(getSourceKey()));
+            return ImmutableSet.<Dependency<?>>of(Dependency.get(getSourceKey()));
         }
 
         @Override
@@ -437,7 +484,7 @@ class InjectorImpl implements Injector, Lookups {
         ParameterizedType parameterizedType = (ParameterizedType) typeLiteralType;
         Type innerType = parameterizedType.getActualTypeArguments()[0];
 
-        // this is unfortunate. We don't support building TypeLiterals for type variable like 'T'. If
+        // this is unforunate. We don't support building TypeLiterals for type variable like 'T'. If
         // this proves problematic, we can probably fix TypeLiteral to support type variables
         if (!(innerType instanceof Class)
                 && !(innerType instanceof GenericArrayType)
@@ -450,7 +497,7 @@ class InjectorImpl implements Injector, Lookups {
         InternalFactory<TypeLiteral<T>> factory = new ConstantFactory<>(
                 Initializables.of(value));
         return new InstanceBindingImpl<>(this, key, SourceProvider.UNKNOWN_SOURCE,
-                factory, emptySet(), value);
+                factory, ImmutableSet.<InjectionPoint>of(), value);
     }
 
     /**
@@ -553,6 +600,14 @@ class InjectorImpl implements Injector, Lookups {
      */
     private <T> BindingImpl<T> createJustInTimeBindingRecursive(Key<T> key, Errors errors)
             throws ErrorsException {
+        // ask the parent to create the JIT binding
+        if (parent != null && !parent.readOnly /* ES: don't check on parent if its read only, its already created all the bindings it can*/) {
+            try {
+                return parent.createJustInTimeBindingRecursive(key, new Errors());
+            } catch (ErrorsException ignored) {
+            }
+        }
+
         if (state.isBlacklisted(key)) {
             throw errors.childBindingAlreadySet(key).toException();
         }
@@ -631,8 +686,14 @@ class InjectorImpl implements Injector, Lookups {
         return getBindingOrThrow(key, errors).getInternalFactory();
     }
 
+    // not test-covered
+    @Override
+    public Map<Key<?>, Binding<?>> getBindings() {
+        return state.getExplicitBindingsThisLevel();
+    }
+
     private static class BindingsMultimap {
-        final Map<TypeLiteral<?>, List<Binding<?>>> multimap = new HashMap<>();
+        final Map<TypeLiteral<?>, List<Binding<?>>> multimap = Maps.newHashMap();
 
         <T> void put(TypeLiteral<T> type, Binding<T> binding) {
             List<Binding<?>> bindingsForType = multimap.get(type);
@@ -838,7 +899,7 @@ class InjectorImpl implements Injector, Lookups {
         state.clearBlacklisted();
         constructors = new ConstructorInjectorStore(this);
         membersInjectorStore = new MembersInjectorStore(this, state.getTypeListenerBindings());
-        jitBindings = new HashMap<>();
+        jitBindings = Maps.newHashMap();
     }
 
     // ES_GUICE: make all registered bindings act as eager singletons

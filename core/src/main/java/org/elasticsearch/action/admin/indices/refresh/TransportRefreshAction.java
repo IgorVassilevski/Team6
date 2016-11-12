@@ -19,14 +19,13 @@
 
 package org.elasticsearch.action.admin.indices.refresh;
 
+import org.elasticsearch.action.ActionWriteResponse;
 import org.elasticsearch.action.ShardOperationFailedException;
 import org.elasticsearch.action.support.ActionFilters;
-import org.elasticsearch.action.support.ActiveShardCount;
-import org.elasticsearch.action.support.replication.BasicReplicationRequest;
-import org.elasticsearch.action.support.replication.ReplicationResponse;
+import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.action.support.replication.TransportBroadcastReplicationAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.shard.ShardId;
@@ -38,26 +37,24 @@ import java.util.List;
 /**
  * Refresh action.
  */
-public class TransportRefreshAction extends TransportBroadcastReplicationAction<RefreshRequest, RefreshResponse, BasicReplicationRequest, ReplicationResponse> {
+public class TransportRefreshAction extends TransportBroadcastReplicationAction<RefreshRequest, RefreshResponse, ReplicationRequest, ActionWriteResponse> {
 
     @Inject
     public TransportRefreshAction(Settings settings, ThreadPool threadPool, ClusterService clusterService,
                                   TransportService transportService, ActionFilters actionFilters,
                                   IndexNameExpressionResolver indexNameExpressionResolver,
                                   TransportShardRefreshAction shardRefreshAction) {
-        super(RefreshAction.NAME, RefreshRequest::new, settings, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, shardRefreshAction);
+        super(RefreshAction.NAME, RefreshRequest.class, settings, threadPool, clusterService, transportService, actionFilters, indexNameExpressionResolver, shardRefreshAction);
     }
 
     @Override
-    protected ReplicationResponse newShardResponse() {
-        return new ReplicationResponse();
+    protected ActionWriteResponse newShardResponse() {
+        return new ActionWriteResponse();
     }
 
     @Override
-    protected BasicReplicationRequest newShardRequest(RefreshRequest request, ShardId shardId) {
-        BasicReplicationRequest replicationRequest = new BasicReplicationRequest(shardId);
-        replicationRequest.waitForActiveShards(ActiveShardCount.NONE);
-        return replicationRequest;
+    protected ReplicationRequest newShardRequest(RefreshRequest request, ShardId shardId) {
+        return new ReplicationRequest(request, shardId);
     }
 
     @Override

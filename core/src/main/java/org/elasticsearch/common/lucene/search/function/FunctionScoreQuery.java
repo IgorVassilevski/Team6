@@ -19,8 +19,8 @@
 
 package org.elasticsearch.common.lucene.search.function;
 
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.FilterScorer;
@@ -28,6 +28,8 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
+import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.ToStringUtils;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -38,27 +40,31 @@ import java.util.Set;
  */
 public class FunctionScoreQuery extends Query {
 
-    public static final float DEFAULT_MAX_BOOST = Float.MAX_VALUE;
-
-    final Query subQuery;
+    Query subQuery;
     final ScoreFunction function;
-    final float maxBoost;
-    final CombineFunction combineFunction;
-    private Float minScore;
+    float maxBoost = Float.MAX_VALUE;
+    CombineFunction combineFunction;
+    private Float minScore = null;
 
-    public FunctionScoreQuery(Query subQuery, ScoreFunction function, Float minScore, CombineFunction combineFunction, float maxBoost) {
+    public FunctionScoreQuery(Query subQuery, ScoreFunction function, Float minScore) {
         this.subQuery = subQuery;
         this.function = function;
-        this.combineFunction = combineFunction;
+        this.combineFunction = function == null? CombineFunction.MULT : function.getDefaultScoreCombiner();
         this.minScore = minScore;
-        this.maxBoost = maxBoost;
     }
 
     public FunctionScoreQuery(Query subQuery, ScoreFunction function) {
         this.subQuery = subQuery;
         this.function = function;
         this.combineFunction = function.getDefaultScoreCombiner();
-        this.maxBoost = DEFAULT_MAX_BOOST;
+    }
+
+    public void setCombineFunction(CombineFunction combineFunction) {
+        this.combineFunction = combineFunction;
+    }
+
+    public void setMaxBoost(float maxBoost) {
+        this.maxBoost = maxBoost;
     }
 
     public float getMaxBoost() {
@@ -73,21 +79,18 @@ public class FunctionScoreQuery extends Query {
         return function;
     }
 
-    public Float getMinScore() {
-        return minScore;
-    }
-
     @Override
     public Query rewrite(IndexReader reader) throws IOException {
-        Query rewritten = super.rewrite(reader);
-        if (rewritten != this) {
-            return rewritten;
+        if (getBoost() != 1.0F) {
+            return super.rewrite(reader);
         }
         Query newQ = subQuery.rewrite(reader);
         if (newQ == subQuery) {
             return this;
         }
-        return new FunctionScoreQuery(newQ, function, minScore, combineFunction, maxBoost);
+        FunctionScoreQuery bq = (FunctionScoreQuery) this.clone();
+        bq.subQuery = newQ;
+        return bq;
     }
 
     @Override
@@ -206,6 +209,7 @@ public class FunctionScoreQuery extends Query {
     public String toString(String field) {
         StringBuilder sb = new StringBuilder();
         sb.append("function score (").append(subQuery.toString(field)).append(",function=").append(function).append(')');
+        sb.append(ToStringUtils.boost(getBoost()));
         return sb.toString();
     }
 
@@ -214,17 +218,17 @@ public class FunctionScoreQuery extends Query {
         if (this == o) {
             return true;
         }
-        if (sameClassAs(o) == false) {
+        if (super.equals(o) == false) {
             return false;
         }
         FunctionScoreQuery other = (FunctionScoreQuery) o;
         return Objects.equals(this.subQuery, other.subQuery) && Objects.equals(this.function, other.function)
-                && Objects.equals(this.combineFunction, other.combineFunction)
-                && Objects.equals(this.minScore, other.minScore) && this.maxBoost == other.maxBoost;
+            && Objects.equals(this.combineFunction, other.combineFunction)
+            && Objects.equals(this.minScore, other.minScore) && this.maxBoost == other.maxBoost;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(classHash(), subQuery.hashCode(), function, combineFunction, minScore, maxBoost);
+        return Objects.hash(super.hashCode(), subQuery.hashCode(), function, combineFunction, minScore, maxBoost);
     }
 }

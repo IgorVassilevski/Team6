@@ -16,6 +16,7 @@
 
 package org.elasticsearch.common.inject.internal;
 
+import com.google.common.collect.ImmutableSet;
 import org.apache.lucene.util.CollectionUtil;
 import org.elasticsearch.common.inject.ConfigurationException;
 import org.elasticsearch.common.inject.CreationException;
@@ -32,6 +33,7 @@ import org.elasticsearch.common.inject.spi.Message;
 import org.elasticsearch.common.inject.spi.TypeListenerBinding;
 
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.io.StringWriter;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
@@ -46,9 +48,6 @@ import java.util.Comparator;
 import java.util.Formatter;
 import java.util.List;
 import java.util.Locale;
-
-import static java.util.Collections.emptySet;
-import static java.util.Collections.unmodifiableList;
 
 /**
  * A collection of error messages. If this type is passed as a method parameter, the method is
@@ -65,7 +64,7 @@ import static java.util.Collections.unmodifiableList;
  *
  * @author jessewilson@google.com (Jesse Wilson)
  */
-public final class Errors {
+public final class Errors implements Serializable {
 
     /**
      * The root errors object. Used to access the list of error messages.
@@ -317,7 +316,7 @@ public final class Errors {
         } else if (throwable instanceof CreationException) {
             return ((CreationException) throwable).getErrorMessages();
         } else {
-            return emptySet();
+            return ImmutableSet.of();
         }
     }
 
@@ -464,7 +463,7 @@ public final class Errors {
             }
         });
 
-        return unmodifiableList(result);
+        return result;
     }
 
     /**
@@ -551,7 +550,7 @@ public final class Errors {
         return root.errors == null ? 0 : root.errors.size();
     }
 
-    private abstract static class Converter<T> {
+    private static abstract class Converter<T> {
 
         final Class<T> type;
 

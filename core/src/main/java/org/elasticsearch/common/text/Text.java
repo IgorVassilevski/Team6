@@ -18,10 +18,9 @@
  */
 package org.elasticsearch.common.text;
 
+import java.nio.charset.StandardCharsets;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
-
-import java.nio.charset.StandardCharsets;
 
 /**
  * Both {@link String} and {@link BytesReference} representation of the text. Starts with one of those, and if
@@ -82,7 +81,13 @@ public final class Text implements Comparable<Text> {
      * Returns a {@link String} view of the data.
      */
     public String string() {
-        return text == null ? bytes.utf8ToString() : text;
+        if (text == null) {
+            if (!bytes.hasArray()) {
+                bytes = bytes.toBytesArray();
+            }
+            text = new String(bytes.array(), bytes.arrayOffset(), bytes.length(), StandardCharsets.UTF_8);
+        }
+        return text;
     }
 
     @Override
@@ -108,6 +113,6 @@ public final class Text implements Comparable<Text> {
 
     @Override
     public int compareTo(Text text) {
-        return bytes().compareTo(text.bytes());
+        return UTF8SortedAsUnicodeComparator.utf8SortedAsUnicodeSortOrder.compare(bytes(), text.bytes());
     }
 }

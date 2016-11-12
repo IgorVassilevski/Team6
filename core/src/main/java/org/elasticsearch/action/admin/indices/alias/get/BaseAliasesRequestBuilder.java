@@ -19,12 +19,13 @@
 
 package org.elasticsearch.action.admin.indices.alias.get;
 
+import com.google.common.collect.ObjectArrays;
 import org.elasticsearch.action.Action;
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.action.support.master.MasterNodeReadOperationRequestBuilder;
 import org.elasticsearch.client.ElasticsearchClient;
-import org.elasticsearch.common.util.ArrayUtils;
+import org.elasticsearch.client.IndicesAdminClient;
 
 /**
  */
@@ -42,7 +43,7 @@ public abstract class BaseAliasesRequestBuilder<Response extends ActionResponse,
 
     @SuppressWarnings("unchecked")
     public Builder addAliases(String... aliases) {
-        request.aliases(ArrayUtils.concat(request.aliases(), aliases));
+        request.aliases(ObjectArrays.concat(request.aliases(), aliases, String.class));
         return (Builder) this;
     }
 
@@ -54,7 +55,7 @@ public abstract class BaseAliasesRequestBuilder<Response extends ActionResponse,
 
     @SuppressWarnings("unchecked")
     public Builder addIndices(String... indices) {
-        request.indices(ArrayUtils.concat(request.indices(), indices));
+        request.indices(ObjectArrays.concat(request.indices(), indices, String.class));
         return (Builder) this;
     }
 

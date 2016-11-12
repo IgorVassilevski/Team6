@@ -28,16 +28,16 @@ import org.elasticsearch.common.lucene.uid.Versions;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.engine.VersionConflictEngineException;
+import org.junit.Test;
 
 import java.io.IOException;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.*;
 
 public class MultiTermVectorsIT extends AbstractTermVectorsTestCase {
+
+    @Test
     public void testDuelESLucene() throws Exception {
         AbstractTermVectorsTestCase.TestFieldSetting[] testFieldSettings = getFieldSettings();
         createIndexBasedOnFieldSettings("test", "alias", testFieldSettings);
@@ -56,18 +56,24 @@ public class MultiTermVectorsIT extends AbstractTermVectorsTestCase {
 
         for (int i = 0; i < testConfigs.length; i++) {
             TestConfig test = testConfigs[i];
-            MultiTermVectorsItemResponse item = responseItems[i];
-            if (test.expectedException != null) {
-                assertTrue(item.isFailed());
-                continue;
-            } else if (item.isFailed()) {
-                fail(item.getFailure().getCause().getMessage());
+            try {
+                MultiTermVectorsItemResponse item = responseItems[i];
+                if (test.expectedException != null) {
+                    assertTrue(item.isFailed());
+                    continue;
+                } else if (item.isFailed()) {
+                    fail(item.getFailure().getCause().getMessage());
+                }
+                Fields luceneTermVectors = getTermVectorsFromLucene(directoryReader, test.doc);
+                validateResponse(item.getResponse(), luceneTermVectors, test);
+            } catch (Throwable t) {
+                throw new Exception("Test exception while running " + test.toString(), t);
             }
-            Fields luceneTermVectors = getTermVectorsFromLucene(directoryReader, test.doc);
-            validateResponse(item.getResponse(), luceneTermVectors, test);
         }
+
     }
 
+    @Test
     public void testMissingIndexThrowsMissingIndex() throws Exception {
         TermVectorsRequestBuilder requestBuilder = client().prepareTermVectors("testX", "typeX", Integer.toString(1));
         MultiTermVectorsRequestBuilder mtvBuilder = client().prepareMultiTermVectors();
@@ -78,9 +84,10 @@ public class MultiTermVectorsIT extends AbstractTermVectorsTestCase {
         assertThat(response.getResponses()[0].getFailure().getCause().getMessage(), equalTo("no such index"));
     }
 
+    @Test
     public void testMultiTermVectorsWithVersion() throws Exception {
         assertAcked(prepareCreate("test").addAlias(new Alias("alias"))
-                .setSettings(Settings.builder().put("index.refresh_interval", -1)));
+                .setSettings(Settings.settingsBuilder().put("index.refresh_interval", -1)));
         ensureGreen();
 
         MultiTermVectorsResponse response = client().prepareMultiTermVectors().add(indexOrAlias(), "type1", "1").get();

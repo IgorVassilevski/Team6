@@ -37,11 +37,12 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
-import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.TestUtil;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -56,6 +57,8 @@ import static org.hamcrest.Matchers.equalTo;
 /**
  */
 public class BlendedTermQueryTests extends ESTestCase {
+
+    @Test
     public void testBooleanQuery() throws IOException {
         Directory dir = newDirectory();
         IndexWriter w = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
@@ -82,7 +85,7 @@ public class BlendedTermQueryTests extends ESTestCase {
             w.addDocument(d);
         }
         w.commit();
-        DirectoryReader reader = DirectoryReader.open(w);
+        DirectoryReader reader = DirectoryReader.open(w, true);
         IndexSearcher searcher = setSimilarity(newSearcher(reader));
 
         {
@@ -109,6 +112,7 @@ public class BlendedTermQueryTests extends ESTestCase {
 
     }
 
+    @Test
     public void testDismaxQuery() throws IOException {
         Directory dir = newDirectory();
         IndexWriter w = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
@@ -143,7 +147,7 @@ public class BlendedTermQueryTests extends ESTestCase {
             w.addDocument(d);
         }
         w.commit();
-        DirectoryReader reader = DirectoryReader.open(w);
+        DirectoryReader reader = DirectoryReader.open(w, true);
         IndexSearcher searcher = setSimilarity(newSearcher(reader));
         {
             String[] fields = new String[]{"username", "song"};
@@ -159,13 +163,16 @@ public class BlendedTermQueryTests extends ESTestCase {
         {
             BooleanQuery.Builder query = new BooleanQuery.Builder();
             query.setDisableCoord(true);
-            DisjunctionMaxQuery uname = new DisjunctionMaxQuery(
-                    Arrays.asList(new TermQuery(new Term("username", "foo")), new TermQuery(new Term("song", "foo"))), 0.0f);
+            DisjunctionMaxQuery uname = new DisjunctionMaxQuery(0.0f);
+            uname.add(new TermQuery(new Term("username", "foo")));
+            uname.add(new TermQuery(new Term("song", "foo")));
 
-            DisjunctionMaxQuery s = new DisjunctionMaxQuery(
-                    Arrays.asList(new TermQuery(new Term("username", "fighers")), new TermQuery(new Term("song", "fighers"))), 0.0f);
-            DisjunctionMaxQuery gen = new DisjunctionMaxQuery(
-                    Arrays.asList(new TermQuery(new Term("username", "generator")), new TermQuery(new Term("song", "generator"))), 0f);
+            DisjunctionMaxQuery s = new DisjunctionMaxQuery(0.0f);
+            s.add(new TermQuery(new Term("username", "fighers")));
+            s.add(new TermQuery(new Term("song", "fighers")));
+            DisjunctionMaxQuery gen = new DisjunctionMaxQuery(0f);
+            gen.add(new TermQuery(new Term("username", "generator")));
+            gen.add(new TermQuery(new Term("song", "generator")));
             query.add(uname, BooleanClause.Occur.SHOULD);
             query.add(s, BooleanClause.Occur.SHOULD);
             query.add(gen, BooleanClause.Occur.SHOULD);
@@ -179,6 +186,7 @@ public class BlendedTermQueryTests extends ESTestCase {
         dir.close();
     }
 
+    @Test
     public void testBasics() {
         final int iters = scaledRandomIntBetween(5, 25);
         for (int j = 0; j < iters; j++) {
@@ -211,11 +219,12 @@ public class BlendedTermQueryTests extends ESTestCase {
     }
 
     public IndexSearcher setSimilarity(IndexSearcher searcher) {
-        Similarity similarity = random().nextBoolean() ? new BM25Similarity() : new ClassicSimilarity();
+        Similarity similarity = random().nextBoolean() ? new BM25Similarity() : new DefaultSimilarity();
         searcher.setSimilarity(similarity);
         return searcher;
     }
 
+    @Test
     public void testExtractTerms() throws IOException {
         Set<Term> terms = new HashSet<>();
         int num = scaledRandomIntBetween(1, 10);

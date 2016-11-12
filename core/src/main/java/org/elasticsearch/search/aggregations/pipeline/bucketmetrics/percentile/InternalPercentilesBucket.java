@@ -19,16 +19,19 @@
 
 package org.elasticsearch.search.aggregations.pipeline.bucketmetrics.percentile;
 
+import com.google.common.collect.UnmodifiableIterator;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.search.DocValueFormat;
+import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.metrics.InternalNumericMetricsAggregation;
 import org.elasticsearch.search.aggregations.metrics.max.InternalMax;
 import org.elasticsearch.search.aggregations.metrics.percentiles.InternalPercentile;
 import org.elasticsearch.search.aggregations.metrics.percentiles.Percentile;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
+import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
+import org.elasticsearch.search.aggregations.support.format.ValueFormatterStreams;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -37,38 +40,35 @@ import java.util.List;
 import java.util.Map;
 
 public class InternalPercentilesBucket extends InternalNumericMetricsAggregation.MultiValue implements PercentilesBucket {
+
+    public final static Type TYPE = new Type("percentiles_bucket");
+
+    public final static AggregationStreams.Stream STREAM = new AggregationStreams.Stream() {
+        @Override
+        public InternalPercentilesBucket readResult(StreamInput in) throws IOException {
+            InternalPercentilesBucket result = new InternalPercentilesBucket();
+            result.readFrom(in);
+            return result;
+        }
+    };
+
+    public static void registerStreams() {
+        AggregationStreams.registerStream(STREAM, TYPE.stream());
+    }
+
     private double[] percentiles;
     private double[] percents;
 
+    protected InternalPercentilesBucket() {
+    } // for serialization
+
     public InternalPercentilesBucket(String name, double[] percents, double[] percentiles,
-                                     DocValueFormat formatter, List<PipelineAggregator> pipelineAggregators,
+                                     ValueFormatter formatter, List<PipelineAggregator> pipelineAggregators,
                                      Map<String, Object> metaData) {
         super(name, pipelineAggregators, metaData);
-        this.format = formatter;
+        this.valueFormatter = formatter;
         this.percentiles = percentiles;
         this.percents = percents;
-    }
-
-    /**
-     * Read from a stream.
-     */
-    public InternalPercentilesBucket(StreamInput in) throws IOException {
-        super(in);
-        format = in.readNamedWriteable(DocValueFormat.class);
-        percentiles = in.readDoubleArray();
-        percents = in.readDoubleArray();
-    }
-
-    @Override
-    protected void doWriteTo(StreamOutput out) throws IOException {
-        out.writeNamedWriteable(format);
-        out.writeDoubleArray(percentiles);
-        out.writeDoubleArray(percents);
-    }
-
-    @Override
-    public String getWriteableName() {
-        return PercentilesBucketPipelineAggregationBuilder.NAME;
     }
 
     @Override
@@ -83,7 +83,7 @@ public class InternalPercentilesBucket extends InternalNumericMetricsAggregation
 
     @Override
     public String percentileAsString(double percent) {
-        return format.format(percentile(percent));
+        return valueFormatter.format(percentile(percent));
     }
 
     @Override
@@ -97,8 +97,27 @@ public class InternalPercentilesBucket extends InternalNumericMetricsAggregation
     }
 
     @Override
+    public Type type() {
+        return TYPE;
+    }
+
+    @Override
     public InternalMax doReduce(List<InternalAggregation> aggregations, ReduceContext reduceContext) {
         throw new UnsupportedOperationException("Not supported");
+    }
+
+    @Override
+    protected void doReadFrom(StreamInput in) throws IOException {
+        valueFormatter = ValueFormatterStreams.readOptional(in);
+        percentiles = in.readDoubleArray();
+        percents = in.readDoubleArray();
+    }
+
+    @Override
+    protected void doWriteTo(StreamOutput out) throws IOException {
+        ValueFormatterStreams.writeOptional(valueFormatter, out);
+        out.writeDoubleArray(percentiles);
+        out.writeDoubleArray(percents);
     }
 
     @Override
@@ -109,7 +128,7 @@ public class InternalPercentilesBucket extends InternalNumericMetricsAggregation
             boolean hasValue = !(Double.isInfinite(value) || Double.isNaN(value));
             String key = String.valueOf(percent);
             builder.field(key, hasValue ? value : null);
-            if (hasValue && format != DocValueFormat.RAW) {
+            if (hasValue && !(valueFormatter instanceof ValueFormatter.Raw)) {
                 builder.field(key + "_as_string", percentileAsString(percent));
             }
         }
@@ -117,7 +136,7 @@ public class InternalPercentilesBucket extends InternalNumericMetricsAggregation
         return builder;
     }
 
-    public static class Iter implements Iterator<Percentile> {
+    public static class Iter extends UnmodifiableIterator<Percentile> {
 
         private final double[] percents;
         private final double[] percentiles;
@@ -139,11 +158,6 @@ public class InternalPercentilesBucket extends InternalNumericMetricsAggregation
             final Percentile next = new InternalPercentile(percents[i], percentiles[i]);
             ++i;
             return next;
-        }
-
-        @Override
-        public final void remove() {
-            throw new UnsupportedOperationException();
         }
     }
 }

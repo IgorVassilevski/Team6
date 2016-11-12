@@ -27,7 +27,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  *
  */
-public abstract class AbstractLifecycleComponent extends AbstractComponent implements LifecycleComponent {
+public abstract class AbstractLifecycleComponent<T> extends AbstractComponent implements LifecycleComponent<T> {
 
     protected final Lifecycle lifecycle = new Lifecycle();
 
@@ -58,9 +58,9 @@ public abstract class AbstractLifecycleComponent extends AbstractComponent imple
 
     @SuppressWarnings({"unchecked"})
     @Override
-    public void start() {
+    public T start() {
         if (!lifecycle.canMoveToStarted()) {
-            return;
+            return (T) this;
         }
         for (LifecycleListener listener : listeners) {
             listener.beforeStart();
@@ -70,15 +70,16 @@ public abstract class AbstractLifecycleComponent extends AbstractComponent imple
         for (LifecycleListener listener : listeners) {
             listener.afterStart();
         }
+        return (T) this;
     }
 
     protected abstract void doStart();
 
     @SuppressWarnings({"unchecked"})
     @Override
-    public void stop() {
+    public T stop() {
         if (!lifecycle.canMoveToStopped()) {
-            return;
+            return (T) this;
         }
         for (LifecycleListener listener : listeners) {
             listener.beforeStop();
@@ -88,6 +89,7 @@ public abstract class AbstractLifecycleComponent extends AbstractComponent imple
         for (LifecycleListener listener : listeners) {
             listener.afterStop();
         }
+        return (T) this;
     }
 
     protected abstract void doStop();

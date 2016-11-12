@@ -33,7 +33,6 @@ import java.util.Set;
  * The class is optimized for source loading as it is a common use case.
  */
 public class CustomFieldsVisitor extends FieldsVisitor {
-
     private final Set<String> fields;
     private final List<String> patterns;
 
@@ -44,7 +43,7 @@ public class CustomFieldsVisitor extends FieldsVisitor {
     }
 
     public CustomFieldsVisitor(Set<String> fields, boolean loadSource) {
-        this(fields, Collections.emptyList(), loadSource);
+        this(fields, Collections.<String>emptyList(), loadSource);
     }
 
     @Override

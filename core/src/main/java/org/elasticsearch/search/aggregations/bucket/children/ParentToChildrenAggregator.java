@@ -21,36 +21,38 @@ package org.elasticsearch.search.aggregations.bucket.children;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.SortedDocValues;
-import org.apache.lucene.search.ConstantScoreScorer;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.Bits;
-import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.lease.Releasables;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.common.util.LongArray;
 import org.elasticsearch.common.util.LongObjectPagedHashMap;
+import org.elasticsearch.index.search.child.ConstantScorer;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.LeafBucketCollector;
+import org.elasticsearch.search.aggregations.NonCollectingAggregator;
 import org.elasticsearch.search.aggregations.bucket.SingleBucketAggregator;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
+import org.elasticsearch.search.aggregations.support.ValuesSourceAggregatorFactory;
+import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 // The RecordingPerReaderBucketCollector assumes per segment recording which isn't the case for this
 // aggregation, for this reason that collector can't be used
 public class ParentToChildrenAggregator extends SingleBucketAggregator {
-
-    static final ParseField TYPE_FIELD = new ParseField("type");
 
     private final String parentType;
     private final Weight childFilter;
@@ -144,7 +146,7 @@ public class ParentToChildrenAggregator extends SingleBucketAggregator {
             final SortedDocValues globalOrdinals = valuesSource.globalOrdinalsValues(parentType, ctx);
 
             // Set the scorer, since we now replay only the child docIds
-            sub.setScorer(new ConstantScoreScorer(null, 1f,childDocsIter));
+            sub.setScorer(ConstantScorer.create(childDocsIter, null, 1f));
 
             final Bits liveDocs = ctx.reader().getLiveDocs();
             for (int docId = childDocsIter.nextDoc(); docId != DocIdSetIterator.NO_MORE_DOCS; docId = childDocsIter.nextDoc()) {
@@ -173,5 +175,42 @@ public class ParentToChildrenAggregator extends SingleBucketAggregator {
     @Override
     protected void doClose() {
         Releasables.close(parentOrdToBuckets, parentOrdToOtherBuckets);
+    }
+
+    public static class Factory extends ValuesSourceAggregatorFactory<ValuesSource.Bytes.WithOrdinals.ParentChild> {
+
+        private final String parentType;
+        private final Query parentFilter;
+        private final Query childFilter;
+
+        public Factory(String name, ValuesSourceConfig<ValuesSource.Bytes.WithOrdinals.ParentChild> config, String parentType, Query parentFilter, Query childFilter) {
+            super(name, InternalChildren.TYPE.name(), config);
+            this.parentType = parentType;
+            this.parentFilter = parentFilter;
+            this.childFilter = childFilter;
+        }
+
+        @Override
+        protected Aggregator createUnmapped(AggregationContext aggregationContext, Aggregator parent, List<PipelineAggregator> pipelineAggregators,
+                Map<String, Object> metaData) throws IOException {
+            return new NonCollectingAggregator(name, aggregationContext, parent, pipelineAggregators, metaData) {
+
+                @Override
+                public InternalAggregation buildEmptyAggregation() {
+                    return new InternalChildren(name, 0, buildEmptySubAggregations(), pipelineAggregators(), metaData());
+                }
+
+            };
+        }
+
+        @Override
+        protected Aggregator doCreateInternal(ValuesSource.Bytes.WithOrdinals.ParentChild valuesSource,
+                AggregationContext aggregationContext, Aggregator parent, boolean collectsFromSingleBucket, List<PipelineAggregator> pipelineAggregators,
+                Map<String, Object> metaData) throws IOException {
+            long maxOrd = valuesSource.globalMaxOrd(aggregationContext.searchContext().searcher(), parentType);
+            return new ParentToChildrenAggregator(name, factories, aggregationContext, parent, parentType, childFilter, parentFilter,
+                    valuesSource, maxOrd, pipelineAggregators, metaData);
+        }
+
     }
 }

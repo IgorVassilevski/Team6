@@ -21,6 +21,7 @@ package org.elasticsearch.action.admin.indices.shards;
 
 import com.carrotsearch.hppc.cursors.IntObjectCursor;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
+import com.google.common.base.Predicate;
 import org.apache.lucene.index.CorruptIndexException;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.client.Requests;
@@ -32,24 +33,20 @@ import org.elasticsearch.cluster.routing.ShardRoutingState;
 import org.elasticsearch.common.collect.ImmutableOpenIntMap;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.Index;
 import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.indices.IndicesService;
-import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.junit.annotations.TestLogging;
-import org.elasticsearch.test.store.MockFSIndexStore;
+import org.elasticsearch.test.store.MockFSDirectoryService;
+import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Predicate;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoTimeout;
@@ -63,11 +60,7 @@ import static org.hamcrest.Matchers.nullValue;
 @TestLogging("_root:DEBUG,action.admin.indices.shards:TRACE,cluster.service:TRACE")
 public class IndicesShardStoreRequestIT extends ESIntegTestCase {
 
-    @Override
-    protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList( MockFSIndexStore.TestPlugin.class);
-    }
-
+    @Test
     public void testEmpty() {
         ensureGreen();
         IndicesShardStoresResponse rsp = client().admin().indices().prepareShardStores().get();
@@ -78,8 +71,8 @@ public class IndicesShardStoreRequestIT extends ESIntegTestCase {
         String index = "test";
         internalCluster().ensureAtLeastNumDataNodes(2);
         assertAcked(prepareCreate(index).setSettings(Settings.builder()
-                        .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, "2")
-                        .put(IndexMetaData.SETTING_NUMBER_OF_REPLICAS, "1")
+                .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, "2")
+                .put(IndexMetaData.SETTING_NUMBER_OF_REPLICAS, "1")
         ));
         indexRandomData(index);
         ensureGreen(index);
@@ -95,7 +88,7 @@ public class IndicesShardStoreRequestIT extends ESIntegTestCase {
         assertThat(shardStores.values().size(), equalTo(2));
         for (ObjectCursor<List<IndicesShardStoresResponse.StoreStatus>> shardStoreStatuses : shardStores.values()) {
             for (IndicesShardStoresResponse.StoreStatus storeStatus : shardStoreStatuses.value) {
-                assertThat(storeStatus.getAllocationId(), notNullValue());
+                assertThat(storeStatus.getVersion(), greaterThan(-1l));
                 assertThat(storeStatus.getNode(), notNullValue());
                 assertThat(storeStatus.getStoreException(), nullValue());
             }
@@ -117,21 +110,22 @@ public class IndicesShardStoreRequestIT extends ESIntegTestCase {
         assertThat(shardStoresStatuses.size(), equalTo(unassignedShards.size()));
         for (IntObjectCursor<List<IndicesShardStoresResponse.StoreStatus>> storesStatus : shardStoresStatuses) {
             assertThat("must report for one store", storesStatus.value.size(), equalTo(1));
-            assertThat("reported store should be primary", storesStatus.value.get(0).getAllocationStatus(), equalTo(IndicesShardStoresResponse.StoreStatus.AllocationStatus.PRIMARY));
+            assertThat("reported store should be primary", storesStatus.value.get(0).getAllocation(), equalTo(IndicesShardStoresResponse.StoreStatus.Allocation.PRIMARY));
         }
         logger.info("--> enable allocation");
         enableAllocation(index);
     }
 
+    @Test
     public void testIndices() throws Exception {
         String index1 = "test1";
         String index2 = "test2";
         internalCluster().ensureAtLeastNumDataNodes(2);
         assertAcked(prepareCreate(index1).setSettings(Settings.builder()
-                        .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, "2")
+                .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, "2")
         ));
         assertAcked(prepareCreate(index2).setSettings(Settings.builder()
-                        .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, "2")
+                .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, "2")
         ));
         indexRandomData(index1);
         indexRandomData(index2);
@@ -151,15 +145,15 @@ public class IndicesShardStoreRequestIT extends ESIntegTestCase {
         assertThat(shardStatuses.get(index1).size(), equalTo(2));
     }
 
+    @Test
     @AwaitsFix(bugUrl = "https://github.com/elastic/elasticsearch/issues/12416")
     public void testCorruptedShards() throws Exception {
         String index = "test";
         internalCluster().ensureAtLeastNumDataNodes(2);
         assertAcked(prepareCreate(index).setSettings(Settings.builder()
-                        .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, "5")
-                        .put(MockFSIndexStore.INDEX_CHECK_INDEX_ON_CLOSE_SETTING.getKey(), false)
+                .put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, "5")
+                .put(MockFSDirectoryService.CHECK_INDEX_ON_CLOSE, false)
         ));
-
         indexRandomData(index);
         ensureGreen(index);
 
@@ -168,12 +162,11 @@ public class IndicesShardStoreRequestIT extends ESIntegTestCase {
 
         logger.info("--> corrupt random shard copies");
         Map<Integer, Set<String>> corruptedShardIDMap = new HashMap<>();
-        Index idx = resolveIndex(index);
         for (String node : internalCluster().nodesInclude(index)) {
             IndicesService indexServices = internalCluster().getInstance(IndicesService.class, node);
-            IndexService indexShards = indexServices.indexServiceSafe(idx);
+            IndexService indexShards = indexServices.indexServiceSafe(index);
             for (Integer shardId : indexShards.shardIds()) {
-                IndexShard shard = indexShards.getShard(shardId);
+                IndexShard shard = indexShards.shardSafe(shardId);
                 if (randomBoolean()) {
                     shard.failShard("test", new CorruptIndexException("test corrupted", ""));
                     Set<String> nodes = corruptedShardIDMap.get(shardId);
@@ -193,11 +186,11 @@ public class IndicesShardStoreRequestIT extends ESIntegTestCase {
         for (IntObjectCursor<List<IndicesShardStoresResponse.StoreStatus>> shardStatus : shardStatuses) {
             for (IndicesShardStoresResponse.StoreStatus status : shardStatus.value) {
                 if (corruptedShardIDMap.containsKey(shardStatus.key)
-                        && corruptedShardIDMap.get(shardStatus.key).contains(status.getNode().getName())) {
-                    assertThat(status.getLegacyVersion(), greaterThanOrEqualTo(0L));
+                        && corruptedShardIDMap.get(shardStatus.key).contains(status.getNode().name())) {
+                    assertThat(status.getVersion(), greaterThanOrEqualTo(0l));
                     assertThat(status.getStoreException(), notNullValue());
                 } else {
-                    assertThat(status.getLegacyVersion(), greaterThanOrEqualTo(0L));
+                    assertThat(status.getVersion(), greaterThanOrEqualTo(0l));
                     assertNull(status.getStoreException());
                 }
             }
@@ -216,7 +209,7 @@ public class IndicesShardStoreRequestIT extends ESIntegTestCase {
         client().admin().indices().prepareFlush().setForce(true).setWaitIfOngoing(true).execute().actionGet();
     }
 
-    private static final class IndexNodePredicate implements Predicate<Settings> {
+    private final static class IndexNodePredicate implements Predicate<Settings> {
         private final Set<String> nodesWithShard;
 
         public IndexNodePredicate(String index) {
@@ -224,8 +217,8 @@ public class IndicesShardStoreRequestIT extends ESIntegTestCase {
         }
 
         @Override
-        public boolean test(Settings settings) {
-            return nodesWithShard.contains(settings.get("node.name"));
+        public boolean apply(Settings settings) {
+            return nodesWithShard.contains(settings.get("name"));
         }
 
         private Set<String> findNodesWithShard(String index) {

@@ -19,7 +19,6 @@
 
 package org.elasticsearch.script.groovy;
 
-import groovy.lang.MissingPropertyException;
 import org.apache.lucene.util.Constants;
 import org.codehaus.groovy.control.MultipleCompilationErrorsException;
 import org.elasticsearch.common.settings.Settings;
@@ -27,6 +26,8 @@ import org.elasticsearch.script.CompiledScript;
 import org.elasticsearch.script.ScriptException;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.test.ESTestCase;
+
+import groovy.lang.MissingPropertyException;
 
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
@@ -77,6 +78,7 @@ public class GroovySecurityTests extends ESTestCase {
         assertSuccess("def range = 1..doc['foo'].value; def v = range.get(0)");
         // Maps
         assertSuccess("def v = doc['foo'].value; def m = [:]; m.put(\"value\", v)");
+
         // Times
         assertSuccess("def t = Instant.now().getMillis()");
         // GroovyCollections
@@ -123,13 +125,6 @@ public class GroovySecurityTests extends ESTestCase {
         }
     }
 
-    public void testGroovyScriptsThatThrowErrors() throws Exception {
-        assertFailure("assert false, \"msg\";", AssertionError.class);
-        assertFailure("def foo=false; assert foo;", AssertionError.class);
-        // Groovy's asserts require org.codehaus.groovy.runtime.InvokerHelper, so they are denied
-        assertFailure("def foo=false; assert foo, \"msg2\";", NoClassDefFoundError.class);
-    }
-
     /** runs a script */
     private void doTest(String script) {
         Map<String, Object> vars = new HashMap<String, Object>();
@@ -139,13 +134,13 @@ public class GroovySecurityTests extends ESTestCase {
         vars.put("myarray", Arrays.asList("foo"));
         vars.put("myobject", new MyObject());
 
-        se.executable(new CompiledScript(ScriptService.ScriptType.INLINE, "test", "js", se.compile(null, script, Collections.emptyMap())), vars).run();
+        se.executable(new CompiledScript(ScriptService.ScriptType.INLINE, "test", "js", se.compile(script, Collections.<String, String>emptyMap())), vars).run();
     }
 
     public static class MyObject {
         public int getPrimitive() { return 0; }
         public Object getObject() { return "value"; }
-        public List<Object> getList() { return Arrays.asList(new MyObject()); }
+        public List<? extends Object> getList() { return Arrays.asList(new MyObject()); }
     }
 
     /** asserts that a script runs without exception */
@@ -153,7 +148,7 @@ public class GroovySecurityTests extends ESTestCase {
         doTest(script);
     }
 
-    /** asserts that a script triggers the given exceptionclass */
+    /** asserts that a script triggers securityexception */
     private void assertFailure(String script, Class<? extends Throwable> exceptionClass) {
         try {
             doTest(script);

@@ -18,9 +18,10 @@
  */
 package org.elasticsearch.update;
 
+import com.google.common.collect.Maps;
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
-import org.elasticsearch.plugins.ScriptPlugin;
 import org.elasticsearch.script.AbstractExecutableScript;
 import org.elasticsearch.script.ExecutableScript;
 import org.elasticsearch.script.NativeScriptEngineService;
@@ -31,12 +32,9 @@ import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.elasticsearch.test.ESIntegTestCase.ClusterScope;
 import org.elasticsearch.test.ESIntegTestCase.Scope;
+import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.Matchers.hasKey;
@@ -50,15 +48,17 @@ public class UpdateByNativeScriptIT extends ESIntegTestCase {
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Arrays.asList(CustomNativeScriptFactory.TestPlugin.class);
+        return pluginList(CustomNativeScriptFactory.TestPlugin.class);
     }
 
+    @Test
     public void testThatUpdateUsingNativeScriptWorks() throws Exception {
         createIndex("test");
+        ensureYellow();
 
         index("test", "type", "1", "text", "value");
 
-        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> params = Maps.newHashMap();
         params.put("foo", "SETVALUE");
         client().prepareUpdate("test", "type", "1")
                 .setScript(new Script("custom", ScriptService.ScriptType.INLINE, NativeScriptEngineService.NAME, params)).get();
@@ -68,11 +68,18 @@ public class UpdateByNativeScriptIT extends ESIntegTestCase {
         assertThat(data.get("foo").toString(), is("SETVALUE"));
     }
 
-    public static class CustomNativeScriptFactory implements NativeScriptFactory  {
-        public static class TestPlugin extends Plugin implements ScriptPlugin {
+    public static class CustomNativeScriptFactory implements NativeScriptFactory {
+        public static class TestPlugin extends Plugin {
             @Override
-            public List<NativeScriptFactory> getNativeScripts() {
-                return Collections.singletonList(new CustomNativeScriptFactory());
+            public String name() {
+                return "mock-native-script";
+            }
+            @Override
+            public String description() {
+                return "a mock native script for testing";
+            }
+            public void onModule(ScriptModule scriptModule) {
+                scriptModule.registerScript("custom", CustomNativeScriptFactory.class);
             }
         }
         @Override
@@ -83,16 +90,11 @@ public class UpdateByNativeScriptIT extends ESIntegTestCase {
         public boolean needsScores() {
             return false;
         }
-
-        @Override
-        public String getName() {
-            return "custom";
-        }
     }
 
     static class CustomScript extends AbstractExecutableScript {
         private Map<String, Object> params;
-        private Map<String, Object> vars = new HashMap<>(2);
+        private Map<String, Object> vars = Maps.newHashMapWithExpectedSize(2);
 
         public CustomScript(Map<String, Object> params) {
             this.params = params;

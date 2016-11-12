@@ -16,11 +16,8 @@
 
 package org.elasticsearch.common.inject.internal;
 
-import org.elasticsearch.common.inject.Binder;
-import org.elasticsearch.common.inject.Exposed;
-import org.elasticsearch.common.inject.Key;
-import org.elasticsearch.common.inject.PrivateBinder;
-import org.elasticsearch.common.inject.Provider;
+import com.google.common.collect.ImmutableSet;
+import org.elasticsearch.common.inject.*;
 import org.elasticsearch.common.inject.spi.Dependency;
 import org.elasticsearch.common.inject.spi.ProviderWithDependencies;
 
@@ -40,7 +37,7 @@ public class ProviderMethod<T> implements ProviderWithDependencies<T> {
     private final Class<? extends Annotation> scopeAnnotation;
     private final Object instance;
     private final Method method;
-    private final Set<Dependency<?>> dependencies;
+    private final ImmutableSet<Dependency<?>> dependencies;
     private final List<Provider<?>> parameterProviders;
     private final boolean exposed;
 
@@ -48,7 +45,7 @@ public class ProviderMethod<T> implements ProviderWithDependencies<T> {
      * @param method the method to invoke. Its return type must be the same type as {@code key}.
      */
     ProviderMethod(Key<T> key, Method method, Object instance,
-                   Set<Dependency<?>> dependencies, List<Provider<?>> parameterProviders,
+                   ImmutableSet<Dependency<?>> dependencies, List<Provider<?>> parameterProviders,
                    Class<? extends Annotation> scopeAnnotation) {
         this.key = key;
         this.scopeAnnotation = scopeAnnotation;

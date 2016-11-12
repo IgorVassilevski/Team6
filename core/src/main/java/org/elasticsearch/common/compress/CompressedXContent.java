@@ -80,7 +80,7 @@ public final class CompressedXContent {
      */
     public CompressedXContent(ToXContent xcontent, XContentType type, ToXContent.Params params) throws IOException {
         BytesStreamOutput bStream = new BytesStreamOutput();
-        OutputStream compressedStream = CompressorFactory.COMPRESSOR.streamOutput(bStream);
+        OutputStream compressedStream = CompressorFactory.defaultCompressor().streamOutput(bStream);
         CRC32 crc32 = new CRC32();
         OutputStream checkedStream = new CheckedOutputStream(compressedStream, crc32);
         try (XContentBuilder builder = XContentFactory.contentBuilder(type, checkedStream)) {
@@ -88,7 +88,7 @@ public final class CompressedXContent {
             xcontent.toXContent(builder, params);
             builder.endObject();
         }
-        this.bytes = BytesReference.toBytes(bStream.bytes());
+        this.bytes = bStream.bytes().toBytes();
         this.crc32 = (int) crc32.getValue();
         assertConsistent();
     }
@@ -101,14 +101,14 @@ public final class CompressedXContent {
         Compressor compressor = CompressorFactory.compressor(data);
         if (compressor != null) {
             // already compressed...
-            this.bytes = BytesReference.toBytes(data);
+            this.bytes = data.toBytes();
             this.crc32 = crc32(new BytesArray(uncompressed()));
         } else {
             BytesStreamOutput out = new BytesStreamOutput();
-            try (OutputStream compressedOutput = CompressorFactory.COMPRESSOR.streamOutput(out)) {
+            try (OutputStream compressedOutput = CompressorFactory.defaultCompressor().streamOutput(out)) {
                 data.writeTo(compressedOutput);
             }
-            this.bytes = BytesReference.toBytes(out.bytes());
+            this.bytes = out.bytes().toBytes();
             this.crc32 = crc32(data);
         }
         assertConsistent();
@@ -140,7 +140,7 @@ public final class CompressedXContent {
     /** Return the uncompressed bytes. */
     public byte[] uncompressed() {
         try {
-            return BytesReference.toBytes(CompressorFactory.uncompress(new BytesArray(bytes)));
+            return CompressorFactory.uncompress(new BytesArray(bytes)).toBytes();
         } catch (IOException e) {
             throw new IllegalStateException("Cannot decompress compressed string", e);
         }

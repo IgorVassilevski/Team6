@@ -36,9 +36,9 @@ public interface AckedClusterStateTaskListener extends ClusterStateTaskListener 
      * Called once all the nodes have acknowledged the cluster state update request. Must be
      * very lightweight execution, since it gets executed on the cluster service thread.
      *
-     * @param e optional error that might have been thrown
+     * @param t optional error that might have been thrown
      */
-    void onAllNodesAcked(@Nullable Exception e);
+    void onAllNodesAcked(@Nullable Throwable t);
 
     /**
      * Called once the acknowledgement timeout defined by
@@ -50,5 +50,4 @@ public interface AckedClusterStateTaskListener extends ClusterStateTaskListener 
      * Acknowledgement timeout, maximum time interval to wait for acknowledgements
      */
     TimeValue ackTimeout();
-
 }

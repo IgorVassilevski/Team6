@@ -30,12 +30,11 @@
                     script:
                         script:
                             inline: "doc['num1'].value > 1"
-                            lang: javascript
+                            lang: js
                 script_fields:
                     sNum1:
-                        script: 
-                            inline: "doc['num1'].value"
-                            lang: javascript
+                        lang: js
+                        script: "doc['num1'].value"
                 sort:
                     num1:
                         order: asc
@@ -52,15 +51,14 @@
                     script:
                         script:
                             inline: "doc['num1'].value > param1"
-                            lang: javascript
+                            lang: js
                             params:
                                 param1: 1
 
                 script_fields:
                     sNum1:
-                        script:
-                            inline: "doc['num1'].value"
-                            lang: javascript
+                        lang: js
+                        script: "doc['num1'].value"
                 sort:
                     num1:
                         order: asc
@@ -77,15 +75,14 @@
                     script:
                         script:
                             inline: "doc['num1'].value > param1"
-                            lang: javascript
+                            lang: js
                             params:
                                 param1: -1
 
                 script_fields:
                     sNum1:
-                        script: 
-                            inline: "doc['num1'].value"
-                            lang: javascript
+                        lang: js
+                        script: "doc['num1'].value"
                 sort:
                     num1:
                         order: asc
@@ -121,21 +118,17 @@
             body:
                 script_fields:
                     s_obj1:
-                        script: 
-                            inline: "_source.obj1"
-                            lang: javascript
+                        lang: js
+                        script: "_source.obj1"
                     s_obj1_test:
-                        script: 
-                            inline: "_source.obj1.test"
-                            lang: javascript
+                        lang: js
+                        script: "_source.obj1.test"
                     s_obj2:
-                        script: 
-                            inline: "_source.obj2"
-                            lang: javascript
+                        lang: js
+                        script: "_source.obj2"
                     s_obj2_arr2:
-                        script: 
-                            inline: "_source.obj2.arr2"
-                            lang: javascript
+                        lang: js
+                        script: "_source.obj2.arr2"
 
     - match: { hits.total: 1 }
     - match: { hits.hits.0.fields.s_obj1.0.test: something }
@@ -175,7 +168,7 @@
                         "functions": [{
                             "script_score": {
                                 "script": {
-                                    "lang": "javascript",
+                                    "lang": "js",
                                     "inline": "doc['num1'].value"
                                 }
                             }
@@ -197,7 +190,7 @@
                         "functions": [{
                             "script_score": {
                                 "script": {
-                                    "lang": "javascript",
+                                    "lang": "js",
                                     "inline": "-doc['num1'].value"
                                 }
                             }
@@ -219,7 +212,7 @@
                         "functions": [{
                             "script_score": {
                                 "script": {
-                                    "lang": "javascript",
+                                    "lang": "js",
                                     "inline": "Math.pow(doc['num1'].value, 2)"
                                 }
                             }
@@ -241,7 +234,7 @@
                         "functions": [{
                             "script_score": {
                                 "script": {
-                                    "lang": "javascript",
+                                    "lang": "js",
                                     "inline": "Math.max(doc['num1'].value, 1)"
                                 }
                             }
@@ -263,7 +256,7 @@
                         "functions": [{
                             "script_score": {
                                 "script": {
-                                    "lang": "javascript",
+                                    "lang": "js",
                                     "inline": "doc['num1'].value * _score"
                                 }
                             }
@@ -285,7 +278,7 @@
                         "functions": [{
                             "script_score": {
                                 "script": {
-                                    "lang": "javascript",
+                                    "lang": "js",
                                     "inline": "param1 * param2 * _score",
                                     "params": {
                                         "param1": 2,
@@ -322,14 +315,14 @@
                                     {
                                         "script_score": {
                                             "script": {
-                                                "lang": "javascript",
+                                                "lang": "js",
                                                 "inline": "1"
                                             }
                                         }
                                     }, {
                                         "script_score": {
                                             "script": {
-                                                "lang": "javascript",
+                                                "lang": "js",
                                                 "inline": "_score.doubleValue()"
                                             }
                                         }
@@ -338,7 +331,7 @@
                         "functions": [{
                             "script_score": {
                                 "script": {
-                                    "lang": "javascript",
+                                    "lang": "js",
                                     "inline": "_score.doubleValue()"
                                 }
                             }
@@ -370,7 +363,7 @@
                         "functions": [{
                             "script_score": {
                                 "script": {
-                                    "lang": "javascript",
+                                    "lang": "js",
                                     "inline": "_score.doubleValue()"
                                 }
                             }
@@ -379,7 +372,7 @@
                     score_agg:
                         terms:
                             script:
-                                lang: javascript
+                                lang: js
                                 inline: "_score.doubleValue()"
 
     - match: { hits.total: 1 }
@@ -406,9 +399,8 @@
             body:
                 script_fields:
                     foobar:
-                        script: 
-                            inline: "doc['f'].values.length"
-                            lang: javascript
+                        lang: js
+                        script: "doc['f'].values.length"
 
 
     - match: { hits.total: 1 }

@@ -10,21 +10,19 @@ by distributed file systems:
 
 The core repository plugins are:
 
-<<repository-s3,S3 Repository>>::
+<<cloud-aws,AWS Cloud>>::
 
-The S3 repository plugin adds support for using S3 as a repository.
+The Amazon Web Service (AWS) Cloud plugin adds support for using S3 as a
+repository.
 
-<<repository-azure,Azure Repository>>::
+<<cloud-azure,Azure Cloud>>::
 
-The Azure repository plugin adds support for using Azure as a repository.
+The Azure Cloud plugin adds support for using Azure as a repository.
 
-<<repository-hdfs,HDFS Repository>>::
+https://github.com/elastic/elasticsearch-hadoop/tree/master/repository-hdfs[Hadoop HDFS Repository]::
 
-The Hadoop HDFS Repository plugin adds support for using HDFS as a repository.
-
-<<repository-gcs,Google Cloud Storage Repository>>::
-
-The GCS repository plugin adds support for using Google Cloud Storage service as a repository.
+The Hadoop HDFS Repository plugin adds support for using an HDFS file system
+as a repository.
 
 
 [float]
@@ -34,11 +32,6 @@ The following plugin has been contributed by our community:
 
 * https://github.com/wikimedia/search-repository-swift[Openstack Swift] (by Wikimedia Foundation)
 
+This community plugin appears to have been abandoned:
 
-include::repository-azure.asciidoc[]
-
-include::repository-s3.asciidoc[]
-
-include::repository-hdfs.asciidoc[]
-
-include::repository-gcs.asciidoc[]
+* https://github.com/kzwang/elasticsearch-repository-gridfs[GridFS] Repository (by Kevin Wang)

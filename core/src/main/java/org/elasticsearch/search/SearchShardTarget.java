@@ -23,38 +23,28 @@ import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
-import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.text.Text;
-import org.elasticsearch.index.Index;
-import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.common.text.Text;
 
 import java.io.IOException;
 
 /**
  * The target that the search request was executed on.
  */
-public class SearchShardTarget implements Writeable, Comparable<SearchShardTarget> {
+public class SearchShardTarget implements Streamable, Comparable<SearchShardTarget> {
 
     private Text nodeId;
     private Text index;
-    private ShardId shardId;
+    private int shardId;
 
-    public SearchShardTarget(StreamInput in) throws IOException {
-        if (in.readBoolean()) {
-            nodeId = in.readText();
-        }
-        shardId = ShardId.readShardId(in);
-        index = new Text(shardId.getIndexName());
+    private SearchShardTarget() {
+
     }
 
-    public SearchShardTarget(String nodeId, ShardId shardId) {
+    public SearchShardTarget(String nodeId, String index, int shardId) {
         this.nodeId = nodeId == null ? null : new Text(nodeId);
-        this.index = new Text(shardId.getIndexName());
+        this.index = new Text(index);
         this.shardId = shardId;
-    }
-
-    public SearchShardTarget(String nodeId, Index index, int shardId) {
-        this(nodeId,  new ShardId(index, shardId));
     }
 
     @Nullable
@@ -83,21 +73,36 @@ public class SearchShardTarget implements Writeable, Comparable<SearchShardTarge
         return this.index;
     }
 
-    public ShardId shardId() {
+    public int shardId() {
         return shardId;
     }
 
-    public ShardId getShardId() {
+    public int getShardId() {
         return shardId;
+    }
+
+    public static SearchShardTarget readSearchShardTarget(StreamInput in) throws IOException {
+        SearchShardTarget result = new SearchShardTarget();
+        result.readFrom(in);
+        return result;
     }
 
     @Override
     public int compareTo(SearchShardTarget o) {
         int i = index.string().compareTo(o.index());
         if (i == 0) {
-            i = shardId.getId() - o.shardId.id();
+            i = shardId - o.shardId;
         }
         return i;
+    }
+
+    @Override
+    public void readFrom(StreamInput in) throws IOException {
+        if (in.readBoolean()) {
+            nodeId = in.readText();
+        }
+        index = in.readText();
+        shardId = in.readVInt();
     }
 
     @Override
@@ -108,15 +113,19 @@ public class SearchShardTarget implements Writeable, Comparable<SearchShardTarge
             out.writeBoolean(true);
             out.writeText(nodeId);
         }
-        shardId.writeTo(out);
+        out.writeText(index);
+        out.writeVInt(shardId);
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+
         SearchShardTarget that = (SearchShardTarget) o;
-        if (shardId.equals(that.shardId) == false) return false;
+
+        if (shardId != that.shardId) return false;
+        if (index != null ? !index.equals(that.index) : that.index != null) return false;
         if (nodeId != null ? !nodeId.equals(that.nodeId) : that.nodeId != null) return false;
 
         return true;
@@ -126,15 +135,15 @@ public class SearchShardTarget implements Writeable, Comparable<SearchShardTarge
     public int hashCode() {
         int result = nodeId != null ? nodeId.hashCode() : 0;
         result = 31 * result + (index != null ? index.hashCode() : 0);
-        result = 31 * result + shardId.hashCode();
+        result = 31 * result + shardId;
         return result;
     }
 
     @Override
     public String toString() {
         if (nodeId == null) {
-            return "[_na_]" + shardId;
+            return "[_na_][" + index + "][" + shardId + "]";
         }
-        return "[" + nodeId + "]" + shardId;
+        return "[" + nodeId + "][" + index + "][" + shardId + "]";
     }
 }

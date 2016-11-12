@@ -19,21 +19,23 @@
 package org.elasticsearch.search.internal;
 
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Sort;
 import org.apache.lucene.util.Counter;
-import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.index.query.ParsedQuery;
-import org.elasticsearch.search.fetch.StoredFieldsContext;
 import org.elasticsearch.search.aggregations.SearchContextAggregations;
 import org.elasticsearch.search.fetch.FetchSearchResult;
-import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
-import org.elasticsearch.search.fetch.subphase.ScriptFieldsContext;
-import org.elasticsearch.search.fetch.subphase.highlight.SearchContextHighlight;
+import org.elasticsearch.search.fetch.innerhits.InnerHitsContext;
+import org.elasticsearch.search.fetch.script.ScriptFieldsContext;
+import org.elasticsearch.search.fetch.source.FetchSourceContext;
+import org.elasticsearch.search.highlight.SearchContextHighlight;
 import org.elasticsearch.search.lookup.SearchLookup;
 import org.elasticsearch.search.query.QuerySearchResult;
 import org.elasticsearch.search.rescore.RescoreSearchContext;
-import org.elasticsearch.search.sort.SortAndFormats;
 import org.elasticsearch.search.suggest.SuggestionSearchContext;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -42,13 +44,11 @@ public class SubSearchContext extends FilteredSearchContext {
 
     // By default return 3 hits per bucket. A higher default would make the response really large by default, since
     // the to hits are returned per bucket.
-    private static final int DEFAULT_SIZE = 3;
+    private final static int DEFAULT_SIZE = 3;
 
     private int from;
     private int size = DEFAULT_SIZE;
-    private SortAndFormats sort;
-    private ParsedQuery parsedQuery;
-    private Query query;
+    private Sort sort;
 
     private final FetchSearchResult fetchSearchResult;
     private final QuerySearchResult querySearchResult;
@@ -57,7 +57,7 @@ public class SubSearchContext extends FilteredSearchContext {
     private int docsIdsToLoadFrom;
     private int docsIdsToLoadSize;
 
-    private StoredFieldsContext storedFields;
+    private List<String> fieldNames;
     private ScriptFieldsContext scriptFields;
     private FetchSourceContext fetchSourceContext;
     private SearchContextHighlight highlight;
@@ -82,6 +82,11 @@ public class SubSearchContext extends FilteredSearchContext {
 
     @Override
     public Query searchFilter(String[] types) {
+        throw new UnsupportedOperationException("this context should be read only");
+    }
+
+    @Override
+    public SearchContext searchType(SearchType searchType) {
         throw new UnsupportedOperationException("this context should be read only");
     }
 
@@ -155,7 +160,7 @@ public class SubSearchContext extends FilteredSearchContext {
     }
 
     @Override
-    public void timeout(TimeValue timeout) {
+    public void timeoutInMillis(long timeoutInMillis) {
         throw new UnsupportedOperationException("Not supported");
     }
 
@@ -170,33 +175,14 @@ public class SubSearchContext extends FilteredSearchContext {
     }
 
     @Override
-    public SearchContext sort(SortAndFormats sort) {
+    public SearchContext sort(Sort sort) {
         this.sort = sort;
         return this;
     }
 
     @Override
-    public SortAndFormats sort() {
+    public Sort sort() {
         return sort;
-    }
-
-    @Override
-    public SearchContext parsedQuery(ParsedQuery parsedQuery) {
-        this.parsedQuery = parsedQuery;
-        if (parsedQuery != null) {
-            this.query = parsedQuery.query();
-        }
-        return this;
-    }
-
-    @Override
-    public ParsedQuery parsedQuery() {
-        return parsedQuery;
-    }
-
-    @Override
-    public Query query() {
-        return query;
     }
 
     @Override
@@ -238,29 +224,21 @@ public class SubSearchContext extends FilteredSearchContext {
     }
 
     @Override
-    public boolean hasStoredFields() {
-        return storedFields != null && storedFields.fieldNames() != null;
+    public boolean hasFieldNames() {
+        return fieldNames != null;
     }
 
     @Override
-    public boolean hasStoredFieldsContext() {
-        return storedFields != null;
+    public List<String> fieldNames() {
+        if (fieldNames == null) {
+            fieldNames = new ArrayList<>();
+        }
+        return fieldNames;
     }
 
     @Override
-    public boolean storedFieldsRequested() {
-        return storedFields != null && storedFields.fetchFields();
-    }
-
-    @Override
-    public StoredFieldsContext storedFieldsContext() {
-        return storedFields;
-    }
-
-    @Override
-    public SearchContext storedFieldsContext(StoredFieldsContext storedFieldsContext) {
-        this.storedFields = storedFieldsContext;
-        return this;
+    public void emptyFieldNames() {
+        this.fieldNames = Collections.emptyList();
     }
 
     @Override

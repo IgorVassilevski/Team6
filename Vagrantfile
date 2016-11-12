@@ -22,16 +22,16 @@
 # under the License.
 
 Vagrant.configure(2) do |config|
-  config.vm.define "ubuntu-1204" do |config|
-    config.vm.box = "elastic/ubuntu-12.04-x86_64"
+  config.vm.define "precise" do |config|
+    config.vm.box = "ubuntu/precise64"
     ubuntu_common config
   end
-  config.vm.define "ubuntu-1404" do |config|
-    config.vm.box = "elastic/ubuntu-14.04-x86_64"
+  config.vm.define "trusty" do |config|
+    config.vm.box = "ubuntu/trusty64"
     ubuntu_common config
   end
-  config.vm.define "ubuntu-1504" do |config|
-    config.vm.box = "elastic/ubuntu-15.04-x86_64"
+  config.vm.define "vivid" do |config|
+    config.vm.box = "ubuntu/vivid64"
     ubuntu_common config, extra: <<-SHELL
       # Install Jayatana so we can work around it being present.
       [ -f /usr/share/java/jayatanaag.jar ] || install jayatana
@@ -40,36 +40,45 @@ Vagrant.configure(2) do |config|
   # Wheezy's backports don't contain Openjdk 8 and the backflips required to
   # get the sun jdk on there just aren't worth it. We have jessie for testing
   # debian and it works fine.
-  config.vm.define "debian-8" do |config|
-    config.vm.box = "elastic/debian-8-x86_64"
-    deb_common config, 'echo deb http://cloudfront.debian.net/debian jessie-backports main > /etc/apt/sources.list.d/backports.list', 'backports'
+  config.vm.define "jessie" do |config|
+    config.vm.box = "debian/jessie64"
+    deb_common config,
+      'echo deb http://http.debian.net/debian jessie-backports main > /etc/apt/sources.list.d/backports.list', 'backports'
   end
   config.vm.define "centos-6" do |config|
-    config.vm.box = "elastic/centos-6-x86_64"
+    config.vm.box = "boxcutter/centos67"
     rpm_common config
   end
   config.vm.define "centos-7" do |config|
-    config.vm.box = "elastic/centos-7-x86_64"
+    # There is a centos/7 box but it doesn't have rsync or virtualbox guest
+    # stuff on there so its slow to use. So chef it is....
+    config.vm.box = "boxcutter/centos71"
     rpm_common config
   end
-  config.vm.define "oel-6" do |config|
-    config.vm.box = "elastic/oraclelinux-6-x86_64"
-    rpm_common config
-  end
+  # This box hangs _forever_ on ```yum check-update```. I have no idea why.
+  # config.vm.define "oel-6", autostart: false do |config|
+  #   config.vm.box = "boxcutter/oel66"
+  #   rpm_common(config)
+  # end
   config.vm.define "oel-7" do |config|
-    config.vm.box = "elastic/oraclelinux-7-x86_64"
+    config.vm.box = "boxcutter/oel70"
     rpm_common config
   end
-  config.vm.define "fedora-24" do |config|
-    config.vm.box = "elastic/fedora-24-x86_64"
+  config.vm.define "fedora-22" do |config|
+    # Fedora hosts their own 'cloud' images that aren't in Vagrant's Atlas but
+    # and are missing required stuff like rsync. It'd be nice if we could use
+    # them but they much slower to get up and running then the boxcutter image.
+    config.vm.box = "boxcutter/fedora22"
     dnf_common config
   end
   config.vm.define "opensuse-13" do |config|
-    config.vm.box = "elastic/opensuse-13-x86_64"
+    config.vm.box = "chef/opensuse-13"
+    config.vm.box_url = "http://opscode-vm-bento.s3.amazonaws.com/vagrant/virtualbox/opscode_opensuse-13.2-x86_64_chef-provisionerless.box"
     opensuse_common config
   end
+  # The SLES boxes are not considered to be highest quality, but seem to be sufficient for a test run
   config.vm.define "sles-12" do |config|
-    config.vm.box = "elastic/sles-12-x86_64"
+    config.vm.box = "idar/sles12"
     sles_common config
   end
   # Switch the default share for the project root from /vagrant to
@@ -78,8 +87,8 @@ Vagrant.configure(2) do |config|
   config.vm.synced_folder ".", "/vagrant", disabled: true
   config.vm.synced_folder ".", "/elasticsearch"
   config.vm.provider "virtualbox" do |v|
-    # Give the boxes 3GB because Elasticsearch defaults to using 2GB
-    v.memory = 3072
+    # Give the boxes 2GB so they can run our tests if they have to.
+    v.memory = 2048
   end
   if Vagrant.has_plugin?("vagrant-cachier")
     config.cache.scope = :box
@@ -125,12 +134,15 @@ def deb_common(config, add_openjdk_repository_command, openjdk_list, extra: '')
     update_tracking_file: "/var/cache/apt/archives/last_update",
     install_command: "apt-get install -y",
     java_package: "openjdk-8-jdk",
+    install_signature_command: "gpg --import",
+    install_signature_privileged: false,
     extra: <<-SHELL
       export DEBIAN_FRONTEND=noninteractive
       ls /etc/apt/sources.list.d/#{openjdk_list}.list > /dev/null 2>&1 ||
-        (echo "==> Importing java-8 ppa" &&
+        (echo "Importing java-8 ppa" &&
           #{add_openjdk_repository_command} &&
           apt-get update)
+      ensure dpkg-sig
       #{extra}
 SHELL
   )
@@ -141,7 +153,8 @@ def rpm_common(config)
     update_command: "yum check-update",
     update_tracking_file: "/var/cache/yum/last_update",
     install_command: "yum install -y",
-    java_package: "java-1.8.0-openjdk-devel")
+    java_package: "java-1.8.0-openjdk-devel",
+    install_signature_command: "rpm --import")
 end
 
 def dnf_common(config)
@@ -149,7 +162,8 @@ def dnf_common(config)
     update_command: "dnf check-update",
     update_tracking_file: "/var/cache/dnf/last_update",
     install_command: "dnf install -y",
-    java_package: "java-1.8.0-openjdk-devel")
+    java_package: "java-1.8.0-openjdk-devel",
+    install_signature_command: "rpm --import")
   if Vagrant.has_plugin?("vagrant-cachier")
     # Autodetect doesn't work....
     config.cache.auto_detect = false
@@ -167,6 +181,7 @@ def suse_common(config, extra)
     update_tracking_file: "/var/cache/zypp/packages/last_update",
     install_command: "zypper --non-interactive --quiet install --no-recommends",
     java_package: "java-1_8_0-openjdk-devel",
+    install_signature_command: 'rpm --import',
     extra: extra)
 end
 
@@ -189,9 +204,13 @@ end
 # @param update_tracking_file [String] The location of the file tracking the
 #   last time the update command was run. Required. Should be in a place that
 #   is cached by vagrant-cachier.
-# @param install_command [String] The command used to install a package.
+# @param install_command [String] Command used to install a package.
 #   Required. Think `apt-get install #{package}`.
 # @param java_package [String] The name of the java package. Required.
+# @param install_signature_command [String] Command used to install a
+#   signature.
+# @param install_signature_privileged [boolean] Install the signature using a
+#   privileged script? Deb doesn't want one. RPM does.
 # @param extra [String] Extra provisioning commands run before anything else.
 #   Optional. Used for things like setting up the ppa for Java 8.
 def provision(config,
@@ -199,12 +218,15 @@ def provision(config,
     update_tracking_file: 'required',
     install_command: 'required',
     java_package: 'required',
+    install_signature_command: 'required',
+    install_signature_privileged: true,
     extra: '')
   # Vagrant run ruby 2.0.0 which doesn't have required named parameters....
   raise ArgumentError.new('update_command is required') if update_command == 'required'
   raise ArgumentError.new('update_tracking_file is required') if update_tracking_file == 'required'
   raise ArgumentError.new('install_command is required') if install_command == 'required'
   raise ArgumentError.new('java_package is required') if java_package == 'required'
+  raise ArgumentError.new('install_signature_command is required') if install_signature_command == 'required'
   config.vm.provision "bats dependencies", type: "shell", inline: <<-SHELL
     set -e
     set -o pipefail
@@ -214,11 +236,9 @@ def provision(config,
     install() {
       # Only apt-get update if we haven't in the last day
       if [ ! -f #{update_tracking_file} ] || [ "x$(find #{update_tracking_file} -mtime +0)" == "x#{update_tracking_file}" ]; then
-        echo "==> Updating repository"
-        #{update_command} || true
-        touch #{update_tracking_file}
+          #{update_command} || true
+          touch #{update_tracking_file}
       fi
-      echo "==> Installing $1"
       #{install_command} $1
     }
     ensure() {
@@ -235,19 +255,24 @@ def provision(config,
     installed bats || {
       # Bats lives in a git repository....
       ensure git
-      echo "==> Installing bats"
       git clone https://github.com/sstephenson/bats /tmp/bats
       # Centos doesn't add /usr/local/bin to the path....
       /tmp/bats/install.sh /usr
       rm -rf /tmp/bats
     }
     cat \<\<VARS > /etc/profile.d/elasticsearch_vars.sh
-export ZIP=/elasticsearch/distribution/zip/build/distributions
-export TAR=/elasticsearch/distribution/tar/build/distributions
-export RPM=/elasticsearch/distribution/rpm/build/distributions
-export DEB=/elasticsearch/distribution/deb/build/distributions
-export TESTROOT=/elasticsearch/qa/vagrant/build/testroot
+export ZIP=/elasticsearch/distribution/zip/target/releases
+export TAR=/elasticsearch/distribution/tar/target/releases
+export RPM=/elasticsearch/distribution/rpm/target/releases
+export DEB=/elasticsearch/distribution/deb/target/releases
+export TESTROOT=/elasticsearch/qa/vagrant/target/testroot
 export BATS=/elasticsearch/qa/vagrant/src/test/resources/packaging/scripts
 VARS
+    # Create a file with the host OS because bats won't read exports....
+    echo #{RbConfig::CONFIG['host_os'].downcase} > /elasticsearch/qa/vagrant/target/testroot/hostOS
   SHELL
+  config.vm.provision "install_package_signature", type: "shell" do |s|
+      s.privileged = install_signature_privileged
+      s.inline = "#{install_signature_command} /elasticsearch/distribution/src/test/resources/dummyGpg/GPG-KEY-dummy"
+  end
 end

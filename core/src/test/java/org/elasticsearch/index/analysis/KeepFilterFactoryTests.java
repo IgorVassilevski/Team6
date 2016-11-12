@@ -22,9 +22,10 @@ package org.elasticsearch.index.analysis;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.WhitespaceTokenizer;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
+import org.elasticsearch.common.settings.SettingsException;
 import org.elasticsearch.test.ESTokenStreamTestCase;
 import org.junit.Assert;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -32,17 +33,21 @@ import java.io.StringReader;
 import static org.hamcrest.Matchers.instanceOf;
 
 public class KeepFilterFactoryTests extends ESTokenStreamTestCase {
+
     private static final String RESOURCE = "/org/elasticsearch/index/analysis/keep_analysis.json";
 
-    public void testLoadWithoutSettings() throws IOException {
+
+    @Test
+    public void testLoadWithoutSettings() {
         AnalysisService analysisService = AnalysisTestsHelper.createAnalysisServiceFromClassPath(createTempDir(), RESOURCE);
         TokenFilterFactory tokenFilter = analysisService.tokenFilter("keep");
         Assert.assertNull(tokenFilter);
     }
 
+    @Test
     public void testLoadOverConfiguredSettings() {
-        Settings settings = Settings.builder()
-                .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir().toString())
+        Settings settings = Settings.settingsBuilder()
+                .put("path.home", createTempDir().toString())
                 .put("index.analysis.filter.broken_keep_filter.type", "keep")
                 .put("index.analysis.filter.broken_keep_filter.keep_words_path", "does/not/exists.txt")
                 .put("index.analysis.filter.broken_keep_filter.keep_words", "[\"Hello\", \"worlD\"]")
@@ -50,15 +55,15 @@ public class KeepFilterFactoryTests extends ESTokenStreamTestCase {
         try {
             AnalysisTestsHelper.createAnalysisServiceFromSettings(settings);
             Assert.fail("path and array are configured");
-        } catch (IllegalArgumentException e) {
-        } catch (IOException e) {
-            fail("expected IAE");
+        } catch (Exception e) {
+            assertThat(e.getCause(), instanceOf(IllegalArgumentException.class));
         }
     }
 
+    @Test
     public void testKeepWordsPathSettings() {
-        Settings settings = Settings.builder()
-                .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir().toString())
+        Settings settings = Settings.settingsBuilder()
+                .put("path.home", createTempDir().toString())
                 .put("index.analysis.filter.non_broken_keep_filter.type", "keep")
                 .put("index.analysis.filter.non_broken_keep_filter.keep_words_path", "does/not/exists.txt")
                 .build();
@@ -66,25 +71,24 @@ public class KeepFilterFactoryTests extends ESTokenStreamTestCase {
             // test our none existing setup is picked up
             AnalysisTestsHelper.createAnalysisServiceFromSettings(settings);
             fail("expected an exception due to non existent keep_words_path");
-        } catch (IllegalArgumentException e) {
-        } catch (IOException e) {
-            fail("expected IAE");
+        } catch (Throwable e) {
+            assertThat(e.getCause(), instanceOf(IllegalArgumentException.class));
         }
 
-        settings = Settings.builder().put(settings)
+        settings = Settings.settingsBuilder().put(settings)
                 .put("index.analysis.filter.non_broken_keep_filter.keep_words", new String[]{"test"})
                 .build();
         try {
             // test our none existing setup is picked up
             AnalysisTestsHelper.createAnalysisServiceFromSettings(settings);
             fail("expected an exception indicating that you can't use [keep_words_path] with [keep_words] ");
-        } catch (IllegalArgumentException e) {
-        } catch (IOException e) {
-            fail("expected IAE");
+        } catch (Throwable e) {
+            assertThat(e.getCause(), instanceOf(IllegalArgumentException.class));
         }
 
     }
 
+    @Test
     public void testCaseInsensitiveMapping() throws IOException {
         AnalysisService analysisService = AnalysisTestsHelper.createAnalysisServiceFromClassPath(createTempDir(), RESOURCE);
         TokenFilterFactory tokenFilter = analysisService.tokenFilter("my_keep_filter");
@@ -96,6 +100,7 @@ public class KeepFilterFactoryTests extends ESTokenStreamTestCase {
         assertTokenStreamContents(tokenFilter.create(tokenizer), expected, new int[]{1, 2});
     }
 
+    @Test
     public void testCaseSensitiveMapping() throws IOException {
         AnalysisService analysisService = AnalysisTestsHelper.createAnalysisServiceFromClassPath(createTempDir(), RESOURCE);
         TokenFilterFactory tokenFilter = analysisService.tokenFilter("my_case_sensitive_keep_filter");
@@ -106,4 +111,5 @@ public class KeepFilterFactoryTests extends ESTokenStreamTestCase {
         tokenizer.setReader(new StringReader(source));
         assertTokenStreamContents(tokenFilter.create(tokenizer), expected, new int[]{1});
     }
+
 }

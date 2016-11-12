@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static com.google.common.base.Preconditions.checkState;
+
 /**
  * @author jessewilson@google.com (Jesse Wilson)
  */
@@ -59,9 +61,7 @@ final class EncounterImpl<T> implements TypeEncounter<T> {
 
     @Override
     public void register(MembersInjector<? super T> membersInjector) {
-        if (!valid) {
-            throw new IllegalStateException("Encounters may not be used after hear() returns.");
-        }
+        checkState(valid, "Encounters may not be used after hear() returns.");
 
         if (membersInjectors == null) {
             membersInjectors = new ArrayList<>();
@@ -72,9 +72,7 @@ final class EncounterImpl<T> implements TypeEncounter<T> {
 
     @Override
     public void register(InjectionListener<? super T> injectionListener) {
-        if (!valid) {
-            throw new IllegalStateException("Encounters may not be used after hear() returns.");
-        }
+        checkState(valid, "Encounters may not be used after hear() returns.");
 
         if (injectionListeners == null) {
             injectionListeners = new ArrayList<>();
@@ -85,33 +83,25 @@ final class EncounterImpl<T> implements TypeEncounter<T> {
 
     @Override
     public void addError(String message, Object... arguments) {
-        if (!valid) {
-            throw new IllegalStateException("Encounters may not be used after hear() returns.");
-        }
+        checkState(valid, "Encounters may not be used after hear() returns.");
         errors.addMessage(message, arguments);
     }
 
     @Override
     public void addError(Throwable t) {
-        if (!valid) {
-            throw new IllegalStateException("Encounters may not be used after hear() returns.");
-        }
+        checkState(valid, "Encounters may not be used after hear() returns.");
         errors.errorInUserCode(t, "An exception was caught and reported. Message: %s", t.getMessage());
     }
 
     @Override
     public void addError(Message message) {
-        if (!valid) {
-            throw new IllegalStateException("Encounters may not be used after hear() returns.");
-        }
+        checkState(valid, "Encounters may not be used after hear() returns.");
         errors.addMessage(message);
     }
 
     @Override
     public <T> Provider<T> getProvider(Key<T> key) {
-        if (!valid) {
-            throw new IllegalStateException("Encounters may not be used after hear() returns.");
-        }
+        checkState(valid, "Encounters may not be used after hear() returns.");
         return lookups.getProvider(key);
     }
 
@@ -122,9 +112,7 @@ final class EncounterImpl<T> implements TypeEncounter<T> {
 
     @Override
     public <T> MembersInjector<T> getMembersInjector(TypeLiteral<T> typeLiteral) {
-        if (!valid) {
-            throw new IllegalStateException("Encounters may not be used after hear() returns.");
-        }
+        checkState(valid, "Encounters may not be used after hear() returns.");
         return lookups.getMembersInjector(typeLiteral);
     }
 

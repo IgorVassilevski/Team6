@@ -8,7 +8,10 @@
             place:
               properties:
                 name:
-                  type: text
+                  type: string
+  - do:
+      cluster.health:
+          wait_for_status: yellow
   - do:
       index:
         index:   test
@@ -24,10 +27,10 @@
         body:
           properties:
             name:
-              type: text
+              type: string
               fields:
                 english:
-                  type:     text
+                  type:     string
                   analyzer: english
 
   - do:

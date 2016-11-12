@@ -75,11 +75,6 @@ public class InputStreamStreamInput extends StreamInput {
     }
 
     @Override
-    public int available() throws IOException {
-        return is.available();
-    }
-
-    @Override
     public int read() throws IOException {
         return is.read();
     }

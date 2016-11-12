@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.cluster.snapshots.get;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.support.master.MasterNodeRequest;
 import org.elasticsearch.common.Strings;
@@ -135,7 +136,9 @@ public class GetSnapshotsRequest extends MasterNodeRequest<GetSnapshotsRequest> 
         super.readFrom(in);
         repository = in.readString();
         snapshots = in.readStringArray();
-        ignoreUnavailable = in.readBoolean();
+        if (in.getVersion().onOrAfter(Version.V_2_2_0)) {
+            ignoreUnavailable = in.readBoolean();
+        }
     }
 
     @Override
@@ -143,6 +146,8 @@ public class GetSnapshotsRequest extends MasterNodeRequest<GetSnapshotsRequest> 
         super.writeTo(out);
         out.writeString(repository);
         out.writeStringArray(snapshots);
-        out.writeBoolean(ignoreUnavailable);
+        if (out.getVersion().onOrAfter(Version.V_2_2_0)) {
+            out.writeBoolean(ignoreUnavailable);
+        }
     }
 }

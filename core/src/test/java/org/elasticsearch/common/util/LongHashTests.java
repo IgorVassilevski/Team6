@@ -22,22 +22,14 @@ package org.elasticsearch.common.util;
 import com.carrotsearch.hppc.LongLongHashMap;
 import com.carrotsearch.hppc.LongLongMap;
 import com.carrotsearch.hppc.cursors.LongLongCursor;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.indices.breaker.NoneCircuitBreakerService;
 import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.junit.Test;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class LongHashTests extends ESSingleNodeTestCase {
-    LongHash hash;
 
-    private BigArrays randombigArrays() {
-        return new MockBigArrays(Settings.EMPTY, new NoneCircuitBreakerService());
-    }
+    LongHash hash;
 
     private void newHash() {
         if (hash != null) {
@@ -46,7 +38,7 @@ public class LongHashTests extends ESSingleNodeTestCase {
 
         // Test high load factors to make sure that collision resolution works fine
         final float maxLoadFactor = 0.6f + randomFloat() * 0.39f;
-        hash = new LongHash(randomIntBetween(0, 100), maxLoadFactor, randombigArrays());
+        hash = new LongHash(randomIntBetween(0, 100), maxLoadFactor, BigArraysTests.randombigArrays());
     }
 
     @Override
@@ -94,6 +86,7 @@ public class LongHashTests extends ESSingleNodeTestCase {
         hash.close();
     }
 
+    @Test
     public void testSize() {
         int num = scaledRandomIntBetween(2, 20);
         for (int j = 0; j < num; j++) {
@@ -113,6 +106,7 @@ public class LongHashTests extends ESSingleNodeTestCase {
         hash.close();
     }
 
+    @Test
     public void testKey() {
         int num = scaledRandomIntBetween(2, 20);
         for (int j = 0; j < num; j++) {
@@ -144,6 +138,7 @@ public class LongHashTests extends ESSingleNodeTestCase {
         hash.close();
     }
 
+    @Test
     public void testAdd() {
         int num = scaledRandomIntBetween(2, 20);
         for (int j = 0; j < num; j++) {
@@ -172,6 +167,7 @@ public class LongHashTests extends ESSingleNodeTestCase {
         hash.close();
     }
 
+    @Test
     public void testFind() throws Exception {
         int num = scaledRandomIntBetween(2, 20);
         for (int j = 0; j < num; j++) {
@@ -210,4 +206,5 @@ public class LongHashTests extends ESSingleNodeTestCase {
             assertTrue("key: " + key + " count: " + count + " long: " + l, key < count);
         }
     }
+
 }

@@ -19,12 +19,13 @@
 
 package org.elasticsearch.search.aggregations;
 
+import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
+
 import org.apache.lucene.search.LeafCollector;
 import org.apache.lucene.search.Scorer;
 
 import java.io.IOException;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 /**
  * Per-leaf bucket collector.
@@ -43,9 +44,14 @@ public abstract class LeafBucketCollector implements LeafCollector {
     };
 
     public static LeafBucketCollector wrap(Iterable<LeafBucketCollector> collectors) {
-        final Stream<LeafBucketCollector> actualCollectors =
-                StreamSupport.stream(collectors.spliterator(), false).filter(c -> c != NO_OP_COLLECTOR);
-        final LeafBucketCollector[] colls = actualCollectors.toArray(size -> new LeafBucketCollector[size]);
+        final Iterable<LeafBucketCollector> actualCollectors = Iterables.filter(collectors,
+                new Predicate<LeafBucketCollector> () {
+                    @Override
+                    public boolean apply(LeafBucketCollector c) {
+                        return c != NO_OP_COLLECTOR;
+                    }
+        });
+        final LeafBucketCollector[] colls = Iterables.toArray(actualCollectors, LeafBucketCollector.class);
         switch (colls.length) {
         case 0:
             return NO_OP_COLLECTOR;

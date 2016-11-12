@@ -20,21 +20,23 @@
 package org.elasticsearch.action.admin.cluster.node.tasks.cancel;
 
 import org.elasticsearch.ResourceNotFoundException;
+import org.elasticsearch.Version;
 import org.elasticsearch.action.FailedNodeException;
 import org.elasticsearch.action.TaskOperationFailure;
+import org.elasticsearch.action.admin.cluster.node.tasks.list.TaskInfo;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.tasks.TransportTasksAction;
+import org.elasticsearch.cluster.ClusterName;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.tasks.CancellableTask;
 import org.elasticsearch.tasks.TaskId;
-import org.elasticsearch.tasks.TaskInfo;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.EmptyTransportResponseHandler;
 import org.elasticsearch.transport.TransportChannel;
@@ -47,28 +49,38 @@ import org.elasticsearch.transport.TransportService;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
+import org.elasticsearch.common.util.Consumer;
 
 /**
  * Transport action that can be used to cancel currently running cancellable tasks.
  * <p>
  * For a task to be cancellable it has to return an instance of
- * {@link CancellableTask} from {@link TransportRequest#createTask(long, String, String, TaskId)}
+ * {@link CancellableTask} from {@link TransportRequest#createTask(long, String, String)}
  */
 public class TransportCancelTasksAction extends TransportTasksAction<CancellableTask, CancelTasksRequest, CancelTasksResponse, TaskInfo> {
 
     public static final String BAN_PARENT_ACTION_NAME = "internal:admin/tasks/ban";
 
     @Inject
-    public TransportCancelTasksAction(Settings settings, ThreadPool threadPool, ClusterService clusterService,
+    public TransportCancelTasksAction(Settings settings, ClusterName clusterName, ThreadPool threadPool, ClusterService clusterService,
                                       TransportService transportService, ActionFilters actionFilters, IndexNameExpressionResolver
                                           indexNameExpressionResolver) {
-        super(settings, CancelTasksAction.NAME, threadPool, clusterService, transportService, actionFilters,
-            indexNameExpressionResolver, CancelTasksRequest::new, CancelTasksResponse::new,
-            ThreadPool.Names.MANAGEMENT);
-        transportService.registerRequestHandler(BAN_PARENT_ACTION_NAME, BanParentTaskRequest::new, ThreadPool.Names.SAME, new
+        super(settings, CancelTasksAction.NAME, clusterName, threadPool, clusterService, transportService, actionFilters,
+            indexNameExpressionResolver, new Callable<CancelTasksRequest>() {
+                @Override
+                public CancelTasksRequest call() throws Exception {
+                    return new CancelTasksRequest();
+                }
+            }, ThreadPool.Names.MANAGEMENT);
+        transportService.registerRequestHandler(BAN_PARENT_ACTION_NAME, new Callable<BanParentTaskRequest>() {
+            @Override
+            public BanParentTaskRequest call() throws Exception {
+                return new BanParentTaskRequest();
+            }
+        }, ThreadPool.Names.SAME, new
             BanParentRequestHandler());
     }
 
@@ -111,9 +123,19 @@ public class TransportCancelTasksAction extends TransportTasksAction<Cancellable
     }
 
     @Override
-    protected synchronized TaskInfo taskOperation(CancelTasksRequest request, CancellableTask cancellableTask) {
-        final BanLock banLock = new BanLock(nodes -> removeBanOnNodes(cancellableTask, nodes));
-        Set<String> childNodes = taskManager.cancel(cancellableTask, request.getReason(), banLock::onTaskFinished);
+    protected synchronized TaskInfo taskOperation(CancelTasksRequest request, final CancellableTask cancellableTask) {
+        final BanLock banLock = new BanLock(new Consumer<Set<String>>() {
+            @Override
+            public void accept(Set<String> nodes) {
+                removeBanOnNodes(cancellableTask, nodes);
+            }
+        });
+        Set<String> childNodes = taskManager.cancel(cancellableTask, request.getReason(), new Consumer<Set<String>>() {
+            @Override
+            public void accept(Set<String> nodes) {
+                banLock.onTaskFinished(nodes);
+            }
+        });
         if (childNodes != null) {
             if (childNodes.isEmpty()) {
                 logger.trace("cancelling task {} with no children", cancellableTask.getId());
@@ -145,11 +167,11 @@ public class TransportCancelTasksAction extends TransportTasksAction<Cancellable
             BanParentTaskRequest.createRemoveBanParentTaskRequest(new TaskId(clusterService.localNode().getId(), task.getId())));
     }
 
-    private void sendSetBanRequest(Set<String> nodes, BanParentTaskRequest request, BanLock banLock) {
+    private void sendSetBanRequest(Set<String> nodes, BanParentTaskRequest request, final BanLock banLock) {
         ClusterState clusterState = clusterService.state();
         for (String node : nodes) {
             DiscoveryNode discoveryNode = clusterState.getNodes().get(node);
-            if (discoveryNode != null) {
+            if (discoveryNode != null && discoveryNode.version().onOrAfter(Version.V_2_3_0)) {
                 // Check if node still in the cluster
                 logger.debug("Sending ban for tasks with the parent [{}] to the node [{}], ban [{}]", request.parentTaskId, node,
                     request.ban);
@@ -167,7 +189,7 @@ public class TransportCancelTasksAction extends TransportTasksAction<Cancellable
                     });
             } else {
                 banLock.onBanSet();
-                logger.debug("Cannot send ban for tasks with the parent [{}] to the node [{}] - the node no longer in the cluster",
+                logger.debug("Cannot send ban for tasks with the parent [{}] to the node [{}] - the node no longer in the cluster or has an old version",
                     request.parentTaskId, node);
             }
         }
@@ -177,14 +199,14 @@ public class TransportCancelTasksAction extends TransportTasksAction<Cancellable
         ClusterState clusterState = clusterService.state();
         for (String node : nodes) {
             DiscoveryNode discoveryNode = clusterState.getNodes().get(node);
-            if (discoveryNode != null) {
+            if (discoveryNode != null && discoveryNode.version().onOrAfter(Version.V_2_3_0)) {
                 // Check if node still in the cluster
                 logger.debug("Sending remove ban for tasks with the parent [{}] to the node [{}]", request.parentTaskId, node);
                 transportService.sendRequest(discoveryNode, BAN_PARENT_ACTION_NAME, request, EmptyTransportResponseHandler
                     .INSTANCE_SAME);
             } else {
                 logger.debug("Cannot send remove ban request for tasks with the parent [{}] to the node [{}] - the node no longer in " +
-                    "the cluster", request.parentTaskId, node);
+                    "the cluster or has an old version", request.parentTaskId, node);
             }
         }
     }
@@ -251,7 +273,7 @@ public class TransportCancelTasksAction extends TransportTasksAction<Cancellable
         @Override
         public void readFrom(StreamInput in) throws IOException {
             super.readFrom(in);
-            parentTaskId = TaskId.readFromStream(in);
+            parentTaskId = new TaskId(in);
             ban = in.readBoolean();
             if (ban) {
                 reason = in.readString();
@@ -269,7 +291,7 @@ public class TransportCancelTasksAction extends TransportTasksAction<Cancellable
         }
     }
 
-    class BanParentRequestHandler implements TransportRequestHandler<BanParentTaskRequest> {
+    class BanParentRequestHandler extends TransportRequestHandler<BanParentTaskRequest> {
         @Override
         public void messageReceived(final BanParentTaskRequest request, final TransportChannel channel) throws Exception {
             if (request.ban) {

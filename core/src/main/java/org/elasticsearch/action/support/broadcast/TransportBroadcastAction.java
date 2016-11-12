@@ -19,12 +19,12 @@
 
 package org.elasticsearch.action.support.broadcast;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.NoShardAvailableActionException;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
 import org.elasticsearch.action.support.TransportActions;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
@@ -33,25 +33,19 @@ import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.GroupShardsIterator;
 import org.elasticsearch.cluster.routing.ShardIterator;
 import org.elasticsearch.cluster.routing.ShardRouting;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.transport.TransportChannel;
-import org.elasticsearch.transport.TransportException;
-import org.elasticsearch.transport.TransportRequestHandler;
-import org.elasticsearch.transport.TransportResponseHandler;
-import org.elasticsearch.transport.TransportService;
+import org.elasticsearch.transport.*;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-import java.util.function.Supplier;
 
 /**
  *
  */
-public abstract class TransportBroadcastAction<Request extends BroadcastRequest<Request>, Response extends BroadcastResponse, ShardRequest extends BroadcastShardRequest, ShardResponse extends BroadcastShardResponse>
+public abstract class TransportBroadcastAction<Request extends BroadcastRequest, Response extends BroadcastResponse, ShardRequest extends BroadcastShardRequest, ShardResponse extends BroadcastShardResponse>
         extends HandledTransportAction<Request, Response> {
 
     protected final ClusterService clusterService;
@@ -61,7 +55,7 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
 
     protected TransportBroadcastAction(Settings settings, String actionName, ThreadPool threadPool, ClusterService clusterService,
                                        TransportService transportService, ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver,
-                                       Supplier<Request> request, Supplier<ShardRequest> shardRequest, String shardExecutor) {
+                                       Class<Request> request, Class<ShardRequest> shardRequest, String shardExecutor) {
         super(settings, actionName, threadPool, transportService, actionFilters, indexNameExpressionResolver, request);
         this.clusterService = clusterService;
         this.transportService = transportService;
@@ -126,7 +120,7 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
                 throw blockException;
             }
             // update to concrete indices
-            String[] concreteIndices = indexNameExpressionResolver.concreteIndexNames(clusterState, request);
+            String[] concreteIndices = indexNameExpressionResolver.concreteIndices(clusterState, request);
             blockException = checkRequestBlock(clusterState, request, concreteIndices);
             if (blockException != null) {
                 throw blockException;
@@ -145,7 +139,7 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
                 // no shards
                 try {
                     listener.onResponse(newResponse(request, new AtomicReferenceArray(0), clusterState));
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     listener.onFailure(e);
                 }
                 return;
@@ -178,7 +172,7 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
                         onOperation(shard, shardIt, shardIndex, new NoShardAvailableActionException(shardIt.shardId()));
                     } else {
                         taskManager.registerChildTask(task, node.getId());
-                        transportService.sendRequest(node, transportShardAction, shardRequest, new TransportResponseHandler<ShardResponse>() {
+                        transportService.sendRequest(node, transportShardAction, shardRequest, new BaseTransportResponseHandler<ShardResponse>() {
                             @Override
                             public ShardResponse newInstance() {
                                 return newShardResponse();
@@ -200,7 +194,7 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
                             }
                         });
                     }
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     onOperation(shard, shardIt, shardIndex, e);
                 }
             }
@@ -216,37 +210,25 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
         }
 
         @SuppressWarnings({"unchecked"})
-        void onOperation(@Nullable ShardRouting shard, final ShardIterator shardIt, int shardIndex, Exception e) {
+        void onOperation(@Nullable ShardRouting shard, final ShardIterator shardIt, int shardIndex, Throwable t) {
             // we set the shard failure always, even if its the first in the replication group, and the next one
             // will work (it will just override it...)
-            setFailure(shardIt, shardIndex, e);
+            setFailure(shardIt, shardIndex, t);
             ShardRouting nextShard = shardIt.nextOrNull();
             if (nextShard != null) {
-                if (e != null) {
+                if (t != null) {
                     if (logger.isTraceEnabled()) {
-                        if (!TransportActions.isShardNotAvailableException(e)) {
-                            logger.trace(
-                                (org.apache.logging.log4j.util.Supplier<?>)
-                                    () -> new ParameterizedMessage(
-                                        "{}: failed to execute [{}]",
-                                        shard != null ? shard.shortSummary() : shardIt.shardId(),
-                                        request),
-                                e);
+                        if (!TransportActions.isShardNotAvailableException(t)) {
+                            logger.trace("{}: failed to execute [{}]", t, shard != null ? shard.shortSummary() : shardIt.shardId(), request);
                         }
                     }
                 }
                 performOperation(shardIt, nextShard, shardIndex);
             } else {
                 if (logger.isDebugEnabled()) {
-                    if (e != null) {
-                        if (!TransportActions.isShardNotAvailableException(e)) {
-                            logger.debug(
-                                (org.apache.logging.log4j.util.Supplier<?>)
-                                    () -> new ParameterizedMessage(
-                                        "{}: failed to execute [{}]",
-                                        shard != null ? shard.shortSummary() : shardIt.shardId(),
-                                        request),
-                                e);
+                    if (t != null) {
+                        if (!TransportActions.isShardNotAvailableException(t)) {
+                            logger.debug("{}: failed to execute [{}]", t, shard != null ? shard.shortSummary() : shardIt.shardId(), request);
                         }
                     }
                 }
@@ -259,25 +241,25 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
         protected void finishHim() {
             try {
                 listener.onResponse(newResponse(request, shardsResponses, clusterState));
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 listener.onFailure(e);
             }
         }
 
-        void setFailure(ShardIterator shardIt, int shardIndex, Exception e) {
+        void setFailure(ShardIterator shardIt, int shardIndex, Throwable t) {
             // we don't aggregate shard failures on non active shards (but do keep the header counts right)
-            if (TransportActions.isShardNotAvailableException(e)) {
+            if (TransportActions.isShardNotAvailableException(t)) {
                 return;
             }
 
-            if (!(e instanceof BroadcastShardOperationFailedException)) {
-                e = new BroadcastShardOperationFailedException(shardIt.shardId(), e);
+            if (!(t instanceof BroadcastShardOperationFailedException)) {
+                t = new BroadcastShardOperationFailedException(shardIt.shardId(), t);
             }
 
             Object response = shardsResponses.get(shardIndex);
             if (response == null) {
                 // just override it and return
-                shardsResponses.set(shardIndex, e);
+                shardsResponses.set(shardIndex, t);
             }
 
             if (!(response instanceof Throwable)) {
@@ -287,13 +269,13 @@ public abstract class TransportBroadcastAction<Request extends BroadcastRequest<
 
             // the failure is already present, try and not override it with an exception that is less meaningless
             // for example, getting illegal shard state
-            if (TransportActions.isReadOverrideException(e)) {
-                shardsResponses.set(shardIndex, e);
+            if (TransportActions.isReadOverrideException(t)) {
+                shardsResponses.set(shardIndex, t);
             }
         }
     }
 
-    class ShardTransportHandler implements TransportRequestHandler<ShardRequest> {
+    class ShardTransportHandler extends TransportRequestHandler<ShardRequest> {
 
         @Override
         public void messageReceived(ShardRequest request, TransportChannel channel, Task task) throws Exception {

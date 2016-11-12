@@ -21,7 +21,6 @@ package org.elasticsearch.action.support;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
 import org.elasticsearch.test.ESTestCase;
-import org.elasticsearch.threadpool.TestThreadPool;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.Transports;
 
@@ -32,7 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ListenableActionFutureTests extends ESTestCase {
 
     public void testListenerIsCallableFromNetworkThreads() throws Throwable {
-        ThreadPool threadPool = new TestThreadPool("testListenerIsCallableFromNetworkThreads");
+        ThreadPool threadPool = new ThreadPool("testListenerIsCallableFromNetworkThreads");
         try {
             final PlainListenableActionFuture<Object> future = new PlainListenableActionFuture<>(threadPool);
             final CountDownLatch listenerCalled = new CountDownLatch(1);
@@ -45,15 +44,15 @@ public class ListenableActionFutureTests extends ESTestCase {
                 }
 
                 @Override
-                public void onFailure(Exception e) {
+                public void onFailure(Throwable e) {
                     error.set(e);
                     listenerCalled.countDown();
                 }
             });
             Thread networkThread = new Thread(new AbstractRunnable() {
                 @Override
-                public void onFailure(Exception e) {
-                    error.set(e);
+                public void onFailure(Throwable t) {
+                    error.set(t);
                     listenerCalled.countDown();
                 }
 

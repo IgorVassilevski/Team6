@@ -24,9 +24,11 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.RAMDirectory;
 import org.elasticsearch.test.ESTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.lessThan;
 
@@ -34,6 +36,8 @@ import static org.hamcrest.Matchers.lessThan;
  *
  */
 public class InputStreamIndexInputTests extends ESTestCase {
+
+    @Test
     public void testSingleReadSingleByteLimit() throws IOException {
         RAMDirectory dir = new RAMDirectory();
         IndexOutput output = dir.createOutput("test", IOContext.DEFAULT);
@@ -51,7 +55,7 @@ public class InputStreamIndexInputTests extends ESTestCase {
         for (int i = 0; i < 3; i++) {
             InputStreamIndexInput is = new InputStreamIndexInput(input, 1);
             assertThat(input.getFilePointer(), lessThan(input.length()));
-            assertThat(is.actualSizeToRead(), equalTo(1L));
+            assertThat(is.actualSizeToRead(), equalTo(1l));
             assertThat(is.read(), equalTo(1));
             assertThat(is.read(), equalTo(-1));
         }
@@ -59,17 +63,18 @@ public class InputStreamIndexInputTests extends ESTestCase {
         for (int i = 0; i < 3; i++) {
             InputStreamIndexInput is = new InputStreamIndexInput(input, 1);
             assertThat(input.getFilePointer(), lessThan(input.length()));
-            assertThat(is.actualSizeToRead(), equalTo(1L));
+            assertThat(is.actualSizeToRead(), equalTo(1l));
             assertThat(is.read(), equalTo(2));
             assertThat(is.read(), equalTo(-1));
         }
 
         assertThat(input.getFilePointer(), equalTo(input.length()));
         InputStreamIndexInput is = new InputStreamIndexInput(input, 1);
-        assertThat(is.actualSizeToRead(), equalTo(0L));
+        assertThat(is.actualSizeToRead(), equalTo(0l));
         assertThat(is.read(), equalTo(-1));
     }
 
+    @Test
     public void testReadMultiSingleByteLimit1() throws IOException {
         RAMDirectory dir = new RAMDirectory();
         IndexOutput output = dir.createOutput("test", IOContext.DEFAULT);
@@ -89,7 +94,7 @@ public class InputStreamIndexInputTests extends ESTestCase {
         for (int i = 0; i < 3; i++) {
             assertThat(input.getFilePointer(), lessThan(input.length()));
             InputStreamIndexInput is = new InputStreamIndexInput(input, 1);
-            assertThat(is.actualSizeToRead(), equalTo(1L));
+            assertThat(is.actualSizeToRead(), equalTo(1l));
             assertThat(is.read(read), equalTo(1));
             assertThat(read[0], equalTo((byte) 1));
         }
@@ -97,17 +102,18 @@ public class InputStreamIndexInputTests extends ESTestCase {
         for (int i = 0; i < 3; i++) {
             assertThat(input.getFilePointer(), lessThan(input.length()));
             InputStreamIndexInput is = new InputStreamIndexInput(input, 1);
-            assertThat(is.actualSizeToRead(), equalTo(1L));
+            assertThat(is.actualSizeToRead(), equalTo(1l));
             assertThat(is.read(read), equalTo(1));
             assertThat(read[0], equalTo((byte) 2));
         }
 
         assertThat(input.getFilePointer(), equalTo(input.length()));
         InputStreamIndexInput is = new InputStreamIndexInput(input, 1);
-        assertThat(is.actualSizeToRead(), equalTo(0L));
+        assertThat(is.actualSizeToRead(), equalTo(0l));
         assertThat(is.read(read), equalTo(-1));
     }
 
+    @Test
     public void testSingleReadTwoBytesLimit() throws IOException {
         RAMDirectory dir = new RAMDirectory();
         IndexOutput output = dir.createOutput("test", IOContext.DEFAULT);
@@ -124,31 +130,32 @@ public class InputStreamIndexInputTests extends ESTestCase {
 
         assertThat(input.getFilePointer(), lessThan(input.length()));
         InputStreamIndexInput is = new InputStreamIndexInput(input, 2);
-        assertThat(is.actualSizeToRead(), equalTo(2L));
+        assertThat(is.actualSizeToRead(), equalTo(2l));
         assertThat(is.read(), equalTo(1));
         assertThat(is.read(), equalTo(1));
         assertThat(is.read(), equalTo(-1));
 
         assertThat(input.getFilePointer(), lessThan(input.length()));
         is = new InputStreamIndexInput(input, 2);
-        assertThat(is.actualSizeToRead(), equalTo(2L));
+        assertThat(is.actualSizeToRead(), equalTo(2l));
         assertThat(is.read(), equalTo(1));
         assertThat(is.read(), equalTo(2));
         assertThat(is.read(), equalTo(-1));
 
         assertThat(input.getFilePointer(), lessThan(input.length()));
         is = new InputStreamIndexInput(input, 2);
-        assertThat(is.actualSizeToRead(), equalTo(2L));
+        assertThat(is.actualSizeToRead(), equalTo(2l));
         assertThat(is.read(), equalTo(2));
         assertThat(is.read(), equalTo(2));
         assertThat(is.read(), equalTo(-1));
 
         assertThat(input.getFilePointer(), equalTo(input.length()));
         is = new InputStreamIndexInput(input, 2);
-        assertThat(is.actualSizeToRead(), equalTo(0L));
+        assertThat(is.actualSizeToRead(), equalTo(0l));
         assertThat(is.read(), equalTo(-1));
     }
 
+    @Test
     public void testReadMultiTwoBytesLimit1() throws IOException {
         RAMDirectory dir = new RAMDirectory();
         IndexOutput output = dir.createOutput("test", IOContext.DEFAULT);
@@ -167,31 +174,32 @@ public class InputStreamIndexInputTests extends ESTestCase {
 
         assertThat(input.getFilePointer(), lessThan(input.length()));
         InputStreamIndexInput is = new InputStreamIndexInput(input, 2);
-        assertThat(is.actualSizeToRead(), equalTo(2L));
+        assertThat(is.actualSizeToRead(), equalTo(2l));
         assertThat(is.read(read), equalTo(2));
         assertThat(read[0], equalTo((byte) 1));
         assertThat(read[1], equalTo((byte) 1));
 
         assertThat(input.getFilePointer(), lessThan(input.length()));
         is = new InputStreamIndexInput(input, 2);
-        assertThat(is.actualSizeToRead(), equalTo(2L));
+        assertThat(is.actualSizeToRead(), equalTo(2l));
         assertThat(is.read(read), equalTo(2));
         assertThat(read[0], equalTo((byte) 1));
         assertThat(read[1], equalTo((byte) 2));
 
         assertThat(input.getFilePointer(), lessThan(input.length()));
         is = new InputStreamIndexInput(input, 2);
-        assertThat(is.actualSizeToRead(), equalTo(2L));
+        assertThat(is.actualSizeToRead(), equalTo(2l));
         assertThat(is.read(read), equalTo(2));
         assertThat(read[0], equalTo((byte) 2));
         assertThat(read[1], equalTo((byte) 2));
 
         assertThat(input.getFilePointer(), equalTo(input.length()));
         is = new InputStreamIndexInput(input, 2);
-        assertThat(is.actualSizeToRead(), equalTo(0L));
+        assertThat(is.actualSizeToRead(), equalTo(0l));
         assertThat(is.read(read), equalTo(-1));
     }
 
+    @Test
     public void testReadMultiFourBytesLimit() throws IOException {
         RAMDirectory dir = new RAMDirectory();
         IndexOutput output = dir.createOutput("test", IOContext.DEFAULT);
@@ -210,7 +218,7 @@ public class InputStreamIndexInputTests extends ESTestCase {
 
         assertThat(input.getFilePointer(), lessThan(input.length()));
         InputStreamIndexInput is = new InputStreamIndexInput(input, 4);
-        assertThat(is.actualSizeToRead(), equalTo(4L));
+        assertThat(is.actualSizeToRead(), equalTo(4l));
         assertThat(is.read(read), equalTo(4));
         assertThat(read[0], equalTo((byte) 1));
         assertThat(read[1], equalTo((byte) 1));
@@ -219,17 +227,18 @@ public class InputStreamIndexInputTests extends ESTestCase {
 
         assertThat(input.getFilePointer(), lessThan(input.length()));
         is = new InputStreamIndexInput(input, 4);
-        assertThat(is.actualSizeToRead(), equalTo(2L));
+        assertThat(is.actualSizeToRead(), equalTo(2l));
         assertThat(is.read(read), equalTo(2));
         assertThat(read[0], equalTo((byte) 2));
         assertThat(read[1], equalTo((byte) 2));
 
         assertThat(input.getFilePointer(), equalTo(input.length()));
         is = new InputStreamIndexInput(input, 4);
-        assertThat(is.actualSizeToRead(), equalTo(0L));
+        assertThat(is.actualSizeToRead(), equalTo(0l));
         assertThat(is.read(read), equalTo(-1));
     }
 
+    @Test
     public void testMarkRest() throws Exception {
         RAMDirectory dir = new RAMDirectory();
         IndexOutput output = dir.createOutput("test", IOContext.DEFAULT);

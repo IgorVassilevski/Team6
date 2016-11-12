@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.delete;
 
-import org.elasticsearch.action.support.WriteRequestBuilder;
 import org.elasticsearch.action.support.replication.ReplicationRequestBuilder;
 import org.elasticsearch.client.ElasticsearchClient;
 import org.elasticsearch.common.Nullable;
@@ -28,8 +27,7 @@ import org.elasticsearch.index.VersionType;
 /**
  * A delete document action request builder.
  */
-public class DeleteRequestBuilder extends ReplicationRequestBuilder<DeleteRequest, DeleteResponse, DeleteRequestBuilder>
-        implements WriteRequestBuilder<DeleteRequestBuilder> {
+public class DeleteRequestBuilder extends ReplicationRequestBuilder<DeleteRequest, DeleteResponse, DeleteRequestBuilder> {
 
     public DeleteRequestBuilder(ElasticsearchClient client, DeleteAction action) {
         super(client, action, new DeleteRequest());
@@ -70,6 +68,16 @@ public class DeleteRequestBuilder extends ReplicationRequestBuilder<DeleteReques
      */
     public DeleteRequestBuilder setRouting(String routing) {
         request.routing(routing);
+        return this;
+    }
+
+    /**
+     * Should a refresh be executed post this index operation causing the operation to
+     * be searchable. Note, heavy indexing should not set this to <tt>true</tt>. Defaults
+     * to <tt>false</tt>.
+     */
+    public DeleteRequestBuilder setRefresh(boolean refresh) {
+        request.refresh(refresh);
         return this;
     }
 

@@ -19,10 +19,6 @@
 
 package org.elasticsearch.plugin.example;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-
 import org.elasticsearch.common.component.LifecycleComponent;
 import org.elasticsearch.common.inject.AbstractModule;
 import org.elasticsearch.common.inject.Module;
@@ -31,6 +27,11 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.repositories.RepositoriesModule;
 import org.elasticsearch.rest.action.cat.AbstractCatAction;
+
+import java.io.Closeable;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 
 /**
  * Example of a plugin.
@@ -44,15 +45,44 @@ public class JvmExamplePlugin extends Plugin {
     }
 
     @Override
-    public Collection<Module> createGuiceModules() {
+    public String name() {
+        return "jvm-example";
+    }
+
+    @Override
+    public String description() {
+        return "A plugin that extends all extension points";
+    }
+
+    @Override
+    public Collection<Module> nodeModules() {
         return Collections.<Module>singletonList(new ConfiguredExampleModule());
     }
 
     @Override
-    @SuppressWarnings("rawtypes") // Plugin use a rawtype
-    public Collection<Class<? extends LifecycleComponent>> getGuiceServiceClasses() {
+    public Collection<Class<? extends LifecycleComponent>> nodeServices() {
         Collection<Class<? extends LifecycleComponent>> services = new ArrayList<>();
         return services;
+    }
+
+    @Override
+    public Collection<Module> indexModules(Settings indexSettings) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public Collection<Class<? extends Closeable>> indexServices() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public Collection<Module> shardModules(Settings indexSettings) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public Collection<Class<? extends Closeable>> shardServices() {
+        return Collections.emptyList();
     }
 
     @Override
@@ -64,7 +94,7 @@ public class JvmExamplePlugin extends Plugin {
     }
 
     /**
-     * Module declaring some example configuration and a _cat action that uses
+     * Module decalaring some example configuration and a _cat action that uses
      * it.
      */
     public static class ConfiguredExampleModule extends AbstractModule {

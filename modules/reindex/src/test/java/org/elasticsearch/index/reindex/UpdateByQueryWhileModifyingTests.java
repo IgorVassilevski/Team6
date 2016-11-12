@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.lucene.util.TestUtil.randomSimpleString;
-import static org.elasticsearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.hamcrest.Matchers.either;
 import static org.hamcrest.Matchers.equalTo;
 
@@ -36,7 +35,7 @@ import static org.hamcrest.Matchers.equalTo;
  * Mutates a document while update-by-query-ing it and asserts that the mutation
  * always sticks. Update-by-query should never revert documents.
  */
-public class UpdateByQueryWhileModifyingTests extends ReindexTestCase {
+public class UpdateByQueryWhileModifyingTests extends UpdateByQueryTestCase {
     private static final int MAX_MUTATIONS = 50;
     private static final int MAX_ATTEMPTS = 10;
 
@@ -44,16 +43,18 @@ public class UpdateByQueryWhileModifyingTests extends ReindexTestCase {
         AtomicReference<String> value = new AtomicReference<>(randomSimpleString(random()));
         indexRandom(true, client().prepareIndex("test", "test", "test").setSource("test", value.get()));
 
-        AtomicReference<Exception> failure = new AtomicReference<>();
-        AtomicBoolean keepUpdating = new AtomicBoolean(true);
-        Thread updater = new Thread(() -> {
-            while (keepUpdating.get()) {
-                try {
-                    BulkIndexByScrollResponse response = updateByQuery().source("test").refresh(true).abortOnVersionConflict(false).get();
-                    assertThat(response, matcher().updated(either(equalTo(0L)).or(equalTo(1L)))
-                            .versionConflicts(either(equalTo(0L)).or(equalTo(1L))));
-                } catch (Exception e) {
-                    failure.set(e);
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+        final AtomicBoolean keepUpdating = new AtomicBoolean(true);
+        Thread updater = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (keepUpdating.get()) {
+                    try {
+                        assertThat(request().source("test").refresh(true).abortOnVersionConflict(false).get(), responseMatcher()
+                                .updated(either(equalTo(0L)).or(equalTo(1L))).versionConflicts(either(equalTo(0L)).or(equalTo(1L))));
+                    } catch (Throwable t) {
+                        failure.set(t);
+                    }
                 }
             }
         });
@@ -65,7 +66,7 @@ public class UpdateByQueryWhileModifyingTests extends ReindexTestCase {
                 assertEquals(value.get(), get.getSource().get("test"));
                 value.set(randomSimpleString(random()));
                 IndexRequestBuilder index = client().prepareIndex("test", "test", "test").setSource("test", value.get())
-                        .setRefreshPolicy(IMMEDIATE);
+                        .setRefresh(true);
                 /*
                  * Update by query increments the version number so concurrent
                  * indexes might get version conflict exceptions so we just

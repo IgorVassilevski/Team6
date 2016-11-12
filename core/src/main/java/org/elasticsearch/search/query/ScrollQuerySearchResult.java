@@ -26,6 +26,7 @@ import org.elasticsearch.transport.TransportResponse;
 
 import java.io.IOException;
 
+import static org.elasticsearch.search.SearchShardTarget.readSearchShardTarget;
 import static org.elasticsearch.search.query.QuerySearchResult.readQuerySearchResult;
 
 /**
@@ -55,7 +56,7 @@ public class ScrollQuerySearchResult extends TransportResponse {
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
-        shardTarget = new SearchShardTarget(in);
+        shardTarget = readSearchShardTarget(in);
         queryResult = readQuerySearchResult(in);
         queryResult.shardTarget(shardTarget);
     }

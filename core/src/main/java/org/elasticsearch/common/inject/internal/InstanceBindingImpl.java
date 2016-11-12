@@ -16,33 +16,27 @@
 
 package org.elasticsearch.common.inject.internal;
 
+import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.common.inject.Binder;
 import org.elasticsearch.common.inject.Injector;
 import org.elasticsearch.common.inject.Key;
 import org.elasticsearch.common.inject.Provider;
-import org.elasticsearch.common.inject.spi.BindingTargetVisitor;
-import org.elasticsearch.common.inject.spi.Dependency;
-import org.elasticsearch.common.inject.spi.HasDependencies;
-import org.elasticsearch.common.inject.spi.InjectionPoint;
-import org.elasticsearch.common.inject.spi.InstanceBinding;
+import org.elasticsearch.common.inject.spi.*;
 import org.elasticsearch.common.inject.util.Providers;
 
-import java.util.HashSet;
 import java.util.Set;
-
-import static java.util.Collections.unmodifiableSet;
 
 public class InstanceBindingImpl<T> extends BindingImpl<T> implements InstanceBinding<T> {
 
     final T instance;
     final Provider<T> provider;
-    final Set<InjectionPoint> injectionPoints;
+    final ImmutableSet<InjectionPoint> injectionPoints;
 
     public InstanceBindingImpl(Injector injector, Key<T> key, Object source,
                                InternalFactory<? extends T> internalFactory, Set<InjectionPoint> injectionPoints,
                                T instance) {
         super(injector, key, source, internalFactory, Scoping.UNSCOPED);
-        this.injectionPoints = injectionPoints;
+        this.injectionPoints = ImmutableSet.copyOf(injectionPoints);
         this.instance = instance;
         this.provider = Providers.of(instance);
     }
@@ -50,7 +44,7 @@ public class InstanceBindingImpl<T> extends BindingImpl<T> implements InstanceBi
     public InstanceBindingImpl(Object source, Key<T> key, Scoping scoping,
                                Set<InjectionPoint> injectionPoints, T instance) {
         super(source, key, scoping);
-        this.injectionPoints = injectionPoints;
+        this.injectionPoints = ImmutableSet.copyOf(injectionPoints);
         this.instance = instance;
         this.provider = Providers.of(instance);
     }
@@ -78,7 +72,7 @@ public class InstanceBindingImpl<T> extends BindingImpl<T> implements InstanceBi
     @Override
     public Set<Dependency<?>> getDependencies() {
         return instance instanceof HasDependencies
-                ? unmodifiableSet(new HashSet<>((((HasDependencies) instance).getDependencies())))
+                ? ImmutableSet.copyOf(((HasDependencies) instance).getDependencies())
                 : Dependency.forInjectionPoints(injectionPoints);
     }
 

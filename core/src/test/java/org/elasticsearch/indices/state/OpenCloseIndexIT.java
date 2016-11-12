@@ -34,25 +34,20 @@ import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_METADATA;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_READ;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_WRITE;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_READ_ONLY;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertBlocked;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoFailures;
-import static org.hamcrest.Matchers.containsString;
+import static org.elasticsearch.cluster.metadata.IndexMetaData.*;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.*;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
 public class OpenCloseIndexIT extends ESIntegTestCase {
+
+    @Test
     public void testSimpleCloseOpen() {
         Client client = client();
         createIndex("test1");
@@ -68,39 +63,28 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsOpened("test1");
     }
 
+    @Test(expected = IndexNotFoundException.class)
     public void testSimpleCloseMissingIndex() {
         Client client = client();
-        try {
-            client.admin().indices().prepareClose("test1").execute().actionGet();
-            fail("Expected IndexNotFoundException");
-        } catch (IndexNotFoundException e) {
-            assertThat(e.getMessage(), is("no such index"));
-        }
+        client.admin().indices().prepareClose("test1").execute().actionGet();
     }
 
+    @Test(expected = IndexNotFoundException.class)
     public void testSimpleOpenMissingIndex() {
         Client client = client();
-        try {
-            client.admin().indices().prepareOpen("test1").execute().actionGet();
-            fail("Expected IndexNotFoundException");
-        } catch (IndexNotFoundException e) {
-            assertThat(e.getMessage(), is("no such index"));
-        }
+        client.admin().indices().prepareOpen("test1").execute().actionGet();
     }
 
+    @Test(expected = IndexNotFoundException.class)
     public void testCloseOneMissingIndex() {
         Client client = client();
         createIndex("test1");
         ClusterHealthResponse healthResponse = client.admin().cluster().prepareHealth().setWaitForGreenStatus().execute().actionGet();
         assertThat(healthResponse.isTimedOut(), equalTo(false));
-        try {
-            client.admin().indices().prepareClose("test1", "test2").execute().actionGet();
-            fail("Expected IndexNotFoundException");
-        } catch (IndexNotFoundException e) {
-            assertThat(e.getMessage(), is("no such index"));
-        }
+        client.admin().indices().prepareClose("test1", "test2").execute().actionGet();
     }
 
+    @Test
     public void testCloseOneMissingIndexIgnoreMissing() {
         Client client = client();
         createIndex("test1");
@@ -112,19 +96,16 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsClosed("test1");
     }
 
+    @Test(expected = IndexNotFoundException.class)
     public void testOpenOneMissingIndex() {
         Client client = client();
         createIndex("test1");
         ClusterHealthResponse healthResponse = client.admin().cluster().prepareHealth().setWaitForGreenStatus().execute().actionGet();
         assertThat(healthResponse.isTimedOut(), equalTo(false));
-        try {
-            client.admin().indices().prepareOpen("test1", "test2").execute().actionGet();
-            fail("Expected IndexNotFoundException");
-        } catch (IndexNotFoundException e) {
-            assertThat(e.getMessage(), is("no such index"));
-        }
+        client.admin().indices().prepareOpen("test1", "test2").execute().actionGet();
     }
 
+    @Test
     public void testOpenOneMissingIndexIgnoreMissing() {
         Client client = client();
         createIndex("test1");
@@ -136,6 +117,7 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsOpened("test1");
     }
 
+    @Test
     public void testCloseOpenMultipleIndices() {
         Client client = client();
         createIndex("test1", "test2", "test3");
@@ -156,6 +138,7 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsOpened("test1", "test2", "test3");
     }
 
+    @Test
     public void testCloseOpenWildcard() {
         Client client = client();
         createIndex("test1", "test2", "a");
@@ -172,6 +155,7 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsOpened("test1", "test2", "a");
     }
 
+    @Test
     public void testCloseOpenAll() {
         Client client = client();
         createIndex("test1", "test2", "test3");
@@ -187,6 +171,7 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsOpened("test1", "test2", "test3");
     }
 
+    @Test
     public void testCloseOpenAllWildcard() {
         Client client = client();
         createIndex("test1", "test2", "test3");
@@ -202,46 +187,31 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsOpened("test1", "test2", "test3");
     }
 
+    @Test(expected = ActionRequestValidationException.class)
     public void testCloseNoIndex() {
         Client client = client();
-        try {
-            client.admin().indices().prepareClose().execute().actionGet();
-            fail("Expected ActionRequestValidationException");
-        } catch (ActionRequestValidationException e) {
-            assertThat(e.getMessage(), containsString("index is missing"));
-        }
+        client.admin().indices().prepareClose().execute().actionGet();
     }
 
+    @Test(expected = ActionRequestValidationException.class)
     public void testCloseNullIndex() {
         Client client = client();
-        try {
-            client.admin().indices().prepareClose((String[])null).execute().actionGet();
-            fail("Expected ActionRequestValidationException");
-        } catch (ActionRequestValidationException e) {
-            assertThat(e.getMessage(), containsString("index is missing"));
-        }
+        client.admin().indices().prepareClose(null).execute().actionGet();
     }
 
+    @Test(expected = ActionRequestValidationException.class)
     public void testOpenNoIndex() {
         Client client = client();
-        try {
-            client.admin().indices().prepareOpen().execute().actionGet();
-            fail("Expected ActionRequestValidationException");
-        } catch (ActionRequestValidationException e) {
-            assertThat(e.getMessage(), containsString("index is missing"));
-        }
+        client.admin().indices().prepareOpen().execute().actionGet();
     }
 
+    @Test(expected = ActionRequestValidationException.class)
     public void testOpenNullIndex() {
         Client client = client();
-        try {
-            client.admin().indices().prepareOpen((String[])null).execute().actionGet();
-            fail("Expected ActionRequestValidationException");
-        } catch (ActionRequestValidationException e) {
-            assertThat(e.getMessage(), containsString("index is missing"));
-        }
+        client.admin().indices().prepareOpen(null).execute().actionGet();
     }
 
+    @Test
     public void testOpenAlreadyOpenedIndex() {
         Client client = client();
         createIndex("test1");
@@ -254,6 +224,7 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsOpened("test1");
     }
 
+    @Test
     public void testCloseAlreadyClosedIndex() {
         Client client = client();
         createIndex("test1");
@@ -271,6 +242,7 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsClosed("test1");
     }
 
+    @Test
     public void testSimpleCloseOpenAlias() {
         Client client = client();
         createIndex("test1");
@@ -289,6 +261,7 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertIndexIsOpened("test1");
     }
 
+    @Test
     public void testCloseOpenAliasMultipleIndices() {
         Client client = client();
         createIndex("test1", "test2");
@@ -326,13 +299,15 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         }
     }
 
+    @Test
     public void testOpenCloseWithDocs() throws IOException, ExecutionException, InterruptedException {
         String mapping = XContentFactory.jsonBuilder().
                 startObject().
                 startObject("type").
                 startObject("properties").
                 startObject("test")
-                .field("type", "keyword")
+                .field("type", "string")
+                .field("index", "not_analyzed")
                 .endObject().
                         endObject().
                         endObject()
@@ -360,6 +335,7 @@ public class OpenCloseIndexIT extends ESIntegTestCase {
         assertHitCount(searchResponse, docs);
     }
 
+    @Test
     public void testOpenCloseIndexWithBlocks() {
         createIndex("test");
         ensureGreen("test");

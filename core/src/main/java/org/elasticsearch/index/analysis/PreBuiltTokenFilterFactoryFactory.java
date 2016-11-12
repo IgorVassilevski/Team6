@@ -21,14 +21,9 @@ package org.elasticsearch.index.analysis;
 
 import org.elasticsearch.Version;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
-import org.elasticsearch.indices.analysis.AnalysisModule;
 import org.elasticsearch.indices.analysis.PreBuiltTokenFilters;
 
-import java.io.IOException;
-
-public class PreBuiltTokenFilterFactoryFactory implements AnalysisModule.AnalysisProvider<TokenFilterFactory> {
+public class PreBuiltTokenFilterFactoryFactory implements TokenFilterFactoryFactory {
 
     private final TokenFilterFactory tokenFilterFactory;
 
@@ -37,7 +32,7 @@ public class PreBuiltTokenFilterFactoryFactory implements AnalysisModule.Analysi
     }
 
     @Override
-    public TokenFilterFactory get(IndexSettings indexSettings, Environment environment, String name, Settings settings) throws IOException {
+    public TokenFilterFactory create(String name, Settings settings) {
         Version indexVersion = Version.indexCreated(settings);
         if (!Version.CURRENT.equals(indexVersion)) {
             PreBuiltTokenFilters preBuiltTokenFilters = PreBuiltTokenFilters.getOrDefault(name, null);

@@ -23,19 +23,21 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Explanation;
 
 import java.io.IOException;
-import java.util.Objects;
 
 /**
  *
  */
 public class WeightFactorFunction extends ScoreFunction {
 
-    private static final ScoreFunction SCORE_ONE = new ScoreOne(CombineFunction.MULTIPLY);
+    private static final ScoreFunction SCORE_ONE = new ScoreOne(CombineFunction.MULT);
     private final ScoreFunction scoreFunction;
     private float weight = 1.0f;
 
     public WeightFactorFunction(float weight, ScoreFunction scoreFunction) {
-        super(CombineFunction.MULTIPLY);
+        super(CombineFunction.MULT);
+        if (scoreFunction instanceof BoostScoreFunction) {
+            throw new IllegalArgumentException(BoostScoreFunction.BOOST_WEIGHT_ERROR_MESSAGE);
+        }
         if (scoreFunction == null) {
             this.scoreFunction = SCORE_ONE;
         } else {
@@ -45,7 +47,7 @@ public class WeightFactorFunction extends ScoreFunction {
     }
 
     public WeightFactorFunction(float weight) {
-        super(CombineFunction.MULTIPLY);
+        super(CombineFunction.MULT);
         this.scoreFunction = SCORE_ONE;
         this.weight = weight;
     }
@@ -82,22 +84,6 @@ public class WeightFactorFunction extends ScoreFunction {
         return weight;
     }
 
-    public ScoreFunction getScoreFunction() {
-        return scoreFunction;
-    }
-
-    @Override
-    protected boolean doEquals(ScoreFunction other) {
-        WeightFactorFunction weightFactorFunction = (WeightFactorFunction) other;
-        return this.weight == weightFactorFunction.weight &&
-                Objects.equals(this.scoreFunction, weightFactorFunction.scoreFunction);
-    }
-
-    @Override
-    protected int doHashCode() {
-        return Objects.hash(weight, scoreFunction);
-    }
-
     private static class ScoreOne extends ScoreFunction {
 
         protected ScoreOne(CombineFunction scoreCombiner) {
@@ -122,16 +108,6 @@ public class WeightFactorFunction extends ScoreFunction {
         @Override
         public boolean needsScores() {
             return false;
-        }
-
-        @Override
-        protected boolean doEquals(ScoreFunction other) {
-            return true;
-        }
-
-        @Override
-        protected int doHashCode() {
-            return 0;
         }
     }
 }

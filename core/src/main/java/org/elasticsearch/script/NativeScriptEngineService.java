@@ -19,16 +19,17 @@
 
 package org.elasticsearch.script;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.component.AbstractComponent;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.search.lookup.SearchLookup;
 
 import java.io.IOException;
 import java.util.Map;
-
-import static java.util.Collections.unmodifiableMap;
 
 /**
  * A native script engine service.
@@ -37,30 +38,36 @@ public class NativeScriptEngineService extends AbstractComponent implements Scri
 
     public static final String NAME = "native";
 
-    private final Map<String, NativeScriptFactory> scripts;
+    private final ImmutableMap<String, NativeScriptFactory> scripts;
 
+    @Inject
     public NativeScriptEngineService(Settings settings, Map<String, NativeScriptFactory> scripts) {
         super(settings);
-        this.scripts = unmodifiableMap(scripts);
+        this.scripts = ImmutableMap.copyOf(scripts);
     }
 
     @Override
-    public String getType() {
-        return NAME;
+    public String[] types() {
+        return new String[]{NAME};
     }
 
     @Override
-    public String getExtension() {
-        return ""; // Native scripts have no extensions
+    public String[] extensions() {
+        return new String[0];
     }
 
     @Override
-    public Object compile(String scriptName, String scriptSource, Map<String, String> params) {
-        NativeScriptFactory scriptFactory = scripts.get(scriptSource);
+    public boolean sandboxed() {
+        return false;
+    }
+
+    @Override
+    public Object compile(String script, Map<String, String> params) {
+        NativeScriptFactory scriptFactory = scripts.get(script);
         if (scriptFactory != null) {
             return scriptFactory;
         }
-        throw new IllegalArgumentException("Native script [" + scriptSource + "] not found");
+        throw new IllegalArgumentException("Native script [" + script + "] not found");
     }
 
     @Override
@@ -91,7 +98,7 @@ public class NativeScriptEngineService extends AbstractComponent implements Scri
     }
 
     @Override
-    public boolean isInlineScriptEnabled() {
-        return true;
+    public void scriptRemoved(CompiledScript script) {
+        // Nothing to do here
     }
 }

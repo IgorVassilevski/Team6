@@ -22,11 +22,12 @@ package org.elasticsearch.action.admin.cluster.repositories.verify;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.master.TransportMasterNodeAction;
+import org.elasticsearch.cluster.ClusterName;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.repositories.RepositoriesService;
@@ -41,13 +42,15 @@ public class TransportVerifyRepositoryAction extends TransportMasterNodeAction<V
 
     private final RepositoriesService repositoriesService;
 
+    protected final ClusterName clusterName;
 
     @Inject
-    public TransportVerifyRepositoryAction(Settings settings, TransportService transportService, ClusterService clusterService,
+    public TransportVerifyRepositoryAction(Settings settings, ClusterName clusterName, TransportService transportService, ClusterService clusterService,
                                            RepositoriesService repositoriesService, ThreadPool threadPool, ActionFilters actionFilters,
                                            IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, VerifyRepositoryAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, VerifyRepositoryRequest::new);
+        super(settings, VerifyRepositoryAction.NAME, transportService, clusterService, threadPool, actionFilters, indexNameExpressionResolver, VerifyRepositoryRequest.class);
         this.repositoriesService = repositoriesService;
+        this.clusterName = clusterName;
     }
 
     @Override
@@ -73,12 +76,12 @@ public class TransportVerifyRepositoryAction extends TransportMasterNodeAction<V
                 if (verifyResponse.failed()) {
                     listener.onFailure(new RepositoryVerificationException(request.name(), verifyResponse.failureDescription()));
                 } else {
-                    listener.onResponse(new VerifyRepositoryResponse(clusterService.getClusterName(), verifyResponse.nodes()));
+                    listener.onResponse(new VerifyRepositoryResponse(clusterName, verifyResponse.nodes()));
                 }
             }
 
             @Override
-            public void onFailure(Exception e) {
+            public void onFailure(Throwable e) {
                 listener.onFailure(e);
             }
         });

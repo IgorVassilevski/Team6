@@ -18,37 +18,39 @@
  */
 package org.elasticsearch.indices.exists.types;
 
-import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.indices.exists.types.TypesExistsResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.test.ESIntegTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
 
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_READ;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_BLOCKS_WRITE;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_READ_ONLY;
+import static org.elasticsearch.cluster.metadata.IndexMetaData.*;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertBlocked;
 import static org.hamcrest.Matchers.equalTo;
 
 public class TypesExistsIT extends ESIntegTestCase {
+
+    @Test
     public void testSimple() throws Exception {
         Client client = client();
-        CreateIndexResponse response1 = client.admin().indices().prepareCreate("test1")
+        client.admin().indices().prepareCreate("test1")
                 .addMapping("type1", jsonBuilder().startObject().startObject("type1").endObject().endObject())
                 .addMapping("type2", jsonBuilder().startObject().startObject("type2").endObject().endObject())
                 .execute().actionGet();
-        CreateIndexResponse response2 = client.admin().indices().prepareCreate("test2")
+        client.admin().indices().prepareCreate("test2")
                 .addMapping("type1", jsonBuilder().startObject().startObject("type1").endObject().endObject())
                 .execute().actionGet();
         client.admin().indices().prepareAliases().addAlias("test1", "alias1").execute().actionGet();
-        assertAcked(response1);
-        assertAcked(response2);
+        ClusterHealthResponse healthResponse = client.admin().cluster()
+                .prepareHealth("test1", "test2").setWaitForYellowStatus().execute().actionGet();
+        assertThat(healthResponse.isTimedOut(), equalTo(false));
 
         TypesExistsResponse response = client.admin().indices().prepareTypesExists("test1").setTypes("type1").execute().actionGet();
         assertThat(response.isExists(), equalTo(true));
@@ -74,6 +76,7 @@ public class TypesExistsIT extends ESIntegTestCase {
         assertThat(response.isExists(), equalTo(false));
     }
 
+    @Test
     public void testTypesExistsWithBlocks() throws IOException {
         assertAcked(prepareCreate("ro").addMapping("type1", jsonBuilder().startObject().startObject("type1").endObject().endObject()));
         ensureGreen("ro");

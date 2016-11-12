@@ -19,36 +19,22 @@
 
 package org.elasticsearch.mapper.attachments;
 
-import org.apache.logging.log4j.Logger;
-import org.elasticsearch.common.logging.DeprecationLogger;
-import org.elasticsearch.common.logging.ESLoggerFactory;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.index.mapper.Mapper;
-import org.elasticsearch.plugins.MapperPlugin;
+import org.elasticsearch.indices.IndicesModule;
 import org.elasticsearch.plugins.Plugin;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-public class MapperAttachmentsPlugin extends Plugin implements MapperPlugin {
-
-    private static Logger logger = ESLoggerFactory.getLogger("mapper.attachment");
-    private static DeprecationLogger deprecationLogger = new DeprecationLogger(logger);
+public class MapperAttachmentsPlugin extends Plugin {
 
     @Override
-    public List<Setting<?>> getSettings() {
-        deprecationLogger.deprecated("[mapper-attachments] plugin has been deprecated and will be replaced by [ingest-attachment] plugin.");
-
-        return Arrays.asList(AttachmentMapper.INDEX_ATTACHMENT_DETECT_LANGUAGE_SETTING,
-        AttachmentMapper.INDEX_ATTACHMENT_IGNORE_ERRORS_SETTING,
-        AttachmentMapper.INDEX_ATTACHMENT_INDEXED_CHARS_SETTING);
+    public String name() {
+        return "mapper-attachments";
     }
 
     @Override
-    public Map<String, Mapper.TypeParser> getMappers() {
-        return Collections.singletonMap("attachment", new AttachmentMapper.TypeParser());
+    public String description() {
+        return "Adds the attachment type allowing to parse difference attachment formats";
     }
 
+    public void onModule(IndicesModule indicesModule) {
+        indicesModule.registerMapper("attachment", new AttachmentMapper.TypeParser());
+    }
 }

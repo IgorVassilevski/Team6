@@ -13,7 +13,8 @@ Here is an example on how to create the aggregation request:
 [source,java]
 --------------------------------------------------
 AggregationBuilders
-    .nested("agg", "resellers");
+    .nested("agg")
+    .path("resellers");
 --------------------------------------------------
 
 
@@ -32,3 +33,4 @@ import org.elasticsearch.search.aggregations.bucket.nested.Nested;
 Nested agg = sr.getAggregations().get("agg");
 agg.getDocCount(); // Doc count
 --------------------------------------------------
+

@@ -19,6 +19,7 @@
 
 package org.elasticsearch.discovery.zen.ping;
 
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.component.LifecycleComponent;
@@ -32,7 +33,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-public interface ZenPing extends LifecycleComponent {
+import static org.elasticsearch.cluster.ClusterName.readClusterName;
+import static org.elasticsearch.cluster.node.DiscoveryNode.readNode;
+
+/**
+ *
+ */
+public interface ZenPing extends LifecycleComponent<ZenPing> {
 
     void setPingContextProvider(PingContextProvider contextProvider);
 
@@ -113,10 +120,10 @@ public interface ZenPing extends LifecycleComponent {
 
         @Override
         public void readFrom(StreamInput in) throws IOException {
-            clusterName = new ClusterName(in);
-            node = new DiscoveryNode(in);
+            clusterName = readClusterName(in);
+            node = readNode(in);
             if (in.readBoolean()) {
-                master = new DiscoveryNode(in);
+                master = readNode(in);
             }
             this.hasJoinedOnce = in.readBoolean();
             this.id = in.readLong();

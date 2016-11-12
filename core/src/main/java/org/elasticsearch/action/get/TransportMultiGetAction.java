@@ -19,13 +19,14 @@
 
 package org.elasticsearch.action.get;
 
+import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
+import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.AtomicArray;
@@ -48,7 +49,7 @@ public class TransportMultiGetAction extends HandledTransportAction<MultiGetRequ
     public TransportMultiGetAction(Settings settings, ThreadPool threadPool, TransportService transportService,
                                    ClusterService clusterService, TransportShardMultiGetAction shardAction,
                                    ActionFilters actionFilters, IndexNameExpressionResolver indexNameExpressionResolver) {
-        super(settings, MultiGetAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver, MultiGetRequest::new);
+        super(settings, MultiGetAction.NAME, threadPool, transportService, actionFilters, indexNameExpressionResolver, MultiGetRequest.class);
         this.clusterService = clusterService;
         this.shardAction = shardAction;
     }
@@ -68,18 +69,18 @@ public class TransportMultiGetAction extends HandledTransportAction<MultiGetRequ
                 responses.set(i, new MultiGetItemResponse(null, new MultiGetResponse.Failure(item.index(), item.type(), item.id(), new IndexNotFoundException(item.index()))));
                 continue;
             }
-            item.routing(clusterState.metaData().resolveIndexRouting(item.parent(), item.routing(), item.index()));
-            String concreteSingleIndex = indexNameExpressionResolver.concreteSingleIndex(clusterState, item).getName();
+            item.routing(clusterState.metaData().resolveIndexRouting(item.routing(), item.index()));
+            String concreteSingleIndex = indexNameExpressionResolver.concreteSingleIndex(clusterState, item);
             if (item.routing() == null && clusterState.getMetaData().routingRequired(concreteSingleIndex, item.type())) {
                 responses.set(i, new MultiGetItemResponse(null, new MultiGetResponse.Failure(concreteSingleIndex, item.type(), item.id(),
                         new IllegalArgumentException("routing is required for [" + concreteSingleIndex + "]/[" + item.type() + "]/[" + item.id() + "]"))));
                 continue;
             }
             ShardId shardId = clusterService.operationRouting()
-                    .getShards(clusterState, concreteSingleIndex, item.id(), item.routing(), null).shardId();
+                    .getShards(clusterState, concreteSingleIndex, item.type(), item.id(), item.routing(), null).shardId();
             MultiGetShardRequest shardRequest = shardRequests.get(shardId);
             if (shardRequest == null) {
-                shardRequest = new MultiGetShardRequest(request, shardId.getIndexName(), shardId.id());
+                shardRequest = new MultiGetShardRequest(request, shardId.index().name(), shardId.id());
                 shardRequests.put(shardId, shardRequest);
             }
             shardRequest.add(i, item);
@@ -105,7 +106,7 @@ public class TransportMultiGetAction extends HandledTransportAction<MultiGetRequ
                 }
 
                 @Override
-                public void onFailure(Exception e) {
+                public void onFailure(Throwable e) {
                     // create failures for all relevant requests
                     for (int i = 0; i < shardRequest.locations.size(); i++) {
                         MultiGetRequest.Item item = shardRequest.items.get(i);

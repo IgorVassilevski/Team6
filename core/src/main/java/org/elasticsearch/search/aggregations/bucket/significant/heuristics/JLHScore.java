@@ -27,30 +27,33 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.query.QueryShardException;
+import org.elasticsearch.index.query.QueryParsingException;
+import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
 
 public class JLHScore extends SignificanceHeuristic {
-    public static final String NAME = "jlh";
 
-    public JLHScore() {
-    }
+    public static final JLHScore INSTANCE = new JLHScore();
 
-    /**
-     * Read from a stream.
-     */
-    public JLHScore(StreamInput in) {
-        // Nothing to read.
-    }
+    protected static final String[] NAMES = {"jlh"};
 
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-    }
+    private JLHScore() {}
 
-    @Override
-    public String getWriteableName() {
-        return NAME;
+    public static final SignificanceHeuristicStreams.Stream STREAM = new SignificanceHeuristicStreams.Stream() {
+        @Override
+        public SignificanceHeuristic readResult(StreamInput in) throws IOException {
+            return readFrom(in);
+        }
+
+        @Override
+        public String getName() {
+            return NAMES[0];
+        }
+    };
+
+    public static SignificanceHeuristic readFrom(StreamInput in) throws IOException {
+        return INSTANCE;
     }
 
     /**
@@ -99,40 +102,33 @@ public class JLHScore extends SignificanceHeuristic {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(NAME).endObject();
-        return builder;
+    public void writeTo(StreamOutput out) throws IOException {
+        out.writeString(STREAM.getName());
     }
 
-    public static SignificanceHeuristic parse(XContentParser parser, ParseFieldMatcher parseFieldMatcher)
-            throws IOException, QueryShardException {
-        // move to the closing bracket
-        if (!parser.nextToken().equals(XContentParser.Token.END_OBJECT)) {
-            throw new ElasticsearchParseException(
-                    "failed to parse [jlh] significance heuristic. expected an empty object, but found [{}] instead",
-                    parser.currentToken());
+    public static class JLHScoreParser implements SignificanceHeuristicParser {
+
+        @Override
+        public SignificanceHeuristic parse(XContentParser parser, ParseFieldMatcher parseFieldMatcher, SearchContext context)
+                throws IOException, QueryParsingException {
+            // move to the closing bracket
+            if (!parser.nextToken().equals(XContentParser.Token.END_OBJECT)) {
+                throw new ElasticsearchParseException("failed to parse [jhl] significance heuristic. expected an empty object, but found [{}] instead", parser.currentToken());
+            }
+            return new JLHScore();
         }
-        return new JLHScore();
-    }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null || obj.getClass() != getClass()) {
-            return false;
+        @Override
+        public String[] getNames() {
+            return NAMES;
         }
-        return true;
-    }
-
-    @Override
-    public int hashCode() {
-        return getClass().hashCode();
     }
 
     public static class JLHScoreBuilder implements SignificanceHeuristicBuilder {
 
         @Override
         public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-            builder.startObject(NAME).endObject();
+            builder.startObject(STREAM.getName()).endObject();
             return builder;
         }
     }

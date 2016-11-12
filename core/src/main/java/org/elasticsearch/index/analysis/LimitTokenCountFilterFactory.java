@@ -21,13 +21,13 @@ package org.elasticsearch.index.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.miscellaneous.LimitTokenCountFilter;
+import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.inject.assistedinject.Assisted;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.env.Environment;
-import org.elasticsearch.index.IndexSettings;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.settings.IndexSettingsService;
 
-/**
- *
- */
 public class LimitTokenCountFilterFactory extends AbstractTokenFilterFactory {
 
     public static final int DEFAULT_MAX_TOKEN_COUNT = 1;
@@ -36,8 +36,9 @@ public class LimitTokenCountFilterFactory extends AbstractTokenFilterFactory {
     final int maxTokenCount;
     final boolean consumeAllTokens;
 
-    public LimitTokenCountFilterFactory(IndexSettings indexSettings, Environment env, String name, Settings settings) {
-        super(indexSettings, name, settings);
+    @Inject
+    public LimitTokenCountFilterFactory(Index index, IndexSettingsService indexSettingsService, Environment env, @Assisted String name, @Assisted Settings settings) {
+        super(index, indexSettingsService.getSettings(), name, settings);
         this.maxTokenCount = settings.getAsInt("max_token_count", DEFAULT_MAX_TOKEN_COUNT);
         this.consumeAllTokens = settings.getAsBoolean("consume_all_tokens", DEFAULT_CONSUME_ALL_TOKENS);
     }

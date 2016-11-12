@@ -19,11 +19,24 @@
 
 package org.elasticsearch.script.python;
 
+import java.io.IOException;
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.Permissions;
+import java.security.PrivilegedAction;
+import java.security.ProtectionDomain;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.Scorer;
 import org.elasticsearch.SpecialPermission;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.component.AbstractComponent;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.script.ClassPermission;
 import org.elasticsearch.script.CompiledScript;
@@ -40,29 +53,17 @@ import org.python.core.PyObject;
 import org.python.core.PyStringMap;
 import org.python.util.PythonInterpreter;
 
-import java.io.IOException;
-import java.security.AccessControlContext;
-import java.security.AccessController;
-import java.security.Permissions;
-import java.security.PrivilegedAction;
-import java.security.ProtectionDomain;
-import java.util.Map;
-
 /**
  *
  */
 //TODO we can optimize the case for Map<String, Object> similar to PyStringMap
 public class PythonScriptEngineService extends AbstractComponent implements ScriptEngineService {
 
-    public static final String NAME = "python";
-    public static final String EXTENSION = "py";
-
     private final PythonInterpreter interp;
 
+    @Inject
     public PythonScriptEngineService(Settings settings) {
         super(settings);
-
-        deprecationLogger.deprecated("[python] scripts are deprecated, use [painless] scripts instead.");
 
         // classloader created here
         final SecurityManager sm = System.getSecurityManager();
@@ -94,17 +95,22 @@ public class PythonScriptEngineService extends AbstractComponent implements Scri
     }
 
     @Override
-    public String getType() {
-        return NAME;
+    public String[] types() {
+        return new String[]{"python", "py"};
     }
 
     @Override
-    public String getExtension() {
-        return EXTENSION;
+    public String[] extensions() {
+        return new String[]{"py"};
     }
 
     @Override
-    public Object compile(String scriptName, String scriptSource, Map<String, String> params) {
+    public boolean sandboxed() {
+        return false;
+    }
+
+    @Override
+    public Object compile(final String script, Map<String, String> params) {
         // classloader created here
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -113,22 +119,18 @@ public class PythonScriptEngineService extends AbstractComponent implements Scri
         return AccessController.doPrivileged(new PrivilegedAction<PyCode>() {
             @Override
             public PyCode run() {
-                return interp.compile(scriptSource);
+                return interp.compile(script);
             }
         });
     }
 
     @Override
     public ExecutableScript executable(CompiledScript compiledScript, Map<String, Object> vars) {
-        deprecationLogger.deprecated("[python] scripts are deprecated, use [painless] scripts instead");
-
         return new PythonExecutableScript((PyCode) compiledScript.compiled(), vars);
     }
 
     @Override
     public SearchScript search(final CompiledScript compiledScript, final SearchLookup lookup, @Nullable final Map<String, Object> vars) {
-        deprecationLogger.deprecated("[python] scripts are deprecated, use [painless] scripts instead");
-
         return new SearchScript() {
             @Override
             public LeafSearchScript getLeafSearchScript(LeafReaderContext context) throws IOException {
@@ -146,6 +148,11 @@ public class PythonScriptEngineService extends AbstractComponent implements Scri
     @Override
     public void close() {
         interp.cleanup();
+    }
+
+    @Override
+    public void scriptRemoved(@Nullable CompiledScript compiledScript) {
+        // Nothing to do
     }
 
     public class PythonExecutableScript implements ExecutableScript {
@@ -240,6 +247,11 @@ public class PythonScriptEngineService extends AbstractComponent implements Scri
         }
 
         @Override
+        public float runAsFloat() {
+            return ((Number) run()).floatValue();
+        }
+
+        @Override
         public long runAsLong() {
             return ((Number) run()).longValue();
         }
@@ -267,7 +279,7 @@ public class PythonScriptEngineService extends AbstractComponent implements Scri
     }
 
     /** Evaluates with reduced privileges */
-    private PyObject evalRestricted(final PyCode code) {
+    private final PyObject evalRestricted(final PyCode code) {
         // eval the script with reduced privileges
         return AccessController.doPrivileged(new PrivilegedAction<PyObject>() {
             @Override

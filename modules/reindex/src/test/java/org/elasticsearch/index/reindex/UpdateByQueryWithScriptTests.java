@@ -19,8 +19,9 @@
 
 package org.elasticsearch.index.reindex;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.script.ScriptService;
+import org.elasticsearch.common.util.Consumer;
 
 import java.util.Date;
 import java.util.Map;
@@ -29,7 +30,6 @@ import static org.hamcrest.Matchers.containsString;
 
 public class UpdateByQueryWithScriptTests
         extends AbstractAsyncBulkIndexByScrollActionScriptTestCase<UpdateByQueryRequest, BulkIndexByScrollResponse> {
-
     public void testModifyingCtxNotAllowed() {
         /*
          * Its important that none of these actually match any of the fields.
@@ -37,10 +37,15 @@ public class UpdateByQueryWithScriptTests
          * more. The point of have many is that they should all present the same
          * error message to the user, not some ClassCastException.
          */
-        Object[] options = new Object[] {"cat", new Object(), 123, new Date(), Math.PI};
-        for (String ctxVar: new String[] {"_index", "_type", "_id", "_version", "_parent", "_routing", "_timestamp", "_ttl"}) {
+        final Object[] options = new Object[] {"cat", new Object(), 123, new Date(), Math.PI};
+        for (final String ctxVar: new String[] {"_index", "_type", "_id", "_version", "_parent", "_routing", "_timestamp", "_ttl"}) {
             try {
-                applyScript((Map<String, Object> ctx) -> ctx.put(ctxVar, randomFrom(options)));
+                applyScript(new Consumer<Map<String, Object>> (){
+                    @Override
+                    public void accept(Map<String, Object> ctx) {
+                        ctx.put(ctxVar, randomFrom(options));
+                    }
+                });
             } catch (IllegalArgumentException e) {
                 assertThat(e.getMessage(), containsString("Modifying [" + ctxVar + "] not allowed"));
             }
@@ -53,8 +58,8 @@ public class UpdateByQueryWithScriptTests
     }
 
     @Override
-    protected AbstractAsyncBulkIndexByScrollAction<UpdateByQueryRequest> action(ScriptService scriptService, UpdateByQueryRequest request) {
-        return new TransportUpdateByQueryAction.AsyncIndexBySearchAction(task, logger, null, threadPool, request, listener(),
-                scriptService, null);
+    protected AbstractAsyncBulkIndexByScrollAction<UpdateByQueryRequest, BulkIndexByScrollResponse> action() {
+        return new TransportUpdateByQueryAction.AsyncIndexBySearchAction(task, logger, null, null, threadPool, Version.V_2_3_0, request(),
+                listener());
     }
 }

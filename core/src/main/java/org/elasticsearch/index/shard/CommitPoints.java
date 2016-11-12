@@ -20,7 +20,6 @@
 package org.elasticsearch.index.shard;
 
 import org.apache.lucene.util.CollectionUtil;
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentParser;
@@ -117,7 +116,7 @@ public class CommitPoints implements Iterable<CommitPoint> {
         builder.endObject();
 
         builder.endObject();
-        return BytesReference.toBytes(builder.bytes());
+        return builder.bytes().toBytes();
     }
 
     public static CommitPoint fromXContent(byte[] data) throws Exception {

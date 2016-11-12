@@ -1093,38 +1093,13 @@ public class IndexMetaData implements Diffable<IndexMetaData>, FromXContentBuild
                     if (KEY_SETTINGS.equals(currentFieldName)) {
                         builder.settings(Settings.builder().put(SettingsLoader.Helper.loadNestedFromMap(parser.mapOrdered())));
                     } else if (KEY_MAPPINGS.equals(currentFieldName)) {
-                        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                            if (token == XContentParser.Token.FIELD_NAME) {
-                                currentFieldName = parser.currentName();
-                            } else if (token == XContentParser.Token.START_OBJECT) {
-                                String mappingType = currentFieldName;
-                                Map<String, Object> mappingSource = MapBuilder.<String, Object>newMapBuilder().put(mappingType, parser.mapOrdered()).map();
-                                builder.putMapping(new MappingMetaData(mappingType, mappingSource));
-                            } else {
-                                throw new IllegalArgumentException("Unexpected token: " + token);
-                            }
-                        }
+                        currentFieldName = key_MappingsEquals(parser, builder, currentFieldName);
                     } else if (KEY_ALIASES.equals(currentFieldName)) {
                         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
                             builder.putAlias(AliasMetaData.Builder.fromXContent(parser));
                         }
                     } else if (KEY_IN_SYNC_ALLOCATIONS.equals(currentFieldName)) {
-                        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                            if (token == XContentParser.Token.FIELD_NAME) {
-                                currentFieldName = parser.currentName();
-                            } else if (token == XContentParser.Token.START_ARRAY) {
-                                String shardId = currentFieldName;
-                                Set<String> allocationIds = new HashSet<>();
-                                while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                                    if (token == XContentParser.Token.VALUE_STRING) {
-                                        allocationIds.add(parser.text());
-                                    }
-                                }
-                                builder.putInSyncAllocationIds(Integer.valueOf(shardId), allocationIds);
-                            } else {
-                                throw new IllegalArgumentException("Unexpected token: " + token);
-                            }
-                        }
+                        currentFieldName = key_In_Sync_allocationsEquals(parser, builder, currentFieldName);
                     } else if ("warmers".equals(currentFieldName)) {
                         // TODO: do this in 6.0:
                         // throw new IllegalArgumentException("Warmers are not supported anymore - are you upgrading from 1.x?");
@@ -1157,15 +1132,7 @@ public class IndexMetaData implements Diffable<IndexMetaData>, FromXContentBuild
                             }
                         }
                     } else if (KEY_PRIMARY_TERMS.equals(currentFieldName)) {
-                        LongArrayList list = new LongArrayList();
-                        while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                            if (token == XContentParser.Token.VALUE_NUMBER) {
-                                list.add(parser.longValue());
-                            } else {
-                                throw new IllegalStateException("found a non-numeric value under [" + KEY_PRIMARY_TERMS + "]");
-                            }
-                        }
-                        builder.primaryTerms(list.toArray());
+                        key_Primary_TermsEquals(parser, builder);
                     } else {
                         throw new IllegalArgumentException("Unexpected field for an array " + currentFieldName);
                     }
@@ -1184,6 +1151,55 @@ public class IndexMetaData implements Diffable<IndexMetaData>, FromXContentBuild
                 }
             }
             return builder.build();
+        }
+
+        private static void key_Primary_TermsEquals(XContentParser parser, Builder builder) throws IOException {
+            XContentParser.Token token;LongArrayList list = new LongArrayList();
+            while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
+                if (token == XContentParser.Token.VALUE_NUMBER) {
+                    list.add(parser.longValue());
+                } else {
+                    throw new IllegalStateException("found a non-numeric value under [" + KEY_PRIMARY_TERMS + "]");
+                }
+            }
+            builder.primaryTerms(list.toArray());
+        }
+
+        private static String key_In_Sync_allocationsEquals(XContentParser parser, Builder builder, String currentFieldName) throws IOException {
+            XContentParser.Token token;
+            while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
+                if (token == XContentParser.Token.FIELD_NAME) {
+                    currentFieldName = parser.currentName();
+                } else if (token == XContentParser.Token.START_ARRAY) {
+                    String shardId = currentFieldName;
+                    Set<String> allocationIds = new HashSet<>();
+                    while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
+                        if (token == XContentParser.Token.VALUE_STRING) {
+                            allocationIds.add(parser.text());
+                        }
+                    }
+                    builder.putInSyncAllocationIds(Integer.valueOf(shardId), allocationIds);
+                } else {
+                    throw new IllegalArgumentException("Unexpected token: " + token);
+                }
+            }
+            return currentFieldName;
+        }
+
+        private static String key_MappingsEquals(XContentParser parser, Builder builder, String currentFieldName) throws IOException {
+            XContentParser.Token token;
+            while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
+                if (token == XContentParser.Token.FIELD_NAME) {
+                    currentFieldName = parser.currentName();
+                } else if (token == XContentParser.Token.START_OBJECT) {
+                    String mappingType = currentFieldName;
+                    Map<String, Object> mappingSource = MapBuilder.<String, Object>newMapBuilder().put(mappingType, parser.mapOrdered()).map();
+                    builder.putMapping(new MappingMetaData(mappingType, mappingSource));
+                } else {
+                    throw new IllegalArgumentException("Unexpected token: " + token);
+                }
+            }
+            return currentFieldName;
         }
 
         public static IndexMetaData readFrom(StreamInput in) throws IOException {

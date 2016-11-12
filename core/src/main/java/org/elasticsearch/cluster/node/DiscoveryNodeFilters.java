@@ -134,49 +134,15 @@ public class DiscoveryNodeFilters {
                 }
             } else if ("_host".equals(attr)) {
                 for (String value : values) {
-                    if (Regex.simpleMatch(value, node.getHostName())) {
-                        if (opType == OpType.OR) {
-                            return true;
-                        }
-                    } else {
-                        if (opType == OpType.AND) {
-                            return false;
-                        }
-                    }
-                    if (Regex.simpleMatch(value, node.getHostAddress())) {
-                        if (opType == OpType.OR) {
-                            return true;
-                        }
-                    } else {
-                        if (opType == OpType.AND) {
-                            return false;
-                        }
-                    }
+                    Boolean x = hostMethod(node, value);
+                    if (x != null) return x;
                 }
             } else if ("_id".equals(attr)) {
-                for (String value : values) {
-                    if (node.getId().equals(value)) {
-                        if (opType == OpType.OR) {
-                            return true;
-                        }
-                    } else {
-                        if (opType == OpType.AND) {
-                            return false;
-                        }
-                    }
-                }
+                Boolean x = idMethod(node, values);
+                if (x != null) return x;
             } else if ("_name".equals(attr) || "name".equals(attr)) {
-                for (String value : values) {
-                    if (Regex.simpleMatch(value, node.getName())) {
-                        if (opType == OpType.OR) {
-                            return true;
-                        }
-                    } else {
-                        if (opType == OpType.AND) {
-                            return false;
-                        }
-                    }
-                }
+                Boolean x = nameMethod(node, values);
+                if (x != null) return x;
             } else {
                 String nodeAttributeValue = node.getAttributes().get(attr);
                 if (nodeAttributeValue == null) {
@@ -187,15 +153,8 @@ public class DiscoveryNodeFilters {
                     }
                 }
                 for (String value : values) {
-                    if (Regex.simpleMatch(value, nodeAttributeValue)) {
-                        if (opType == OpType.OR) {
-                            return true;
-                        }
-                    } else {
-                        if (opType == OpType.AND) {
-                            return false;
-                        }
-                    }
+                    Boolean x = matchMethod(nodeAttributeValue, value);
+                    if (x != null) return x;
                 }
             }
         }
@@ -204,6 +163,71 @@ public class DiscoveryNodeFilters {
         } else {
             return true;
         }
+    }
+
+    private Boolean matchMethod(String nodeAttributeValue, String value) {
+        if (Regex.simpleMatch(value, nodeAttributeValue)) {
+            if (opType == OpType.OR) {
+                return true;
+            }
+        } else {
+            if (opType == OpType.AND) {
+                return false;
+            }
+        }
+        return null;
+    }
+
+    private Boolean nameMethod(DiscoveryNode node, String[] values) {
+        for (String value : values) {
+            if (Regex.simpleMatch(value, node.getName())) {
+                if (opType == OpType.OR) {
+                    return true;
+                }
+            } else {
+                if (opType == OpType.AND) {
+                    return false;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Boolean idMethod(DiscoveryNode node, String[] values) {
+        for (String value : values) {
+            if (node.getId().equals(value)) {
+                if (opType == OpType.OR) {
+                    return true;
+                }
+            } else {
+                if (opType == OpType.AND) {
+                    return false;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Boolean hostMethod(DiscoveryNode node, String value) {
+        if (Regex.simpleMatch(value, node.getHostName())) {
+            if (opType == OpType.OR) {
+                return true;
+            }
+        } else {
+            if (opType == OpType.AND) {
+                return false;
+            }
+        }
+        if (Regex.simpleMatch(value, node.getHostAddress())) {
+            if (opType == OpType.OR) {
+                return true;
+            }
+        } else {
+            if (opType == OpType.AND) {
+                return false;
+            }
+        }
+        return null;
     }
 
     /**

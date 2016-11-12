@@ -800,14 +800,7 @@ public class IndexNameExpressionResolver extends AbstractComponent {
                 if (inPlaceHolder) {
                     switch (c) {
                         case LEFT_BOUND:
-                            if (inDateFormat && escapedChar) {
-                                inPlaceHolderSb.append(c);
-                            } else if (!inDateFormat) {
-                                inDateFormat = true;
-                                inPlaceHolderSb.append(c);
-                            } else {
-                                throw new ElasticsearchParseException("invalid dynamic name expression [{}]. invalid character in placeholder at position [{}]", new String(text, from, length), i);
-                            }
+                            inDateFormat = left_BoundMethod(inDateFormat, inPlaceHolderSb, text, from, length, i, escapedChar, c);
                             break;
 
                         case RIGHT_BOUND:
@@ -896,6 +889,18 @@ public class IndexNameExpressionResolver extends AbstractComponent {
             }
             return beforePlaceHolderSb.toString();
         }
+    }
+
+    private static boolean left_BoundMethod(boolean inDateFormat, StringBuilder inPlaceHolderSb, char[] text, int from, int length, int i, boolean escapedChar, char c) {
+        if (inDateFormat && escapedChar) {
+            inPlaceHolderSb.append(c);
+        } else if (!inDateFormat) {
+            inDateFormat = true;
+            inPlaceHolderSb.append(c);
+        } else {
+            throw new ElasticsearchParseException("invalid dynamic name expression [{}]. invalid character in placeholder at position [{}]", new String(text, from, length), i);
+        }
+        return inDateFormat;
     }
 
     /**

@@ -122,60 +122,7 @@ public class DateMathParser {
             }
             char unit = mathString.charAt(i++);
             MutableDateTime.Property propertyToRound = null;
-            switch (unit) {
-                case 'y':
-                    if (round) {
-                        propertyToRound = dateTime.yearOfCentury();
-                    } else {
-                        dateTime.addYears(sign * num);
-                    }
-                    break;
-                case 'M':
-                    if (round) {
-                        propertyToRound = dateTime.monthOfYear();
-                    } else {
-                        dateTime.addMonths(sign * num);
-                    }
-                    break;
-                case 'w':
-                    if (round) {
-                        propertyToRound = dateTime.weekOfWeekyear();
-                    } else {
-                        dateTime.addWeeks(sign * num);
-                    }
-                    break;
-                case 'd':
-                    if (round) {
-                        propertyToRound = dateTime.dayOfMonth();
-                    } else {
-                        dateTime.addDays(sign * num);
-                    }
-                    break;
-                case 'h':
-                case 'H':
-                    if (round) {
-                        propertyToRound = dateTime.hourOfDay();
-                    } else {
-                        dateTime.addHours(sign * num);
-                    }
-                    break;
-                case 'm':
-                    if (round) {
-                        propertyToRound = dateTime.minuteOfHour();
-                    } else {
-                        dateTime.addMinutes(sign * num);
-                    }
-                    break;
-                case 's':
-                    if (round) {
-                        propertyToRound = dateTime.secondOfMinute();
-                    } else {
-                        dateTime.addSeconds(sign * num);
-                    }
-                    break;
-                default:
-                    throw new ElasticsearchParseException("unit [{}] not supported for date math [{}]", unit, mathString);
-            }
+            propertyToRound = getProperty(mathString, dateTime, round, sign, num, unit, propertyToRound);
             if (propertyToRound != null) {
                 if (roundUp) {
                     // we want to go up to the next whole value, even if we are already on a rounded value
@@ -188,6 +135,64 @@ public class DateMathParser {
             }
         }
         return dateTime.getMillis();
+    }
+
+    private MutableDateTime.Property getProperty(String mathString, MutableDateTime dateTime, boolean round, int sign, int num, char unit, MutableDateTime.Property propertyToRound) {
+        switch (unit) {
+            case 'y':
+                if (round) {
+                    propertyToRound = dateTime.yearOfCentury();
+                } else {
+                    dateTime.addYears(sign * num);
+                }
+                break;
+            case 'M':
+                if (round) {
+                    propertyToRound = dateTime.monthOfYear();
+                } else {
+                    dateTime.addMonths(sign * num);
+                }
+                break;
+            case 'w':
+                if (round) {
+                    propertyToRound = dateTime.weekOfWeekyear();
+                } else {
+                    dateTime.addWeeks(sign * num);
+                }
+                break;
+            case 'd':
+                if (round) {
+                    propertyToRound = dateTime.dayOfMonth();
+                } else {
+                    dateTime.addDays(sign * num);
+                }
+                break;
+            case 'h':
+            case 'H':
+                if (round) {
+                    propertyToRound = dateTime.hourOfDay();
+                } else {
+                    dateTime.addHours(sign * num);
+                }
+                break;
+            case 'm':
+                if (round) {
+                    propertyToRound = dateTime.minuteOfHour();
+                } else {
+                    dateTime.addMinutes(sign * num);
+                }
+                break;
+            case 's':
+                if (round) {
+                    propertyToRound = dateTime.secondOfMinute();
+                } else {
+                    dateTime.addSeconds(sign * num);
+                }
+                break;
+            default:
+                throw new ElasticsearchParseException("unit [{}] not supported for date math [{}]", unit, mathString);
+        }
+        return propertyToRound;
     }
 
     private long parseDateTime(String value, DateTimeZone timeZone) {

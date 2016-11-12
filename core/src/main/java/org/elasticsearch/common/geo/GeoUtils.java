@@ -370,50 +370,11 @@ public class GeoUtils {
         NumberFormatException numberFormatException = null;
 
         if(parser.currentToken() == Token.START_OBJECT) {
-            while(parser.nextToken() != Token.END_OBJECT) {
-                if(parser.currentToken() == Token.FIELD_NAME) {
-                    String field = parser.currentName();
-                    if(LATITUDE.equals(field)) {
-                        parser.nextToken();
-                        switch (parser.currentToken()) {
-                            case VALUE_NUMBER:
-                            case VALUE_STRING:
-                                try {
-                                    lat = parser.doubleValue(true);
-                                } catch (NumberFormatException e) {
-                                    numberFormatException = e;
-                                }
-                                break;
-                            default:
-                                throw new ElasticsearchParseException("latitude must be a number");
-                        }
-                    } else if (LONGITUDE.equals(field)) {
-                        parser.nextToken();
-                        switch (parser.currentToken()) {
-                            case VALUE_NUMBER:
-                            case VALUE_STRING:
-                                try {
-                                    lon = parser.doubleValue(true);
-                                } catch (NumberFormatException e) {
-                                    numberFormatException = e;
-                                }
-                                break;
-                            default:
-                                throw new ElasticsearchParseException("longitude must be a number");
-                        }
-                    } else if (GEOHASH.equals(field)) {
-                        if(parser.nextToken() == Token.VALUE_STRING) {
-                            geohash = parser.text();
-                        } else {
-                            throw new ElasticsearchParseException("geohash must be a string");
-                        }
-                    } else {
-                        throw new ElasticsearchParseException("field must be either [{}], [{}] or [{}]", LATITUDE, LONGITUDE, GEOHASH);
-                    }
-                } else {
-                    throw new ElasticsearchParseException("token [{}] not allowed", parser.currentToken());
-                }
-            }
+            GoThroughToken goThroughToken = new GoThroughToken(parser, lat, lon, geohash, numberFormatException).invoke();
+            geohash = goThroughToken.getGeohash();
+            lat = goThroughToken.getLat();
+            lon = goThroughToken.getLon();
+            numberFormatException = goThroughToken.getNumberFormatException();
 
             if (geohash != null) {
                 if(!Double.isNaN(lat) || !Double.isNaN(lon)) {
@@ -493,5 +454,85 @@ public class GeoUtils {
     }
 
     private GeoUtils() {
+    }
+
+    private static class GoThroughToken {
+        private XContentParser parser;
+        private double lat;
+        private double lon;
+        private String geohash;
+        private NumberFormatException numberFormatException;
+
+        public GoThroughToken(XContentParser parser, double lat, double lon, String geohash, NumberFormatException numberFormatException) {
+            this.parser = parser;
+            this.lat = lat;
+            this.lon = lon;
+            this.geohash = geohash;
+            this.numberFormatException = numberFormatException;
+        }
+
+        public double getLat() {
+            return lat;
+        }
+
+        public double getLon() {
+            return lon;
+        }
+
+        public String getGeohash() {
+            return geohash;
+        }
+
+        public NumberFormatException getNumberFormatException() {
+            return numberFormatException;
+        }
+
+        public GoThroughToken invoke() throws IOException {
+            while(parser.nextToken() != Token.END_OBJECT) {
+                if(parser.currentToken() == Token.FIELD_NAME) {
+                    String field = parser.currentName();
+                    if(LATITUDE.equals(field)) {
+                        parser.nextToken();
+                        switch (parser.currentToken()) {
+                            case VALUE_NUMBER:
+                            case VALUE_STRING:
+                                try {
+                                    lat = parser.doubleValue(true);
+                                } catch (NumberFormatException e) {
+                                    numberFormatException = e;
+                                }
+                                break;
+                            default:
+                                throw new ElasticsearchParseException("latitude must be a number");
+                        }
+                    } else if (LONGITUDE.equals(field)) {
+                        parser.nextToken();
+                        switch (parser.currentToken()) {
+                            case VALUE_NUMBER:
+                            case VALUE_STRING:
+                                try {
+                                    lon = parser.doubleValue(true);
+                                } catch (NumberFormatException e) {
+                                    numberFormatException = e;
+                                }
+                                break;
+                            default:
+                                throw new ElasticsearchParseException("longitude must be a number");
+                        }
+                    } else if (GEOHASH.equals(field)) {
+                        if(parser.nextToken() == Token.VALUE_STRING) {
+                            geohash = parser.text();
+                        } else {
+                            throw new ElasticsearchParseException("geohash must be a string");
+                        }
+                    } else {
+                        throw new ElasticsearchParseException("field must be either [{}], [{}] or [{}]", LATITUDE, LONGITUDE, GEOHASH);
+                    }
+                } else {
+                    throw new ElasticsearchParseException("token [{}] not allowed", parser.currentToken());
+                }
+            }
+            return this;
+        }
     }
 }

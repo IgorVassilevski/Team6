@@ -596,36 +596,40 @@ public class TermVectorsRequest extends SingleShardRequest<TermVectorsRequest> i
                     termVectorsRequest.perFieldAnalyzer(readPerFieldAnalyzer(parser.map()));
                 } else if (currentFieldName.equals("filter")) {
                     termVectorsRequest.filterSettings(readFilterSettings(parser));
-                } else if ("_index".equals(currentFieldName)) { // the following is important for multi request parsing.
-                    termVectorsRequest.index = parser.text();
-                } else if ("_type".equals(currentFieldName)) {
-                    termVectorsRequest.type = parser.text();
-                } else if ("_id".equals(currentFieldName)) {
-                    if (termVectorsRequest.doc != null) {
-                        throw new ElasticsearchParseException("failed to parse term vectors request. either [id] or [doc] can be specified, but not both!");
-                    }
-                    termVectorsRequest.id = parser.text();
-                } else if ("doc".equals(currentFieldName)) {
-                    if (termVectorsRequest.id != null) {
-                        throw new ElasticsearchParseException("failed to parse term vectors request. either [id] or [doc] can be specified, but not both!");
-                    }
-                    termVectorsRequest.doc(jsonBuilder().copyCurrentStructure(parser));
-                } else if ("_routing".equals(currentFieldName) || "routing".equals(currentFieldName)) {
-                    termVectorsRequest.routing = parser.text();
-                } else if ("_parent".equals(currentFieldName) || "parent".equals(currentFieldName)) {
-                    termVectorsRequest.parent = parser.text();
-                } else if ("_version".equals(currentFieldName) || "version".equals(currentFieldName)) {
-                    termVectorsRequest.version = parser.longValue();
-                } else if ("_version_type".equals(currentFieldName) || "_versionType".equals(currentFieldName) || "version_type".equals(currentFieldName) || "versionType".equals(currentFieldName)) {
-                    termVectorsRequest.versionType = VersionType.fromString(parser.text());
-                } else {
-                    throw new ElasticsearchParseException("failed to parse term vectors request. unknown field [{}]", currentFieldName);
-                }
+                } else multiRequestParsing(termVectorsRequest, parser, currentFieldName);
             }
         }
         if (fields.size() > 0) {
             String[] fieldsAsArray = new String[fields.size()];
             termVectorsRequest.selectedFields(fields.toArray(fieldsAsArray));
+        }
+    }
+
+    private static void multiRequestParsing(TermVectorsRequest termVectorsRequest, XContentParser parser, String currentFieldName) throws IOException {
+        if ("_index".equals(currentFieldName)) { // the following is important for multi request parsing.
+            termVectorsRequest.index = parser.text();
+        } else if ("_type".equals(currentFieldName)) {
+            termVectorsRequest.type = parser.text();
+        } else if ("_id".equals(currentFieldName)) {
+            if (termVectorsRequest.doc != null) {
+                throw new ElasticsearchParseException("failed to parse term vectors request. either [id] or [doc] can be specified, but not both!");
+            }
+            termVectorsRequest.id = parser.text();
+        } else if ("doc".equals(currentFieldName)) {
+            if (termVectorsRequest.id != null) {
+                throw new ElasticsearchParseException("failed to parse term vectors request. either [id] or [doc] can be specified, but not both!");
+            }
+            termVectorsRequest.doc(jsonBuilder().copyCurrentStructure(parser));
+        } else if ("_routing".equals(currentFieldName) || "routing".equals(currentFieldName)) {
+            termVectorsRequest.routing = parser.text();
+        } else if ("_parent".equals(currentFieldName) || "parent".equals(currentFieldName)) {
+            termVectorsRequest.parent = parser.text();
+        } else if ("_version".equals(currentFieldName) || "version".equals(currentFieldName)) {
+            termVectorsRequest.version = parser.longValue();
+        } else if ("_version_type".equals(currentFieldName) || "_versionType".equals(currentFieldName) || "version_type".equals(currentFieldName) || "versionType".equals(currentFieldName)) {
+            termVectorsRequest.versionType = VersionType.fromString(parser.text());
+        } else {
+            throw new ElasticsearchParseException("failed to parse term vectors request. unknown field [{}]", currentFieldName);
         }
     }
 

@@ -232,6 +232,11 @@ public class TransportClusterHealthAction extends TransportMasterNodeReadAction<
                 // missing indices, wait a bit more...
             }
         }
+        waitForCounter = getWaitForCounter(request, response, waitForCounter);
+        return waitForCounter == waitFor;
+    }
+
+    private int getWaitForCounter(ClusterHealthRequest request, ClusterHealthResponse response, int waitForCounter) {
         if (!request.waitForNodes().isEmpty()) {
             if (request.waitForNodes().startsWith(">=")) {
                 int expected = Integer.parseInt(request.waitForNodes().substring(2));
@@ -280,7 +285,7 @@ public class TransportClusterHealthAction extends TransportMasterNodeReadAction<
                 }
             }
         }
-        return waitForCounter == waitFor;
+        return waitForCounter;
     }
 
 

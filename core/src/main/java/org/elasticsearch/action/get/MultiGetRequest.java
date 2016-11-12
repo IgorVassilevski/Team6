@@ -396,35 +396,16 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
                 if (token == XContentParser.Token.FIELD_NAME) {
                     currentFieldName = parser.currentName();
                 } else if (token.isValue()) {
-                    if ("_index".equals(currentFieldName)) {
-                        if (!allowExplicitIndex) {
-                            throw new IllegalArgumentException("explicit index in multi get is not allowed");
-                        }
-                        index = parser.text();
-                    } else if ("_type".equals(currentFieldName)) {
-                        type = parser.text();
-                    } else if ("_id".equals(currentFieldName)) {
-                        id = parser.text();
-                    } else if ("_routing".equals(currentFieldName) || "routing".equals(currentFieldName)) {
-                        routing = parser.text();
-                    } else if ("_parent".equals(currentFieldName) || "parent".equals(currentFieldName)) {
-                        parent = parser.text();
-                    } else if ("fields".equals(currentFieldName)) {
-                        fields = new ArrayList<>();
-                        fields.add(parser.text());
-                    } else if ("_version".equals(currentFieldName) || "version".equals(currentFieldName)) {
-                        version = parser.longValue();
-                    } else if ("_version_type".equals(currentFieldName) || "_versionType".equals(currentFieldName) || "version_type".equals(currentFieldName) || "versionType".equals(currentFieldName)) {
-                        versionType = VersionType.fromString(parser.text());
-                    } else if ("_source".equals(currentFieldName)) {
-                        if (parser.isBooleanValue()) {
-                            fetchSourceContext = new FetchSourceContext(parser.booleanValue());
-                        } else if (token == XContentParser.Token.VALUE_STRING) {
-                            fetchSourceContext = new FetchSourceContext(new String[]{parser.text()});
-                        } else {
-                            throw new ElasticsearchParseException("illegal type for _source: [{}]", token);
-                        }
-                    }
+                    ParseDocumentIndex parseDocumentIndex = new ParseDocumentIndex(parser, allowExplicitIndex, currentFieldName, token, index, type, id, routing, parent, fields, version, versionType, fetchSourceContext).invoke();
+                    fields = parseDocumentIndex.getFields();
+                    fetchSourceContext = parseDocumentIndex.getFetchSourceContext();
+                    index = parseDocumentIndex.getIndex();
+                    type = parseDocumentIndex.getType();
+                    id = parseDocumentIndex.getId();
+                    routing = parseDocumentIndex.getRouting();
+                    parent = parseDocumentIndex.getParent();
+                    version = parseDocumentIndex.getVersion();
+                    versionType = parseDocumentIndex.getVersionType();
                 } else if (token == XContentParser.Token.START_ARRAY) {
                     if ("fields".equals(currentFieldName)) {
                         fields = new ArrayList<>();
@@ -440,34 +421,8 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
                     }
 
                 } else if (token == XContentParser.Token.START_OBJECT) {
-                    if ("_source".equals(currentFieldName)) {
-                        List<String> currentList = null, includes = null, excludes = null;
-
-                        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                            if (token == XContentParser.Token.FIELD_NAME) {
-                                currentFieldName = parser.currentName();
-                                if ("includes".equals(currentFieldName) || "include".equals(currentFieldName)) {
-                                    currentList = includes != null ? includes : (includes = new ArrayList<>(2));
-                                } else if ("excludes".equals(currentFieldName) || "exclude".equals(currentFieldName)) {
-                                    currentList = excludes != null ? excludes : (excludes = new ArrayList<>(2));
-                                } else {
-                                    throw new ElasticsearchParseException("source definition may not contain [{}]", parser.text());
-                                }
-                            } else if (token == XContentParser.Token.START_ARRAY) {
-                                while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                                    currentList.add(parser.text());
-                                }
-                            } else if (token.isValue()) {
-                                currentList.add(parser.text());
-                            } else {
-                                throw new ElasticsearchParseException("unexpected token while parsing source settings");
-                            }
-                        }
-
-                        fetchSourceContext = new FetchSourceContext(
-                                includes == null ? Strings.EMPTY_ARRAY : includes.toArray(new String[includes.size()]),
-                                excludes == null ? Strings.EMPTY_ARRAY : excludes.toArray(new String[excludes.size()]));
-                    }
+                    ParseDocumentStartObject parseDocumentStartObject = new ParseDocumentStartObject(parser, currentFieldName, fetchSourceContext).invoke();
+                    fetchSourceContext = parseDocumentStartObject.getFetchSourceContext();
                 }
             }
             String[] aFields;
@@ -530,6 +485,160 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
         out.writeVInt(items.size());
         for (Item item : items) {
             item.writeTo(out);
+        }
+    }
+
+    private static class ParseDocumentStartObject {
+        private XContentParser parser;
+        private String currentFieldName;
+        private FetchSourceContext fetchSourceContext;
+
+        public ParseDocumentStartObject(XContentParser parser, String currentFieldName, FetchSourceContext fetchSourceContext) {
+            this.parser = parser;
+            this.currentFieldName = currentFieldName;
+            this.fetchSourceContext = fetchSourceContext;
+        }
+
+        public String getCurrentFieldName() {
+            return currentFieldName;
+        }
+
+        public FetchSourceContext getFetchSourceContext() {
+            return fetchSourceContext;
+        }
+
+        public ParseDocumentStartObject invoke() throws IOException {
+            XContentParser.Token token;
+            if ("_source".equals(currentFieldName)) {
+                List<String> currentList = null, includes = null, excludes = null;
+
+                while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
+                    if (token == XContentParser.Token.FIELD_NAME) {
+                        currentFieldName = parser.currentName();
+                        if ("includes".equals(currentFieldName) || "include".equals(currentFieldName)) {
+                            currentList = includes != null ? includes : (includes = new ArrayList<>(2));
+                        } else if ("excludes".equals(currentFieldName) || "exclude".equals(currentFieldName)) {
+                            currentList = excludes != null ? excludes : (excludes = new ArrayList<>(2));
+                        } else {
+                            throw new ElasticsearchParseException("source definition may not contain [{}]", parser.text());
+                        }
+                    } else if (token == XContentParser.Token.START_ARRAY) {
+                        while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
+                            currentList.add(parser.text());
+                        }
+                    } else if (token.isValue()) {
+                        currentList.add(parser.text());
+                    } else {
+                        throw new ElasticsearchParseException("unexpected token while parsing source settings");
+                    }
+                }
+
+                fetchSourceContext = new FetchSourceContext(
+                        includes == null ? Strings.EMPTY_ARRAY : includes.toArray(new String[includes.size()]),
+                        excludes == null ? Strings.EMPTY_ARRAY : excludes.toArray(new String[excludes.size()]));
+            }
+            return this;
+        }
+    }
+
+    private static class ParseDocumentIndex {
+        private XContentParser parser;
+        private boolean allowExplicitIndex;
+        private String currentFieldName;
+        private XContentParser.Token token;
+        private String index;
+        private String type;
+        private String id;
+        private String routing;
+        private String parent;
+        private List<String> fields;
+        private long version;
+        private VersionType versionType;
+        private FetchSourceContext fetchSourceContext;
+
+        public ParseDocumentIndex(XContentParser parser, boolean allowExplicitIndex, String currentFieldName, XContentParser.Token token, String index, String type, String id, String routing, String parent, List<String> fields, long version, VersionType versionType, FetchSourceContext fetchSourceContext) {
+            this.parser = parser;
+            this.allowExplicitIndex = allowExplicitIndex;
+            this.currentFieldName = currentFieldName;
+            this.token = token;
+            this.index = index;
+            this.type = type;
+            this.id = id;
+            this.routing = routing;
+            this.parent = parent;
+            this.fields = fields;
+            this.version = version;
+            this.versionType = versionType;
+            this.fetchSourceContext = fetchSourceContext;
+        }
+
+        public String getIndex() {
+            return index;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public String getRouting() {
+            return routing;
+        }
+
+        public String getParent() {
+            return parent;
+        }
+
+        public List<String> getFields() {
+            return fields;
+        }
+
+        public long getVersion() {
+            return version;
+        }
+
+        public VersionType getVersionType() {
+            return versionType;
+        }
+
+        public FetchSourceContext getFetchSourceContext() {
+            return fetchSourceContext;
+        }
+
+        public ParseDocumentIndex invoke() throws IOException {
+            if ("_index".equals(currentFieldName)) {
+                if (!allowExplicitIndex) {
+                    throw new IllegalArgumentException("explicit index in multi get is not allowed");
+                }
+                index = parser.text();
+            } else if ("_type".equals(currentFieldName)) {
+                type = parser.text();
+            } else if ("_id".equals(currentFieldName)) {
+                id = parser.text();
+            } else if ("_routing".equals(currentFieldName) || "routing".equals(currentFieldName)) {
+                routing = parser.text();
+            } else if ("_parent".equals(currentFieldName) || "parent".equals(currentFieldName)) {
+                parent = parser.text();
+            } else if ("fields".equals(currentFieldName)) {
+                fields = new ArrayList<>();
+                fields.add(parser.text());
+            } else if ("_version".equals(currentFieldName) || "version".equals(currentFieldName)) {
+                version = parser.longValue();
+            } else if ("_version_type".equals(currentFieldName) || "_versionType".equals(currentFieldName) || "version_type".equals(currentFieldName) || "versionType".equals(currentFieldName)) {
+                versionType = VersionType.fromString(parser.text());
+            } else if ("_source".equals(currentFieldName)) {
+                if (parser.isBooleanValue()) {
+                    fetchSourceContext = new FetchSourceContext(parser.booleanValue());
+                } else if (token == XContentParser.Token.VALUE_STRING) {
+                    fetchSourceContext = new FetchSourceContext(new String[]{parser.text()});
+                } else {
+                    throw new ElasticsearchParseException("illegal type for _source: [{}]", token);
+                }
+            }
+            return this;
         }
     }
 }

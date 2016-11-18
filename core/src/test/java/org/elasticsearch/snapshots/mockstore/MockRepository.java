@@ -33,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.carrotsearch.randomizedtesting.RandomizedContext;
+import org.apache.lucene.index.CorruptIndexException;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.metadata.RepositoryMetaData;
@@ -40,7 +42,6 @@ import org.elasticsearch.common.blobstore.BlobContainer;
 import org.elasticsearch.common.blobstore.BlobMetaData;
 import org.elasticsearch.common.blobstore.BlobPath;
 import org.elasticsearch.common.blobstore.BlobStore;
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.io.PathUtils;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
@@ -48,6 +49,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.env.Environment;
 import org.elasticsearch.plugins.RepositoryPlugin;
 import org.elasticsearch.repositories.Repository;
+import org.elasticsearch.repositories.IndexId;
 import org.elasticsearch.repositories.fs.FsRepository;
 import org.elasticsearch.snapshots.SnapshotId;
 
@@ -81,6 +83,8 @@ public class MockRepository extends FsRepository {
 
     private final double randomDataFileIOExceptionRate;
 
+    private final boolean useLuceneCorruptionException;
+
     private final long maximumNumberOfFailures;
 
     private final long waitAfterUnblock;
@@ -101,6 +105,7 @@ public class MockRepository extends FsRepository {
         super(overrideSettings(metadata, environment), environment);
         randomControlIOExceptionRate = metadata.settings().getAsDouble("random_control_io_exception_rate", 0.0);
         randomDataFileIOExceptionRate = metadata.settings().getAsDouble("random_data_file_io_exception_rate", 0.0);
+        useLuceneCorruptionException = metadata.settings().getAsBoolean("use_lucene_corruption", false);
         maximumNumberOfFailures = metadata.settings().getAsLong("max_failure_number", 100L);
         blockOnControlFiles = metadata.settings().getAsBoolean("block_on_control", false);
         blockOnDataFiles = metadata.settings().getAsBoolean("block_on_data", false);
@@ -112,8 +117,8 @@ public class MockRepository extends FsRepository {
     }
 
     @Override
-    public void initializeSnapshot(SnapshotId snapshotId, List<String> indices, MetaData clusterMetadata) {
-        if (blockOnInitialization ) {
+    public void initializeSnapshot(SnapshotId snapshotId, List<IndexId> indices, MetaData clusterMetadata) {
+        if (blockOnInitialization) {
             blockExecution();
         }
         super.initializeSnapshot(snapshotId, indices, clusterMetadata);
@@ -245,7 +250,11 @@ public class MockRepository extends FsRepository {
                 if (blobName.startsWith("__")) {
                     if (shouldFail(blobName, randomDataFileIOExceptionRate) && (incrementAndGetFailureCount() < maximumNumberOfFailures)) {
                         logger.info("throwing random IOException for file [{}] at path [{}]", blobName, path());
-                        throw new IOException("Random IOException");
+                        if (useLuceneCorruptionException) {
+                            throw new CorruptIndexException("Random corruption", "random file");
+                        } else {
+                            throw new IOException("Random IOException");
+                        }
                     } else if (blockOnDataFiles) {
                         logger.info("blocking I/O operation for file [{}] at path [{}]", blobName, path());
                         if (blockExecution() && waitAfterUnblock > 0) {
@@ -313,20 +322,28 @@ public class MockRepository extends FsRepository {
 
             @Override
             public void move(String sourceBlob, String targetBlob) throws IOException {
-                maybeIOExceptionOrBlock(targetBlob);
-                super.move(sourceBlob, targetBlob);
-            }
-
-            @Override
-            public void writeBlob(String blobName, BytesReference bytes) throws IOException {
-                maybeIOExceptionOrBlock(blobName);
-                super.writeBlob(blobName, bytes);
+                if (RandomizedContext.current().getRandom().nextBoolean()) {
+                    // simulate a non-atomic move, since many blob container implementations
+                    // will not have an atomic move, and we should be able to handle that
+                    maybeIOExceptionOrBlock(targetBlob);
+                    super.writeBlob(targetBlob, super.readBlob(sourceBlob), 0L);
+                    super.deleteBlob(sourceBlob);
+                } else {
+                    // atomic move since this inherits from FsBlobContainer which provides atomic moves
+                    maybeIOExceptionOrBlock(targetBlob);
+                    super.move(sourceBlob, targetBlob);
+                }
             }
 
             @Override
             public void writeBlob(String blobName, InputStream inputStream, long blobSize) throws IOException {
                 maybeIOExceptionOrBlock(blobName);
                 super.writeBlob(blobName, inputStream, blobSize);
+                if (RandomizedContext.current().getRandom().nextBoolean()) {
+                    // for network based repositories, the blob may have been written but we may still
+                    // get an error with the client connection, so an IOException here simulates this
+                    maybeIOExceptionOrBlock(blobName);
+                }
             }
         }
     }

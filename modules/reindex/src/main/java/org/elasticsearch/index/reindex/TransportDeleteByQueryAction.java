@@ -19,6 +19,7 @@
 
 package org.elasticsearch.index.reindex;
 
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.support.ActionFilters;
@@ -29,7 +30,6 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.tasks.Task;
@@ -53,9 +53,15 @@ public class TransportDeleteByQueryAction extends HandledTransportAction<DeleteB
 
     @Override
     protected void doExecute(Task task, DeleteByQueryRequest request, ActionListener<BulkIndexByScrollResponse> listener) {
-        ClusterState state = clusterService.state();
-        ParentTaskAssigningClient client = new ParentTaskAssigningClient(this.client, clusterService.localNode(), task);
-        new AsyncDeleteBySearchAction((BulkByScrollTask) task, logger, client, threadPool, request, listener, scriptService, state).start();
+        if (request.getSlices() > 1) {
+            ReindexParallelizationHelper.startSlices(client, taskManager, DeleteByQueryAction.INSTANCE, clusterService.localNode().getId(),
+                    (ParentBulkByScrollTask) task, request, listener);
+        } else {
+            ClusterState state = clusterService.state();
+            ParentTaskAssigningClient client = new ParentTaskAssigningClient(this.client, clusterService.localNode(), task);
+            new AsyncDeleteBySearchAction((WorkingBulkByScrollTask) task, logger, client, threadPool, request, listener, scriptService,
+                    state).start();
+        }
     }
 
     @Override
@@ -68,10 +74,19 @@ public class TransportDeleteByQueryAction extends HandledTransportAction<DeleteB
      */
     static class AsyncDeleteBySearchAction extends AbstractAsyncBulkIndexByScrollAction<DeleteByQueryRequest> {
 
-        public AsyncDeleteBySearchAction(BulkByScrollTask task, ESLogger logger, ParentTaskAssigningClient client, ThreadPool threadPool,
-                                         DeleteByQueryRequest request, ActionListener<BulkIndexByScrollResponse> listener,
-                                         ScriptService scriptService, ClusterState clusterState) {
+        public AsyncDeleteBySearchAction(WorkingBulkByScrollTask task, Logger logger, ParentTaskAssigningClient client,
+                ThreadPool threadPool, DeleteByQueryRequest request, ActionListener<BulkIndexByScrollResponse> listener,
+                ScriptService scriptService, ClusterState clusterState) {
             super(task, logger, client, threadPool, request, listener, scriptService, clusterState);
+        }
+
+        @Override
+        protected boolean needsSourceDocumentVersions() {
+            /*
+             * We always need the version of the source document so we can report a version conflict if we try to delete it and it has been
+             * changed.
+             */
+            return true;
         }
 
         @Override

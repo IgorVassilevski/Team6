@@ -61,8 +61,6 @@ import org.elasticsearch.search.aggregations.metrics.geobounds.GeoBounds;
 import org.elasticsearch.search.aggregations.metrics.geobounds.GeoBoundsAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.geocentroid.GeoCentroid;
 import org.elasticsearch.search.aggregations.metrics.geocentroid.GeoCentroidAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.geoheatmap.GeoHeatmap;
-import org.elasticsearch.search.aggregations.metrics.geoheatmap.GeoHeatmapAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.max.Max;
 import org.elasticsearch.search.aggregations.metrics.max.MaxAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.min.Min;
@@ -230,13 +228,6 @@ public class AggregationBuilders {
      */
     public static GeoGridAggregationBuilder geohashGrid(String name) {
         return new GeoGridAggregationBuilder(name);
-    }
-
-    /**
-     * Create a new {@link GeoHeatmap} aggregation with the given name.
-     */
-    public static GeoHeatmapAggregationBuilder geoHeatmap(String name) {
-        return new GeoHeatmapAggregationBuilder(name);
     }
 
     /**

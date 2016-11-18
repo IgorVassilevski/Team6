@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.ExceptionsHelper;
@@ -62,12 +63,13 @@ public class PipelineStore extends AbstractComponent implements ClusterStateList
 
     @Override
     public void clusterChanged(ClusterChangedEvent event) {
-        innerUpdatePipelines(event.state());
+        innerUpdatePipelines(event.previousState(), event.state());
     }
 
-    void innerUpdatePipelines(ClusterState state) {
+    void innerUpdatePipelines(ClusterState previousState, ClusterState state) {
         IngestMetadata ingestMetadata = state.getMetaData().custom(IngestMetadata.TYPE);
-        if (ingestMetadata == null) {
+        IngestMetadata previousIngestMetadata = previousState.getMetaData().custom(IngestMetadata.TYPE);
+        if (Objects.equals(ingestMetadata, previousIngestMetadata)) {
             return;
         }
 
@@ -205,6 +207,11 @@ public class PipelineStore extends AbstractComponent implements ClusterStateList
     List<PipelineConfiguration> innerGetPipelines(IngestMetadata ingestMetadata, String... ids) {
         if (ingestMetadata == null) {
             return Collections.emptyList();
+        }
+
+        // if we didn't ask for _any_ ID, then we get them all (this is the same as if they ask for '*')
+        if (ids.length == 0) {
+            return new ArrayList<>(ingestMetadata.getPipelines().values());
         }
 
         List<PipelineConfiguration> result = new ArrayList<>(ids.length);

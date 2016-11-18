@@ -19,6 +19,8 @@
 
 package org.elasticsearch.rest;
 
+import org.apache.logging.log4j.message.ParameterizedMessage;
+import org.apache.logging.log4j.util.Supplier;
 import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.bytes.BytesArray;
@@ -28,24 +30,15 @@ import org.elasticsearch.common.path.PathTrie;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.plugins.ActionPlugin;
-import org.elasticsearch.rest.support.RestUtils;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.util.Collections.unmodifiableSet;
 import static org.elasticsearch.rest.RestStatus.BAD_REQUEST;
 import static org.elasticsearch.rest.RestStatus.OK;
 
-/**
- *
- */
 public class RestController extends AbstractLifecycleComponent {
     private final PathTrie<RestHandler> getHandlers = new PathTrie<>(RestUtils.REST_DECODER);
     private final PathTrie<RestHandler> postHandlers = new PathTrie<>(RestUtils.REST_DECODER);
@@ -193,7 +186,7 @@ public class RestController extends AbstractLifecycleComponent {
         if (!checkRequestParameters(request, channel)) {
             return;
         }
-        try (ThreadContext.StoredContext t = threadContext.stashContext()) {
+        try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
             for (String key : headersToCopy) {
                 String httpHeader = request.header(key);
                 if (httpHeader != null) {
@@ -214,7 +207,7 @@ public class RestController extends AbstractLifecycleComponent {
             channel.sendResponse(new BytesRestResponse(channel, e));
         } catch (Exception inner) {
             inner.addSuppressed(e);
-            logger.error("failed to send failure response for uri [{}]", inner, request.uri());
+            logger.error((Supplier<?>) () -> new ParameterizedMessage("failed to send failure response for uri [{}]", request.uri()), inner);
         }
     }
 
@@ -224,10 +217,11 @@ public class RestController extends AbstractLifecycleComponent {
      */
     boolean checkRequestParameters(final RestRequest request, final RestChannel channel) {
         // error_trace cannot be used when we disable detailed errors
-        if (channel.detailedErrorsEnabled() == false && request.paramAsBoolean("error_trace", false)) {
+        // we consume the error_trace parameter first to ensure that it is always consumed
+        if (request.paramAsBoolean("error_trace", false) && channel.detailedErrorsEnabled() == false) {
             try {
                 XContentBuilder builder = channel.newErrorBuilder();
-                builder.startObject().field("error","error traces in responses are disabled.").endObject().string();
+                builder.startObject().field("error", "error traces in responses are disabled.").endObject().string();
                 RestResponse response = new BytesRestResponse(BAD_REQUEST, builder);
                 response.addHeader("Content-Type", "application/json");
                 channel.sendResponse(response);
@@ -316,7 +310,7 @@ public class RestController extends AbstractLifecycleComponent {
                 try {
                     channel.sendResponse(new BytesRestResponse(channel, e));
                 } catch (IOException e1) {
-                    logger.error("Failed to send failure response for uri [{}]", e1, request.uri());
+                    logger.error((Supplier<?>) () -> new ParameterizedMessage("Failed to send failure response for uri [{}]", request.uri()), e1);
                 }
             }
         }

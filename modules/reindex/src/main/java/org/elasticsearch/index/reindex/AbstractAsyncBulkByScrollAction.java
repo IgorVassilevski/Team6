@@ -19,7 +19,9 @@
 
 package org.elasticsearch.index.reindex;
 
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
 import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.bulk.BackoffPolicy;
@@ -30,7 +32,6 @@ import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.bulk.Retry;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.ParentTaskAssigningClient;
-import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.AbstractRunnable;
@@ -63,8 +64,8 @@ import static org.elasticsearch.search.sort.SortBuilders.fieldSort;
  * their tests can use them. Most methods run in the listener thread pool because the are meant to be fast and don't expect to block.
  */
 public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBulkByScrollRequest<Request>> {
-    protected final ESLogger logger;
-    protected final BulkByScrollTask task;
+    protected final Logger logger;
+    protected final WorkingBulkByScrollTask task;
     protected final ThreadPool threadPool;
     /**
      * The request for this action. Named mainRequest because we create lots of <code>request</code> variables all representing child
@@ -78,9 +79,9 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
     private final ParentTaskAssigningClient client;
     private final ActionListener<BulkIndexByScrollResponse> listener;
     private final Retry bulkRetry;
-    private final ScrollableHitSource scrollSource; 
+    private final ScrollableHitSource scrollSource;
 
-    public AbstractAsyncBulkByScrollAction(BulkByScrollTask task, ESLogger logger, ParentTaskAssigningClient client,
+    public AbstractAsyncBulkByScrollAction(WorkingBulkByScrollTask task, Logger logger, ParentTaskAssigningClient client,
                                            ThreadPool threadPool, Request mainRequest, ActionListener<BulkIndexByScrollResponse> listener) {
         this.task = task;
         this.logger = logger;
@@ -100,7 +101,13 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
         if (sorts == null || sorts.isEmpty()) {
             mainRequest.getSearchRequest().source().sort(fieldSort("_doc"));
         }
+        mainRequest.getSearchRequest().source().version(needsSourceDocumentVersions());
     }
+
+    /**
+     * Does this operation need the versions of the source documents?
+     */
+    protected abstract boolean needsSourceDocumentVersions();
 
     protected abstract BulkRequest buildBulk(Iterable<? extends ScrollableHitSource.Hit> docs);
 
@@ -208,7 +215,7 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
             return;
         }
         request.timeout(mainRequest.getTimeout());
-        request.consistencyLevel(mainRequest.getConsistency());
+        request.waitForActiveShards(mainRequest.getWaitForActiveShards());
         if (logger.isDebugEnabled()) {
             logger.debug("sending [{}] entry, [{}] bulk request", request.requests().size(),
                     new ByteSizeValue(request.estimatedSizeInBytes()));
@@ -249,22 +256,21 @@ public abstract class AbstractAsyncBulkByScrollAction<Request extends AbstractBu
                     recordFailure(item.getFailure(), failures);
                     continue;
                 }
-
                 switch (item.getOpType()) {
-                case "index":
-                case "create":
-                    IndexResponse ir = item.getResponse();
-                    if (ir.isCreated()) {
-                        task.countCreated();
-                    } else {
+                    case CREATE:
+                    case INDEX:
+                        if (item.getResponse().getResult() == DocWriteResponse.Result.CREATED) {
+                            task.countCreated();
+                        } else {
+                            task.countUpdated();
+                        }
+                        break;
+                    case UPDATE:
                         task.countUpdated();
-                    }
-                    break;
-                case "delete":
-                    task.countDeleted();
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown op type:  " + item.getOpType());
+                        break;
+                    case DELETE:
+                        task.countDeleted();
+                        break;
                 }
                 // Track the indexes we've seen so we can refresh them if requested
                 destinationIndicesThisBatch.add(item.getIndex());

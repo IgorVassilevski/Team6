@@ -28,7 +28,6 @@ import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.BoundTransportAddress;
-import org.elasticsearch.common.transport.LocalTransportAddress;
 import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
@@ -142,7 +141,7 @@ public class HttpServerTests extends ESTestCase {
 
         @Override
         public BoundTransportAddress boundAddress() {
-            LocalTransportAddress transportAddress = new LocalTransportAddress("1");
+            TransportAddress transportAddress = buildNewFakeTransportAddress();
             return new BoundTransportAddress(new TransportAddress[] {transportAddress} ,transportAddress);
         }
 
@@ -189,11 +188,11 @@ public class HttpServerTests extends ESTestCase {
     }
 
     private static final class TestRestRequest extends RestRequest {
-        private final String path;
+
         private final BytesReference content;
 
         private TestRestRequest(String path, String content) {
-            this.path = path;
+            super(Collections.emptyMap(), path);
             this.content = new BytesArray(content);
         }
 
@@ -205,11 +204,6 @@ public class HttpServerTests extends ESTestCase {
         @Override
         public String uri() {
             return null;
-        }
-
-        @Override
-        public String rawPath() {
-            return path;
         }
 
         @Override
@@ -232,24 +226,5 @@ public class HttpServerTests extends ESTestCase {
             return null;
         }
 
-        @Override
-        public boolean hasParam(String key) {
-            return false;
-        }
-
-        @Override
-        public String param(String key) {
-            return null;
-        }
-
-        @Override
-        public String param(String key, String defaultValue) {
-            return null;
-        }
-
-        @Override
-        public Map<String, String> params() {
-            return null;
-        }
     }
 }

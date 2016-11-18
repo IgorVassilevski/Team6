@@ -30,6 +30,7 @@ import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.common.lucene.index.ElasticsearchDirectoryReader;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.ReleasableLock;
+import org.elasticsearch.index.seqno.SequenceNumbersService;
 import org.elasticsearch.index.translog.Translog;
 
 import java.io.IOException;
@@ -106,12 +107,12 @@ public class ShadowEngine extends Engine {
 
 
     @Override
-    public boolean index(Index index) throws EngineException {
+    public IndexResult index(Index index) {
         throw new UnsupportedOperationException(shardId + " index operation not allowed on shadow engine");
     }
 
     @Override
-    public void delete(Delete delete) throws EngineException {
+    public DeleteResult delete(Delete delete) {
         throw new UnsupportedOperationException(shardId + " delete operation not allowed on shadow engine");
     }
 
@@ -191,7 +192,8 @@ public class ShadowEngine extends Engine {
             ensureOpen();
             searcherManager.maybeRefreshBlocking();
         } catch (AlreadyClosedException e) {
-            ensureOpen();
+            // This means there's a bug somewhere: don't suppress it
+            throw new AssertionError(e);
         } catch (EngineClosedException e) {
             throw e;
         } catch (Exception e) {
@@ -205,7 +207,7 @@ public class ShadowEngine extends Engine {
     }
 
     @Override
-    public IndexCommit snapshotIndex(boolean flushFirst) throws EngineException {
+    public IndexCommit acquireIndexCommit(boolean flushFirst) throws EngineException {
         throw new UnsupportedOperationException("Can not take snapshot from a shadow engine");
     }
 
@@ -256,7 +258,23 @@ public class ShadowEngine extends Engine {
     }
 
     @Override
+    public SequenceNumbersService seqNoService() {
+        throw new UnsupportedOperationException("ShadowEngine doesn't track sequence numbers");
+    }
+
+    @Override
+    public boolean isThrottled() {
+        return false;
+    }
+
+    @Override
+    public long getIndexThrottleTimeInMillis() {
+        return 0L;
+    }
+
+    @Override
     public Engine recoverFromTranslog() throws IOException {
         throw new UnsupportedOperationException("can't recover on a shadow engine");
     }
+
 }

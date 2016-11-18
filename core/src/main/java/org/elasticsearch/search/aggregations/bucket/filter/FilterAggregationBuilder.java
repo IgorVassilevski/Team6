@@ -19,7 +19,6 @@
 
 package org.elasticsearch.search.aggregations.bucket.filter;
 
-import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -38,7 +37,6 @@ import java.util.Objects;
 public class FilterAggregationBuilder extends AbstractAggregationBuilder<FilterAggregationBuilder> {
     public static final String NAME = "filter";
     private static final Type TYPE = new Type(NAME);
-    public static final ParseField AGGREGATION_NAME_FIELD = new ParseField(NAME);
 
     private final QueryBuilder filter;
 
@@ -74,7 +72,9 @@ public class FilterAggregationBuilder extends AbstractAggregationBuilder<FilterA
     @Override
     protected AggregatorFactory<?> doBuild(AggregationContext context, AggregatorFactory<?> parent,
             AggregatorFactories.Builder subFactoriesBuilder) throws IOException {
-        return new FilterAggregatorFactory(name, type, filter, context, parent, subFactoriesBuilder, metaData);
+        // TODO this sucks we need a rewrite phase for aggregations too
+        final QueryBuilder rewrittenFilter = QueryBuilder.rewriteQuery(filter, context.searchContext().getQueryShardContext());
+        return new FilterAggregatorFactory(name, type, rewrittenFilter, context, parent, subFactoriesBuilder, metaData);
     }
 
     @Override

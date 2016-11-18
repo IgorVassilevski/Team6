@@ -19,22 +19,18 @@
 
 package org.elasticsearch.index.query;
 
-import com.fasterxml.jackson.core.JsonParseException;
-
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.join.ScoreMode;
-import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.common.ParseFieldMatcher;
-import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.compress.CompressedXContent;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.mapper.MapperService;
-import org.elasticsearch.search.fetch.innerhits.InnerHitsContext;
+import org.elasticsearch.search.fetch.subphase.InnerHitsContext;
 import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.SortOrder;
@@ -49,7 +45,6 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.startsWith;
 
 public class HasParentQueryBuilderTests extends AbstractQueryTestCase<HasParentQueryBuilder> {
     protected static final String PARENT_TYPE = "parent";
@@ -104,7 +99,7 @@ public class HasParentQueryBuilderTests extends AbstractQueryTestCase<HasParentQ
     }
 
     @Override
-    protected void doAssertLuceneQuery(HasParentQueryBuilder queryBuilder, Query query, QueryShardContext context) throws IOException {
+    protected void doAssertLuceneQuery(HasParentQueryBuilder queryBuilder, Query query, SearchContext searchContext) throws IOException {
         assertThat(query, instanceOf(HasChildQueryBuilder.LateParsingQuery.class));
         HasChildQueryBuilder.LateParsingQuery lpq = (HasChildQueryBuilder.LateParsingQuery) query;
         assertEquals(queryBuilder.score() ? ScoreMode.Max : ScoreMode.None, lpq.getScoreMode());
@@ -112,9 +107,8 @@ public class HasParentQueryBuilderTests extends AbstractQueryTestCase<HasParentQ
         if (queryBuilder.innerHit() != null) {
             // have to rewrite again because the provided queryBuilder hasn't been rewritten (directly returned from
             // doCreateTestQueryBuilder)
-            queryBuilder = (HasParentQueryBuilder) queryBuilder.rewrite(context);
+            queryBuilder = (HasParentQueryBuilder) queryBuilder.rewrite(searchContext.getQueryShardContext());
 
-            SearchContext searchContext = SearchContext.current();
             assertNotNull(searchContext);
             Map<String, InnerHitBuilder> innerHitBuilders = new HashMap<>();
             InnerHitBuilder.extractInnerHits(queryBuilder, innerHitBuilders);
@@ -157,15 +151,12 @@ public class HasParentQueryBuilderTests extends AbstractQueryTestCase<HasParentQ
         builder.field("type", "foo"); // deprecated
         builder.endObject();
         builder.endObject();
-        try {
-            parseQuery(builder.string());
-            fail("type is deprecated");
-        } catch (IllegalArgumentException ex) {
-            assertEquals("Deprecated field [type] used, expected [parent_type] instead", ex.getMessage());
-        }
+        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> parseQuery(builder.string()));
+        assertEquals("Deprecated field [type] used, expected [parent_type] instead", e.getMessage());
 
         HasParentQueryBuilder queryBuilder = (HasParentQueryBuilder) parseQuery(builder.string(), ParseFieldMatcher.EMPTY);
         assertEquals("foo", queryBuilder.type());
+        checkWarningHeaders("Deprecated field [type] used, expected [parent_type] instead");
     }
 
     public void testToQueryInnerQueryType() throws IOException {
@@ -178,35 +169,6 @@ public class HasParentQueryBuilderTests extends AbstractQueryTestCase<HasParentQ
         //verify that the context types are still the same as the ones we previously set
         assertThat(shardContext.getTypes(), equalTo(searchTypes));
         HasChildQueryBuilderTests.assertLateParsingQuery(query, PARENT_TYPE, "id");
-    }
-
-    /**
-     * override superclass test, because here we need to take care that mutation doesn't happen inside
-     * `inner_hits` structure, because we don't parse them yet and so no exception will be triggered
-     * for any mutation there.
-     */
-    @Override
-    public void testUnknownObjectException() throws IOException {
-        String validQuery = createTestQueryBuilder().toString();
-        assertThat(validQuery, containsString("{"));
-        int endPosition = validQuery.indexOf("inner_hits");
-        if (endPosition == -1) {
-            endPosition = validQuery.length() - 1;
-        }
-        for (int insertionPosition = 0; insertionPosition < endPosition; insertionPosition++) {
-            if (validQuery.charAt(insertionPosition) == '{') {
-                String testQuery = validQuery.substring(0, insertionPosition) + "{ \"newField\" : " + validQuery.substring(insertionPosition) + "}";
-                try {
-                    parseQuery(testQuery);
-                    fail("some parsing exception expected for query: " + testQuery);
-                } catch (ParsingException | ElasticsearchParseException e) {
-                    // different kinds of exception wordings depending on location
-                    // of mutation, so no simple asserts possible here
-                } catch (JsonParseException e) {
-                    // mutation produced invalid json
-                }
-            }
-        }
     }
 
     @Override
@@ -259,10 +221,13 @@ public class HasParentQueryBuilderTests extends AbstractQueryTestCase<HasParentQ
         Optional<QueryBuilder> innerQueryBuilder = context.parseInnerQueryBuilder();
         assertTrue(innerQueryBuilder.isPresent() == false);
 
+        checkWarningHeaders("query malformed, empty clause found at [3:17]");
+
         parser = XContentFactory.xContent(query).createParser(query);
         QueryParseContext otherContext = createParseContext(parser, ParseFieldMatcher.STRICT);
         IllegalArgumentException ex = expectThrows(IllegalArgumentException.class, () -> otherContext.parseInnerQueryBuilder());
-        assertThat(ex.getMessage(), startsWith("query malformed, empty clause found at"));
+        assertThat(ex.getMessage(), equalTo("query malformed, empty clause found at [3:17]"));
+        checkWarningHeaders("query malformed, empty clause found at [3:17]");
     }
 
     public void testIgnoreUnmapped() throws IOException {

@@ -255,7 +255,6 @@ import org.elasticsearch.search.fetch.subphase.highlight.HighlightPhase;
 import org.elasticsearch.search.fetch.subphase.highlight.Highlighter;
 import org.elasticsearch.search.fetch.subphase.highlight.PlainHighlighter;
 import org.elasticsearch.search.fetch.subphase.highlight.PostingsHighlighter;
-import org.elasticsearch.search.fetch.subphase.highlight.UnifiedHighlighter;
 import org.elasticsearch.search.rescore.QueryRescorerBuilder;
 import org.elasticsearch.search.rescore.RescoreBuilder;
 import org.elasticsearch.search.sort.FieldSortBuilder;
@@ -616,11 +615,7 @@ public class SearchModule {
         highlighters.register("fvh",  new FastVectorHighlighter(settings));
         highlighters.register("plain", new PlainHighlighter());
         highlighters.register("postings", new PostingsHighlighter());
-        UnifiedHighlighter uh = new UnifiedHighlighter();
-        highlighters.register("unified", uh);
-        highlighters.register("unified_plain", uh);
-        highlighters.register("unified_postings", uh);
-        highlighters.register("unified_fvh", uh);
+
         highlighters.extractAndRegister(plugins, SearchPlugin::getHighlighters);
 
         return unmodifiableMap(highlighters.getRegistry());

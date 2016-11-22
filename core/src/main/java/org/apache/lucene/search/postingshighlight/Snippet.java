@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.lucene.search.highlight;
+package org.apache.lucene.search.postingshighlight;
 
 /**
  * Represents a scored highlighted snippet.

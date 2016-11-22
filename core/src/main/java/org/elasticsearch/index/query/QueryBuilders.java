@@ -29,10 +29,12 @@ import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder;
 import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilder;
 import org.elasticsearch.indices.TermsLookup;
 import org.elasticsearch.script.Script;
+import org.elasticsearch.script.ScriptService;
 
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A static factory for simple "import static" usage.
@@ -118,7 +120,7 @@ public abstract class QueryBuilders {
      * @param types The mapping/doc type
      */
     public static IdsQueryBuilder idsQuery(String... types) {
-        return new IdsQueryBuilder().types(types);
+        return new IdsQueryBuilder(types);
     }
 
     /**

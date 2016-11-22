@@ -653,9 +653,8 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
                 org.elasticsearch.repositories.RepositoryVerificationException::new, 120),
         INVALID_AGGREGATION_PATH_EXCEPTION(org.elasticsearch.search.aggregations.InvalidAggregationPathException.class,
                 org.elasticsearch.search.aggregations.InvalidAggregationPathException::new, 121),
-        // 123 used to be IndexAlreadyExistsException and was renamed
-        RESOURCE_ALREADY_EXISTS_EXCEPTION(ResourceAlreadyExistsException.class,
-            ResourceAlreadyExistsException::new, 123),
+        INDEX_ALREADY_EXISTS_EXCEPTION(org.elasticsearch.indices.IndexAlreadyExistsException.class,
+                org.elasticsearch.indices.IndexAlreadyExistsException::new, 123),
         // 124 used to be Script.ScriptParseException
         HTTP_ON_TRANSPORT_EXCEPTION(TcpTransport.HttpOnTransportException.class,
                 TcpTransport.HttpOnTransportException::new, 125),
@@ -694,7 +693,6 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
         STATUS_EXCEPTION(org.elasticsearch.ElasticsearchStatusException.class, org.elasticsearch.ElasticsearchStatusException::new, 145),
         TASK_CANCELLED_EXCEPTION(org.elasticsearch.tasks.TaskCancelledException.class,
             org.elasticsearch.tasks.TaskCancelledException::new, 146);
-
 
         final Class<? extends ElasticsearchException> exceptionClass;
         final FunctionThatThrowsIOException<StreamInput, ? extends ElasticsearchException> constructor;

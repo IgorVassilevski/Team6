@@ -17,26 +17,27 @@
  * under the License.
  */
 
-package org.elasticsearch;
+package org.elasticsearch.indices;
 
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.rest.RestStatus;
 
 import java.io.IOException;
 
-public class ResourceAlreadyExistsException extends ElasticsearchException {
+public class IndexAlreadyExistsException extends ElasticsearchException {
 
-    public ResourceAlreadyExistsException(Index index) {
-        this("index {} already exists", index.toString());
+    public IndexAlreadyExistsException(Index index) {
+        this(index, "index " + index.toString() + " already exists");
+    }
+
+    public IndexAlreadyExistsException(Index index, String message) {
+        super(message);
         setIndex(index);
     }
 
-    public ResourceAlreadyExistsException(String msg, Object... args) {
-        super(msg, args);
-    }
-
-    public ResourceAlreadyExistsException(StreamInput in) throws IOException{
+    public IndexAlreadyExistsException(StreamInput in) throws IOException{
         super(in);
     }
 

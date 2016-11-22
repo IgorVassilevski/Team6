@@ -20,12 +20,13 @@
 package org.elasticsearch.index.query;
 
 import org.apache.lucene.search.Query;
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.lucene.search.Queries;
-import org.elasticsearch.common.xcontent.ObjectParser;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentParser;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -47,7 +48,7 @@ public class MatchAllQueryBuilder extends AbstractQueryBuilder<MatchAllQueryBuil
     }
 
     @Override
-    protected void doWriteTo(StreamOutput out) {
+    protected void doWriteTo(StreamOutput out) throws IOException {
         // only superclass has state
     }
 
@@ -58,22 +59,38 @@ public class MatchAllQueryBuilder extends AbstractQueryBuilder<MatchAllQueryBuil
         builder.endObject();
     }
 
-    private static ObjectParser<MatchAllQueryBuilder, QueryParseContext> PARSER = new ObjectParser<>(NAME, MatchAllQueryBuilder::new);
+    public static Optional<MatchAllQueryBuilder> fromXContent(QueryParseContext parseContext) throws IOException {
+        XContentParser parser = parseContext.parser();
 
-    static {
-        declareStandardFields(PARSER);
-    }
-
-    public static Optional<MatchAllQueryBuilder> fromXContent(QueryParseContext context) {
-        try {
-            return Optional.of(PARSER.apply(context.parser(), context));
-        } catch (IllegalArgumentException e) {
-            throw new ParsingException(context.parser().getTokenLocation(), e.getMessage(), e);
+        String currentFieldName = null;
+        XContentParser.Token token;
+        String queryName = null;
+        float boost = AbstractQueryBuilder.DEFAULT_BOOST;
+        while (((token = parser.nextToken()) != XContentParser.Token.END_OBJECT && token != XContentParser.Token.END_ARRAY)) {
+            if (token == XContentParser.Token.FIELD_NAME) {
+                currentFieldName = parser.currentName();
+            } else if (token.isValue()) {
+                if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.NAME_FIELD)) {
+                    queryName = parser.text();
+                } else if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.BOOST_FIELD)) {
+                    boost = parser.floatValue();
+                } else {
+                    throw new ParsingException(parser.getTokenLocation(), "[" + MatchAllQueryBuilder.NAME +
+                            "] query does not support [" + currentFieldName + "]");
+                }
+            } else {
+                throw new ParsingException(parser.getTokenLocation(), "[" + MatchAllQueryBuilder.NAME +
+                        "] unknown token [" + token + "] after [" + currentFieldName + "]");
+            }
         }
+        MatchAllQueryBuilder queryBuilder = new MatchAllQueryBuilder();
+        queryBuilder.boost(boost);
+        queryBuilder.queryName(queryName);
+        return Optional.of(queryBuilder);
     }
 
     @Override
-    protected Query doToQuery(QueryShardContext context) {
+    protected Query doToQuery(QueryShardContext context) throws IOException {
         return Queries.newMatchAllQuery();
     }
 

@@ -29,14 +29,13 @@ import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.ActionFilterChain;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.util.concurrent.EsExecutors;
-import org.elasticsearch.ingest.CompoundProcessor;
 import org.elasticsearch.ingest.IngestService;
-import org.elasticsearch.ingest.Pipeline;
 import org.elasticsearch.ingest.PipelineExecutionService;
 import org.elasticsearch.ingest.PipelineStore;
-import org.elasticsearch.ingest.Processor;
 import org.elasticsearch.ingest.TestProcessor;
+import org.elasticsearch.ingest.CompoundProcessor;
+import org.elasticsearch.ingest.Pipeline;
+import org.elasticsearch.ingest.Processor;
 import org.elasticsearch.node.service.NodeService;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.test.ESTestCase;
@@ -44,7 +43,6 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.junit.Before;
 import org.mockito.stubbing.Answer;
 
-import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 import static org.hamcrest.Matchers.equalTo;
@@ -160,8 +158,7 @@ public class IngestActionFilterTests extends ESTestCase {
     public void testApplyWithBulkRequest() throws Exception {
         Task task = mock(Task.class);
         ThreadPool threadPool = mock(ThreadPool.class);
-        final ExecutorService executorService = EsExecutors.newDirectExecutorService();
-        when(threadPool.executor(any())).thenReturn(executorService);
+        when(threadPool.executor(any())).thenReturn(Runnable::run);
         PipelineStore store = mock(PipelineStore.class);
 
         Processor processor = new TestProcessor(ingestDocument -> ingestDocument.setFieldValue("field2", "value2"));

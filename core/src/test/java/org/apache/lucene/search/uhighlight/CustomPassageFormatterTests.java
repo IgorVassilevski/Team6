@@ -17,13 +17,13 @@
  * under the License.
  */
 
-package org.apache.lucene.search.postingshighlight;
+package org.apache.lucene.search.uhighlight;
 
+import org.apache.lucene.search.highlight.Snippet;
 import org.apache.lucene.search.highlight.DefaultEncoder;
 import org.apache.lucene.search.highlight.SimpleHTMLEncoder;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.test.ESTestCase;
-import org.apache.lucene.search.highlight.Snippet;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -31,7 +31,7 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 
 public class CustomPassageFormatterTests extends ESTestCase {
     public void testSimpleFormat() {
-        String content = "This is a really cool highlighter. Postings highlighter gives nice snippets back. No matches here.";
+        String content = "This is a really cool highlighter. Unified highlighter gives nice snippets back. No matches here.";
 
         CustomPassageFormatter passageFormatter = new CustomPassageFormatter("<em>", "</em>", new DefaultEncoder());
 
@@ -65,14 +65,14 @@ public class CustomPassageFormatterTests extends ESTestCase {
         assertThat(fragments.length, equalTo(3));
         assertThat(fragments[0].getText(), equalTo("This is a really cool <em>highlighter</em>."));
         assertThat(fragments[0].isHighlighted(), equalTo(true));
-        assertThat(fragments[1].getText(), equalTo("Postings <em>highlighter</em> gives nice snippets back."));
+        assertThat(fragments[1].getText(), equalTo("Unified <em>highlighter</em> gives nice snippets back."));
         assertThat(fragments[1].isHighlighted(), equalTo(true));
         assertThat(fragments[2].getText(), equalTo("No matches here."));
         assertThat(fragments[2].isHighlighted(), equalTo(false));
     }
 
     public void testHtmlEncodeFormat() {
-        String content = "<b>This is a really cool highlighter.</b> Postings highlighter gives nice snippets back.";
+        String content = "<b>This is a really cool highlighter.</b> Unified highlighter gives nice snippets back.";
 
         CustomPassageFormatter passageFormatter = new CustomPassageFormatter("<em>", "</em>", new SimpleHTMLEncoder());
 
@@ -100,6 +100,6 @@ public class CustomPassageFormatterTests extends ESTestCase {
         assertThat(fragments, notNullValue());
         assertThat(fragments.length, equalTo(2));
         assertThat(fragments[0].getText(), equalTo("&lt;b&gt;This is a really cool <em>highlighter</em>.&lt;&#x2F;b&gt;"));
-        assertThat(fragments[1].getText(), equalTo("Postings <em>highlighter</em> gives nice snippets back."));
+        assertThat(fragments[1].getText(), equalTo("Unified <em>highlighter</em> gives nice snippets back."));
     }
 }

@@ -272,6 +272,7 @@ import org.elasticsearch.search.suggest.phrase.PhraseSuggester;
 import org.elasticsearch.search.suggest.phrase.SmoothingModel;
 import org.elasticsearch.search.suggest.phrase.StupidBackoff;
 import org.elasticsearch.search.suggest.term.TermSuggester;
+import org.elasticsearch.search.fetch.subphase.highlight.UnifiedHighlighter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -615,6 +616,11 @@ public class SearchModule {
         highlighters.register("fvh",  new FastVectorHighlighter(settings));
         highlighters.register("plain", new PlainHighlighter());
         highlighters.register("postings", new PostingsHighlighter());
+        UnifiedHighlighter uh = new UnifiedHighlighter();
+        highlighters.register("unified", uh);
+        highlighters.register("unified_plain", uh);
+        highlighters.register("unified_postings", uh);
+        highlighters.register("unified_fvh", uh);
 
         highlighters.extractAndRegister(plugins, SearchPlugin::getHighlighters);
 

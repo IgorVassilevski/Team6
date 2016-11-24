@@ -464,6 +464,13 @@ public class MatchQuery {
                 prefixQuery.add(((AllTermQuery) innerQuery).getTerm());
                 return boost == 1 ? prefixQuery : new BoostQuery(prefixQuery, boost);
             }
+                else if (query instanceof BoostQuery) {
+                                    BoostQuery bq = (BoostQuery) query;
+                                    if (bq.getQuery() instanceof TermQuery) {
+                                           prefixQuery.add(((TermQuery) bq.getQuery()).getTerm());
+                                           return prefixQuery;
+                                        }
+            }
             return query;
         }
 

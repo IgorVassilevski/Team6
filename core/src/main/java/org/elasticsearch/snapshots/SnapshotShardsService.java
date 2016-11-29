@@ -214,6 +214,56 @@ public class SnapshotShardsService extends AbstractLifecycleComponent implements
         // Now go through all snapshots and update existing or create missing
         final String localNodeId = clusterService.localNode().getId();
         final Map<Snapshot, Map<String, IndexId>> snapshotIndices = new HashMap<>();
+        newSnapshots(event, snapshotsInProgress, survivors, newSnapshots, localNodeId, snapshotIndices);
+
+        // Update the list of snapshots that we saw and tried to started
+        // If startup of these shards fails later, we don't want to try starting these shards again
+        shutdownLock.lock();
+        try {
+            shardSnapshots = unmodifiableMap(survivors);
+            if (shardSnapshots.isEmpty()) {
+                // Notify all waiting threads that no more snapshots
+                shutdownCondition.signalAll();
+            }
+        } finally {
+            shutdownLock.unlock();
+        }
+
+        // We have new shards to starts
+        if (newSnapshots.isEmpty() == false) {
+            Executor executor = threadPool.executor(ThreadPool.Names.SNAPSHOT);
+            for (final Map.Entry<Snapshot, Map<ShardId, IndexShardSnapshotStatus>> entry : newSnapshots.entrySet()) {
+                Map<String, IndexId> indicesMap = snapshotIndices.get(entry.getKey());
+                assert indicesMap != null;
+                for (final Map.Entry<ShardId, IndexShardSnapshotStatus> shardEntry : entry.getValue().entrySet()) {
+                    final ShardId shardId = shardEntry.getKey();
+                    try {
+                        final IndexShard indexShard = indicesService.indexServiceSafe(shardId.getIndex()).getShardOrNull(shardId.id());
+                        final IndexId indexId = indicesMap.get(shardId.getIndexName());
+                        assert indexId != null;
+                        executor.execute(new AbstractRunnable() {
+                            @Override
+                            public void doRun() {
+                                snapshot(indexShard, entry.getKey(), indexId, shardEntry.getValue());
+                                updateIndexShardSnapshotStatus(entry.getKey(), shardId, new SnapshotsInProgress.ShardSnapshotStatus(localNodeId, SnapshotsInProgress.State.SUCCESS));
+                            }
+
+                            @Override
+                            public void onFailure(Exception e) {
+                                logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] [{}] failed to create snapshot", shardId, entry.getKey()), e);
+                                updateIndexShardSnapshotStatus(entry.getKey(), shardId, new SnapshotsInProgress.ShardSnapshotStatus(localNodeId, SnapshotsInProgress.State.FAILED, ExceptionsHelper.detailedMessage(e)));
+                            }
+
+                        });
+                    } catch (Exception e) {
+                        updateIndexShardSnapshotStatus(entry.getKey(), shardId, new SnapshotsInProgress.ShardSnapshotStatus(localNodeId, SnapshotsInProgress.State.FAILED, ExceptionsHelper.detailedMessage(e)));
+                    }
+                }
+            }
+        }
+    }
+
+    private void newSnapshots(ClusterChangedEvent event, SnapshotsInProgress snapshotsInProgress, Map<Snapshot, SnapshotShards> survivors, Map<Snapshot, Map<ShardId, IndexShardSnapshotStatus>> newSnapshots, String localNodeId, Map<Snapshot, Map<String, IndexId>> snapshotIndices) throws IllegalStateException {
         if (snapshotsInProgress != null) {
             for (SnapshotsInProgress.Entry entry : snapshotsInProgress.entries()) {
                 snapshotIndices.put(entry.snapshot(),
@@ -275,52 +325,6 @@ public class SnapshotShardsService extends AbstractLifecycleComponent implements
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }
-
-        // Update the list of snapshots that we saw and tried to started
-        // If startup of these shards fails later, we don't want to try starting these shards again
-        shutdownLock.lock();
-        try {
-            shardSnapshots = unmodifiableMap(survivors);
-            if (shardSnapshots.isEmpty()) {
-                // Notify all waiting threads that no more snapshots
-                shutdownCondition.signalAll();
-            }
-        } finally {
-            shutdownLock.unlock();
-        }
-
-        // We have new shards to starts
-        if (newSnapshots.isEmpty() == false) {
-            Executor executor = threadPool.executor(ThreadPool.Names.SNAPSHOT);
-            for (final Map.Entry<Snapshot, Map<ShardId, IndexShardSnapshotStatus>> entry : newSnapshots.entrySet()) {
-                Map<String, IndexId> indicesMap = snapshotIndices.get(entry.getKey());
-                assert indicesMap != null;
-                for (final Map.Entry<ShardId, IndexShardSnapshotStatus> shardEntry : entry.getValue().entrySet()) {
-                    final ShardId shardId = shardEntry.getKey();
-                    try {
-                        final IndexShard indexShard = indicesService.indexServiceSafe(shardId.getIndex()).getShardOrNull(shardId.id());
-                        final IndexId indexId = indicesMap.get(shardId.getIndexName());
-                        assert indexId != null;
-                        executor.execute(new AbstractRunnable() {
-                            @Override
-                            public void doRun() {
-                                snapshot(indexShard, entry.getKey(), indexId, shardEntry.getValue());
-                                updateIndexShardSnapshotStatus(entry.getKey(), shardId, new SnapshotsInProgress.ShardSnapshotStatus(localNodeId, SnapshotsInProgress.State.SUCCESS));
-                            }
-
-                            @Override
-                            public void onFailure(Exception e) {
-                                logger.warn((Supplier<?>) () -> new ParameterizedMessage("[{}] [{}] failed to create snapshot", shardId, entry.getKey()), e);
-                                updateIndexShardSnapshotStatus(entry.getKey(), shardId, new SnapshotsInProgress.ShardSnapshotStatus(localNodeId, SnapshotsInProgress.State.FAILED, ExceptionsHelper.detailedMessage(e)));
-                            }
-
-                        });
-                    } catch (Exception e) {
-                        updateIndexShardSnapshotStatus(entry.getKey(), shardId, new SnapshotsInProgress.ShardSnapshotStatus(localNodeId, SnapshotsInProgress.State.FAILED, ExceptionsHelper.detailedMessage(e)));
                     }
                 }
             }

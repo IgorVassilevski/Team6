@@ -400,13 +400,7 @@ public class GeolocationContextMapping extends ContextMapping {
                 }
             }
 
-            if (point == null) {
-                if (Double.isNaN(lat) || Double.isNaN(lon)) {
-                    throw new ElasticsearchParseException("location is missing");
-                } else {
-                    point = new GeoPoint(lat, lon);
-                }
-            }
+            point = getGeoPoint(lat, lon, point);
 
             if (precision == null || precision.length == 0) {
                 precision = this.precision;
@@ -416,6 +410,17 @@ public class GeolocationContextMapping extends ContextMapping {
         } else {
             return new GeoQuery(name, GeoUtils.parseGeoPoint(parser).getGeohash(), precision);
         }
+    }
+
+    private GeoPoint getGeoPoint(double lat, double lon, GeoPoint point) throws ElasticsearchParseException {
+        if (point == null) {
+            if (Double.isNaN(lat) || Double.isNaN(lon)) {
+                throw new ElasticsearchParseException("location is missing");
+            } else {
+                point = new GeoPoint(lat, lon);
+            }
+        }
+        return point;
     }
 
     @Override

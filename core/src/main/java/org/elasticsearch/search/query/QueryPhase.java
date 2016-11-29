@@ -178,25 +178,7 @@ public class QueryPhase implements SearchPhase {
                     numDocs = Math.min(searchContext.size(), totalNumDocs);
                     after = scrollContext.lastEmittedDoc;
 
-                    if (returnsDocsInOrder(query, searchContext.sort())) {
-                        if (scrollContext.totalHits == -1) {
-                            // first round
-                            assert scrollContext.lastEmittedDoc == null;
-                            // there is not much that we can optimize here since we want to collect all
-                            // documents in order to get the total number of hits
-                        } else {
-                            // now this gets interesting: since we sort in index-order, we can directly
-                            // skip to the desired doc and stop collecting after ${size} matches
-                            if (scrollContext.lastEmittedDoc != null) {
-                                BooleanQuery bq = new BooleanQuery.Builder()
-                                    .add(query, BooleanClause.Occur.MUST)
-                                    .add(new MinDocQuery(after.doc + 1), BooleanClause.Occur.FILTER)
-                                    .build();
-                                query = bq;
-                            }
-                            searchContext.terminateAfter(numDocs);
-                        }
-                    }
+                    query = getQuery(searchContext, query, numDocs, scrollContext, after);
                 } else {
                     after = searchContext.searchAfter();
                 }
@@ -350,16 +332,7 @@ public class QueryPhase implements SearchPhase {
             }
 
             final boolean timeoutSet = searchContext.timeout() != null && !searchContext.timeout().equals(SearchService.NO_TIMEOUT);
-            if (timeoutSet && collector != null) { // collector might be null if no collection is actually needed
-                final Collector child = collector;
-                // TODO: change to use our own counter that uses the scheduler in ThreadPool
-                // throws TimeLimitingCollector.TimeExceededException when timeout has reached
-                collector = Lucene.wrapTimeLimitingCollector(collector, searchContext.timeEstimateCounter(), searchContext.timeout().millis());
-                if (doProfile) {
-                    collector = new InternalProfileCollector(collector, CollectorResult.REASON_SEARCH_TIMEOUT,
-                            Collections.singletonList((InternalProfileCollector) child));
-                }
-            }
+            collector = getCollector(searchContext, doProfile, collector, timeoutSet);
 
             try {
                 if (collector != null) {
@@ -394,5 +367,42 @@ public class QueryPhase implements SearchPhase {
         } catch (Exception e) {
             throw new QueryPhaseExecutionException(searchContext, "Failed to execute main query", e);
         }
+    }
+
+    private static Collector getCollector(SearchContext searchContext, boolean doProfile, Collector collector, boolean timeoutSet) {
+        if (timeoutSet && collector != null) { // collector might be null if no collection is actually needed
+            final Collector child = collector;
+            // TODO: change to use our own counter that uses the scheduler in ThreadPool
+            // throws TimeLimitingCollector.TimeExceededException when timeout has reached
+            collector = Lucene.wrapTimeLimitingCollector(collector, searchContext.timeEstimateCounter(), searchContext.timeout().millis());
+            if (doProfile) {
+                collector = new InternalProfileCollector(collector, CollectorResult.REASON_SEARCH_TIMEOUT,
+                        Collections.singletonList((InternalProfileCollector) child));
+            }
+        }
+        return collector;
+    }
+
+    private static Query getQuery(SearchContext searchContext, Query query, int numDocs, ScrollContext scrollContext, ScoreDoc after) {
+        if (returnsDocsInOrder(query, searchContext.sort())) {
+            if (scrollContext.totalHits == -1) {
+                // first round
+                assert scrollContext.lastEmittedDoc == null;
+                // there is not much that we can optimize here since we want to collect all
+                // documents in order to get the total number of hits
+            } else {
+                // now this gets interesting: since we sort in index-order, we can directly
+                // skip to the desired doc and stop collecting after ${size} matches
+                if (scrollContext.lastEmittedDoc != null) {
+                    BooleanQuery bq = new BooleanQuery.Builder()
+                        .add(query, BooleanClause.Occur.MUST)
+                        .add(new MinDocQuery(after.doc + 1), BooleanClause.Occur.FILTER)
+                        .build();
+                    query = bq;
+                }
+                searchContext.terminateAfter(numDocs);
+            }
+        }
+        return query;
     }
 }

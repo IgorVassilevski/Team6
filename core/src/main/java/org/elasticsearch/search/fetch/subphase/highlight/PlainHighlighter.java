@@ -71,33 +71,7 @@ public class PlainHighlighter implements Highlighter {
         Map<FieldMapper, org.apache.lucene.search.highlight.Highlighter> cache =
             (Map<FieldMapper, org.apache.lucene.search.highlight.Highlighter>) hitContext.cache().get(CACHE_KEY);
 
-        org.apache.lucene.search.highlight.Highlighter entry = cache.get(mapper);
-        if (entry == null) {
-            QueryScorer queryScorer = new CustomQueryScorer(highlighterContext.query,
-                    field.fieldOptions().requireFieldMatch() ? mapper.fieldType().name() : null);
-            queryScorer.setExpandMultiTermQuery(true);
-            Fragmenter fragmenter;
-            if (field.fieldOptions().numberOfFragments() == 0) {
-                fragmenter = new NullFragmenter();
-            } else if (field.fieldOptions().fragmenter() == null) {
-                fragmenter = new SimpleSpanFragmenter(queryScorer, field.fieldOptions().fragmentCharSize());
-            } else if ("simple".equals(field.fieldOptions().fragmenter())) {
-                fragmenter = new SimpleFragmenter(field.fieldOptions().fragmentCharSize());
-            } else if ("span".equals(field.fieldOptions().fragmenter())) {
-                fragmenter = new SimpleSpanFragmenter(queryScorer, field.fieldOptions().fragmentCharSize());
-            } else {
-                throw new IllegalArgumentException("unknown fragmenter option [" + field.fieldOptions().fragmenter()
-                        + "] for the field [" + highlighterContext.fieldName + "]");
-            }
-            Formatter formatter = new SimpleHTMLFormatter(field.fieldOptions().preTags()[0], field.fieldOptions().postTags()[0]);
-
-            entry = new org.apache.lucene.search.highlight.Highlighter(formatter, encoder, queryScorer);
-            entry.setTextFragmenter(fragmenter);
-            // always highlight across all data
-            entry.setMaxDocCharsToAnalyze(Integer.MAX_VALUE);
-
-            cache.put(mapper, entry);
-        }
+        org.apache.lucene.search.highlight.Highlighter entry = getHighlighter(highlighterContext, field, mapper, encoder, cache);
 
         // a HACK to make highlighter do highlighting, even though its using the single frag list builder
         int numberOfFragments = field.fieldOptions().numberOfFragments() == 0 ? 1 : field.fieldOptions().numberOfFragments();
@@ -142,21 +116,7 @@ public class PlainHighlighter implements Highlighter {
                 }
             });
         }
-        String[] fragments;
-        // number_of_fragments is set to 0 but we have a multivalued field
-        if (field.fieldOptions().numberOfFragments() == 0 && textsToHighlight.size() > 1 && fragsList.size() > 0) {
-            fragments = new String[fragsList.size()];
-            for (int i = 0; i < fragsList.size(); i++) {
-                fragments[i] = fragsList.get(i).toString();
-            }
-        } else {
-            // refine numberOfFragments if needed
-            numberOfFragments = fragsList.size() < numberOfFragments ? fragsList.size() : numberOfFragments;
-            fragments = new String[numberOfFragments];
-            for (int i = 0; i < fragments.length; i++) {
-                fragments[i] = fragsList.get(i).toString();
-            }
-        }
+        String[] fragments = getStrings(field, numberOfFragments, fragsList, textsToHighlight);
 
         if (fragments.length > 0) {
             return new HighlightField(highlighterContext.fieldName, Text.convertFromStringArray(fragments));
@@ -177,6 +137,56 @@ public class PlainHighlighter implements Highlighter {
             }
         }
         return null;
+    }
+
+    private String[] getStrings(SearchContextHighlight.Field field, int numberOfFragments, ArrayList<TextFragment> fragsList, List<Object> textsToHighlight) {
+        String[] fragments;
+        // number_of_fragments is set to 0 but we have a multivalued field
+        if (field.fieldOptions().numberOfFragments() == 0 && textsToHighlight.size() > 1 && fragsList.size() > 0) {
+            fragments = new String[fragsList.size()];
+            for (int i = 0; i < fragsList.size(); i++) {
+                fragments[i] = fragsList.get(i).toString();
+            }
+        } else {
+            // refine numberOfFragments if needed
+            numberOfFragments = fragsList.size() < numberOfFragments ? fragsList.size() : numberOfFragments;
+            fragments = new String[numberOfFragments];
+            for (int i = 0; i < fragments.length; i++) {
+                fragments[i] = fragsList.get(i).toString();
+            }
+        }
+        return fragments;
+    }
+
+    private org.apache.lucene.search.highlight.Highlighter getHighlighter(HighlighterContext highlighterContext, SearchContextHighlight.Field field, FieldMapper mapper, Encoder encoder, Map<FieldMapper, org.apache.lucene.search.highlight.Highlighter> cache) throws IllegalArgumentException {
+        org.apache.lucene.search.highlight.Highlighter entry = cache.get(mapper);
+        if (entry == null) {
+            QueryScorer queryScorer = new CustomQueryScorer(highlighterContext.query,
+                    field.fieldOptions().requireFieldMatch() ? mapper.fieldType().name() : null);
+            queryScorer.setExpandMultiTermQuery(true);
+            Fragmenter fragmenter;
+            if (field.fieldOptions().numberOfFragments() == 0) {
+                fragmenter = new NullFragmenter();
+            } else if (field.fieldOptions().fragmenter() == null) {
+                fragmenter = new SimpleSpanFragmenter(queryScorer, field.fieldOptions().fragmentCharSize());
+            } else if ("simple".equals(field.fieldOptions().fragmenter())) {
+                fragmenter = new SimpleFragmenter(field.fieldOptions().fragmentCharSize());
+            } else if ("span".equals(field.fieldOptions().fragmenter())) {
+                fragmenter = new SimpleSpanFragmenter(queryScorer, field.fieldOptions().fragmentCharSize());
+            } else {
+                throw new IllegalArgumentException("unknown fragmenter option [" + field.fieldOptions().fragmenter()
+                        + "] for the field [" + highlighterContext.fieldName + "]");
+            }
+            Formatter formatter = new SimpleHTMLFormatter(field.fieldOptions().preTags()[0], field.fieldOptions().postTags()[0]);
+
+            entry = new org.apache.lucene.search.highlight.Highlighter(formatter, encoder, queryScorer);
+            entry.setTextFragmenter(fragmenter);
+            // always highlight across all data
+            entry.setMaxDocCharsToAnalyze(Integer.MAX_VALUE);
+
+            cache.put(mapper, entry);
+        }
+        return entry;
     }
 
     @Override

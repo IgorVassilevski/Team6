@@ -189,47 +189,7 @@ public class SearchPhaseController extends AbstractComponent {
             }
         }
         if (canOptimize) {
-            int offset = result.from();
-            if (ignoreFrom) {
-                offset = 0;
-            }
-            ScoreDoc[] scoreDocs = result.topDocs().scoreDocs;
-            ScoreDoc[] docs;
-            int numSuggestDocs = 0;
-            final Suggest suggest = result.queryResult().suggest();
-            final List<CompletionSuggestion> completionSuggestions;
-            if (suggest != null) {
-                completionSuggestions = suggest.filter(CompletionSuggestion.class);
-                for (CompletionSuggestion suggestion : completionSuggestions) {
-                    numSuggestDocs += suggestion.getOptions().size();
-                }
-            } else {
-                completionSuggestions = Collections.emptyList();
-            }
-            int docsOffset = 0;
-            if (scoreDocs.length == 0 || scoreDocs.length < offset) {
-                docs = new ScoreDoc[numSuggestDocs];
-            } else {
-                int resultDocsSize = result.size();
-                if ((scoreDocs.length - offset) < resultDocsSize) {
-                    resultDocsSize = scoreDocs.length - offset;
-                }
-                docs = new ScoreDoc[resultDocsSize + numSuggestDocs];
-                for (int i = 0; i < resultDocsSize; i++) {
-                    ScoreDoc scoreDoc = scoreDocs[offset + i];
-                    scoreDoc.shardIndex = shardIndex;
-                    docs[i] = scoreDoc;
-                    docsOffset++;
-                }
-            }
-            for (CompletionSuggestion suggestion: completionSuggestions) {
-                for (CompletionSuggestion.Entry.Option option : suggestion.getOptions()) {
-                    ScoreDoc doc = option.getDoc();
-                    doc.shardIndex = shardIndex;
-                    docs[docsOffset++] = doc;
-                }
-            }
-            return docs;
+            return getScoreDocs(ignoreFrom, result, shardIndex);
         }
 
         @SuppressWarnings("unchecked")
@@ -312,6 +272,50 @@ public class SearchPhaseController extends AbstractComponent {
             }
         }
         return scoreDocs;
+    }
+
+    private ScoreDoc[] getScoreDocs(boolean ignoreFrom, QuerySearchResult result, int shardIndex) {
+        int offset = result.from();
+        if (ignoreFrom) {
+            offset = 0;
+        }
+        ScoreDoc[] scoreDocs = result.topDocs().scoreDocs;
+        ScoreDoc[] docs;
+        int numSuggestDocs = 0;
+        final Suggest suggest = result.queryResult().suggest();
+        final List<CompletionSuggestion> completionSuggestions;
+        if (suggest != null) {
+            completionSuggestions = suggest.filter(CompletionSuggestion.class);
+            for (CompletionSuggestion suggestion : completionSuggestions) {
+                numSuggestDocs += suggestion.getOptions().size();
+            }
+        } else {
+            completionSuggestions = Collections.emptyList();
+        }
+        int docsOffset = 0;
+        if (scoreDocs.length == 0 || scoreDocs.length < offset) {
+            docs = new ScoreDoc[numSuggestDocs];
+        } else {
+            int resultDocsSize = result.size();
+            if ((scoreDocs.length - offset) < resultDocsSize) {
+                resultDocsSize = scoreDocs.length - offset;
+            }
+            docs = new ScoreDoc[resultDocsSize + numSuggestDocs];
+            for (int i = 0; i < resultDocsSize; i++) {
+                ScoreDoc scoreDoc = scoreDocs[offset + i];
+                scoreDoc.shardIndex = shardIndex;
+                docs[i] = scoreDoc;
+                docsOffset++;
+            }
+        }
+        for (CompletionSuggestion suggestion: completionSuggestions) {
+            for (CompletionSuggestion.Entry.Option option : suggestion.getOptions()) {
+                ScoreDoc doc = option.getDoc();
+                doc.shardIndex = shardIndex;
+                docs[docsOffset++] = doc;
+            }
+        }
+        return docs;
     }
 
     public ScoreDoc[] getLastEmittedDocPerShard(List<? extends AtomicArray.Entry<? extends QuerySearchResultProvider>> queryResults,
@@ -416,28 +420,7 @@ public class SearchPhaseController extends AbstractComponent {
         // merge hits
         List<InternalSearchHit> hits = new ArrayList<>();
         if (!fetchResults.isEmpty()) {
-            for (int i = 0; i < numSearchHits; i++) {
-                ScoreDoc shardDoc = sortedDocs[i];
-                FetchSearchResultProvider fetchResultProvider = fetchResultsArr.get(shardDoc.shardIndex);
-                if (fetchResultProvider == null) {
-                    continue;
-                }
-                FetchSearchResult fetchResult = fetchResultProvider.fetchResult();
-                int index = fetchResult.counterGetAndIncrement();
-                if (index < fetchResult.hits().internalHits().length) {
-                    InternalSearchHit searchHit = fetchResult.hits().internalHits()[index];
-                    searchHit.score(shardDoc.score);
-                    searchHit.shard(fetchResult.shardTarget());
-                    if (sorted) {
-                        FieldDoc fieldDoc = (FieldDoc) shardDoc;
-                        searchHit.sortValues(fieldDoc.fields, firstResult.sortValueFormats());
-                        if (sortScoreIndex != -1) {
-                            searchHit.score(((Number) fieldDoc.fields[sortScoreIndex]).floatValue());
-                        }
-                    }
-                    hits.add(searchHit);
-                }
-            }
+            processingFetchResults(sortedDocs, fetchResultsArr, firstResult, sorted, sortScoreIndex, numSearchHits, hits);
         }
 
         // merge suggest results
@@ -454,32 +437,7 @@ public class SearchPhaseController extends AbstractComponent {
                 }
             }
             if (groupedSuggestions.isEmpty() == false) {
-                suggest = new Suggest(Suggest.reduce(groupedSuggestions));
-                if (!fetchResults.isEmpty()) {
-                    int currentOffset = numSearchHits;
-                    for (CompletionSuggestion suggestion : suggest.filter(CompletionSuggestion.class)) {
-                        final List<CompletionSuggestion.Entry.Option> suggestionOptions = suggestion.getOptions();
-                        for (int scoreDocIndex = currentOffset; scoreDocIndex < currentOffset + suggestionOptions.size(); scoreDocIndex++) {
-                            ScoreDoc shardDoc = sortedDocs[scoreDocIndex];
-                            FetchSearchResultProvider fetchSearchResultProvider = fetchResultsArr.get(shardDoc.shardIndex);
-                            if (fetchSearchResultProvider == null) {
-                                continue;
-                            }
-                            FetchSearchResult fetchResult = fetchSearchResultProvider.fetchResult();
-                            int fetchResultIndex = fetchResult.counterGetAndIncrement();
-                            if (fetchResultIndex < fetchResult.hits().internalHits().length) {
-                                InternalSearchHit hit = fetchResult.hits().internalHits()[fetchResultIndex];
-                                CompletionSuggestion.Entry.Option suggestOption =
-                                    suggestionOptions.get(scoreDocIndex - currentOffset);
-                                hit.score(shardDoc.score);
-                                hit.shard(fetchResult.shardTarget());
-                                suggestOption.setHit(hit);
-                            }
-                        }
-                        currentOffset += suggestionOptions.size();
-                    }
-                    assert currentOffset == sortedDocs.length : "expected no more score doc slices";
-                }
+                suggest = processingGroupedSuggestions(sortedDocs, fetchResultsArr, fetchResults, numSearchHits, groupedSuggestions);
             }
         }
 
@@ -519,6 +477,62 @@ public class SearchPhaseController extends AbstractComponent {
         InternalSearchHits searchHits = new InternalSearchHits(hits.toArray(new InternalSearchHit[hits.size()]), totalHits, maxScore);
 
         return new InternalSearchResponse(searchHits, aggregations, suggest, shardResults, timedOut, terminatedEarly);
+    }
+
+    private Suggest processingGroupedSuggestions(ScoreDoc[] sortedDocs, AtomicArray<? extends FetchSearchResultProvider> fetchResultsArr, List<? extends AtomicArray.Entry<? extends FetchSearchResultProvider>> fetchResults, int numSearchHits, Map<String, List<Suggestion>> groupedSuggestions) {
+        Suggest suggest;
+        suggest = new Suggest(Suggest.reduce(groupedSuggestions));
+        if (!fetchResults.isEmpty()) {
+            int currentOffset = numSearchHits;
+            for (CompletionSuggestion suggestion : suggest.filter(CompletionSuggestion.class)) {
+                final List<CompletionSuggestion.Entry.Option> suggestionOptions = suggestion.getOptions();
+                for (int scoreDocIndex = currentOffset; scoreDocIndex < currentOffset + suggestionOptions.size(); scoreDocIndex++) {
+                    ScoreDoc shardDoc = sortedDocs[scoreDocIndex];
+                    FetchSearchResultProvider fetchSearchResultProvider = fetchResultsArr.get(shardDoc.shardIndex);
+                    if (fetchSearchResultProvider == null) {
+                        continue;
+                    }
+                    FetchSearchResult fetchResult = fetchSearchResultProvider.fetchResult();
+                    int fetchResultIndex = fetchResult.counterGetAndIncrement();
+                    if (fetchResultIndex < fetchResult.hits().internalHits().length) {
+                        InternalSearchHit hit = fetchResult.hits().internalHits()[fetchResultIndex];
+                        CompletionSuggestion.Entry.Option suggestOption =
+                            suggestionOptions.get(scoreDocIndex - currentOffset);
+                        hit.score(shardDoc.score);
+                        hit.shard(fetchResult.shardTarget());
+                        suggestOption.setHit(hit);
+                    }
+                }
+                currentOffset += suggestionOptions.size();
+            }
+            assert currentOffset == sortedDocs.length : "expected no more score doc slices";
+        }
+        return suggest;
+    }
+
+    private void processingFetchResults(ScoreDoc[] sortedDocs, AtomicArray<? extends FetchSearchResultProvider> fetchResultsArr, QuerySearchResult firstResult, boolean sorted, int sortScoreIndex, int numSearchHits, List<InternalSearchHit> hits) {
+        for (int i = 0; i < numSearchHits; i++) {
+            ScoreDoc shardDoc = sortedDocs[i];
+            FetchSearchResultProvider fetchResultProvider = fetchResultsArr.get(shardDoc.shardIndex);
+            if (fetchResultProvider == null) {
+                continue;
+            }
+            FetchSearchResult fetchResult = fetchResultProvider.fetchResult();
+            int index = fetchResult.counterGetAndIncrement();
+            if (index < fetchResult.hits().internalHits().length) {
+                InternalSearchHit searchHit = fetchResult.hits().internalHits()[index];
+                searchHit.score(shardDoc.score);
+                searchHit.shard(fetchResult.shardTarget());
+                if (sorted) {
+                    FieldDoc fieldDoc = (FieldDoc) shardDoc;
+                    searchHit.sortValues(fieldDoc.fields, firstResult.sortValueFormats());
+                    if (sortScoreIndex != -1) {
+                        searchHit.score(((Number) fieldDoc.fields[sortScoreIndex]).floatValue());
+                    }
+                }
+                hits.add(searchHit);
+            }
+        }
     }
 
     /**

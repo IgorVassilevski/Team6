@@ -61,28 +61,16 @@ import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.dfs.DfsPhase;
 import org.elasticsearch.search.dfs.DfsSearchResult;
-import org.elasticsearch.search.fetch.FetchPhase;
-import org.elasticsearch.search.fetch.FetchSearchResult;
-import org.elasticsearch.search.fetch.QueryFetchSearchResult;
-import org.elasticsearch.search.fetch.ScrollQueryFetchSearchResult;
-import org.elasticsearch.search.fetch.ShardFetchRequest;
+import org.elasticsearch.search.fetch.*;
 import org.elasticsearch.search.fetch.subphase.DocValueFieldsContext;
 import org.elasticsearch.search.fetch.subphase.DocValueFieldsContext.DocValueField;
 import org.elasticsearch.search.fetch.subphase.DocValueFieldsFetchSubPhase;
 import org.elasticsearch.search.fetch.subphase.ScriptFieldsContext.ScriptField;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
-import org.elasticsearch.search.internal.DefaultSearchContext;
-import org.elasticsearch.search.internal.InternalScrollSearchRequest;
-import org.elasticsearch.search.internal.ScrollContext;
-import org.elasticsearch.search.internal.SearchContext;
+import org.elasticsearch.search.internal.*;
 import org.elasticsearch.search.internal.SearchContext.Lifetime;
-import org.elasticsearch.search.internal.ShardSearchRequest;
 import org.elasticsearch.search.profile.Profilers;
-import org.elasticsearch.search.query.QueryPhase;
-import org.elasticsearch.search.query.QuerySearchRequest;
-import org.elasticsearch.search.query.QuerySearchResult;
-import org.elasticsearch.search.query.QuerySearchResultProvider;
-import org.elasticsearch.search.query.ScrollQuerySearchResult;
+import org.elasticsearch.search.query.*;
 import org.elasticsearch.search.rescore.RescoreBuilder;
 import org.elasticsearch.search.searchafter.SearchAfterBuilder;
 import org.elasticsearch.search.sort.SortAndFormats;
@@ -94,11 +82,7 @@ import org.elasticsearch.threadpool.ThreadPool.Cancellable;
 import org.elasticsearch.threadpool.ThreadPool.Names;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -667,6 +651,46 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             }
         }
         Map<String, InnerHitBuilder> innerHitBuilders = new HashMap<>();
+        sourceParametersCheck(context, source, queryShardContext, innerHitBuilders);
+        if (source.highlighter() != null) {
+            highlight(context, source, queryShardContext);
+        }
+        if (source.scriptFields() != null) {
+            addScript(context, source);
+        }
+        if (source.ext() != null) {
+            XContentParser extParser = null;
+            checkToken(context, source, extParser);
+        }
+        sourceExit(context, source);
+    }
+
+    private void checkToken(DefaultSearchContext context, SearchSourceBuilder source, XContentParser extParser) {
+        try {
+            extParser = XContentFactory.xContent(source.ext()).createParser(source.ext());
+            XContentParser.Token token = extParser.nextToken();
+            String currentFieldName = null;
+            while ((token = extParser.nextToken()) != XContentParser.Token.END_OBJECT) {
+                currentFieldName = checkToken(context, extParser, token, currentFieldName);
+            }
+        } catch (Exception e) {
+            String sSource = "_na_";
+            try {
+                sSource = source.toString();
+            } catch (Exception inner) {
+                e.addSuppressed(inner);
+                // ignore
+            }
+            XContentLocation location = extParser != null ? extParser.getTokenLocation() : null;
+            throw new SearchParseException(context, "failed to parse ext source [" + sSource + "]", location, e);
+        } finally {
+            if (extParser != null) {
+                extParser.close();
+            }
+        }
+    }
+
+    private void sourceParametersCheck(DefaultSearchContext context, SearchSourceBuilder source, QueryShardContext queryShardContext, Map<String, InnerHitBuilder> innerHitBuilders) {
         if (source.query() != null) {
             InnerHitBuilder.extractInnerHits(source.query(), innerHitBuilders);
             context.parsedQuery(queryShardContext.toQuery(source.query()));
@@ -676,23 +700,10 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             context.parsedPostFilter(queryShardContext.toQuery(source.postFilter()));
         }
         if (innerHitBuilders.size() > 0) {
-            for (Map.Entry<String, InnerHitBuilder> entry : innerHitBuilders.entrySet()) {
-                try {
-                    entry.getValue().build(context, context.innerHits());
-                } catch (IOException e) {
-                    throw new SearchContextException(context, "failed to build inner_hits", e);
-                }
-            }
+            getValue(context, innerHitBuilders);
         }
         if (source.sorts() != null) {
-            try {
-                Optional<SortAndFormats> optionalSort = SortBuilder.buildSort(source.sorts(), context.getQueryShardContext());
-                if (optionalSort.isPresent()) {
-                    context.sort(optionalSort.get());
-                }
-            } catch (IOException e) {
-                throw new SearchContextException(context, "failed to create sort elements", e);
-            }
+            getQureyContext(context, source);
         }
         context.trackScores(source.trackScores());
         if (source.minScore() != null) {
@@ -704,30 +715,13 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
         context.timeout(source.timeout());
         context.terminateAfter(source.terminateAfter());
         if (source.aggregations() != null) {
-            try {
-                AggregationContext aggContext = new AggregationContext(context);
-                AggregatorFactories factories = source.aggregations().build(aggContext, null);
-                factories.validate();
-                context.aggregations(new SearchContextAggregations(factories));
-            } catch (IOException e) {
-                throw new AggregationInitializationException("Failed to create aggregators", e);
-            }
+            getContext(context, source);
         }
         if (source.suggest() != null) {
-            try {
-                context.suggest(source.suggest().build(queryShardContext));
-            } catch (IOException e) {
-                throw new SearchContextException(context, "failed to create SuggestionSearchContext", e);
-            }
+            setSuggest(context, source, queryShardContext);
         }
         if (source.rescores() != null) {
-            try {
-                for (RescoreBuilder<?> rescore : source.rescores()) {
-                    context.addRescore(rescore.build(queryShardContext));
-                }
-            } catch (IOException e) {
-                throw new SearchContextException(context, "failed to create RescoreSearchContext", e);
-            }
+            addRescore(context, source, queryShardContext);
         }
         if (source.explain() != null) {
             context.explain(source.explain());
@@ -736,67 +730,11 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             context.fetchSourceContext(source.fetchSource());
         }
         if (source.docValueFields() != null) {
-            DocValueFieldsContext docValuesFieldsContext = context.getFetchSubPhaseContext(DocValueFieldsFetchSubPhase.CONTEXT_FACTORY);
-            for (String field : source.docValueFields()) {
-                docValuesFieldsContext.add(new DocValueField(field));
-            }
-            docValuesFieldsContext.setHitExecutionNeeded(true);
+            addValue(context, source);
         }
-        if (source.highlighter() != null) {
-            HighlightBuilder highlightBuilder = source.highlighter();
-            try {
-                context.highlight(highlightBuilder.build(queryShardContext));
-            } catch (IOException e) {
-                throw new SearchContextException(context, "failed to create SearchContextHighlighter", e);
-            }
-        }
-        if (source.scriptFields() != null) {
-            for (org.elasticsearch.search.builder.SearchSourceBuilder.ScriptField field : source.scriptFields()) {
-                SearchScript searchScript = context.scriptService().search(context.lookup(), field.script(), ScriptContext.Standard.SEARCH,
-                        Collections.emptyMap());
-                context.scriptFields().add(new ScriptField(field.fieldName(), searchScript, field.ignoreFailure()));
-            }
-        }
-        if (source.ext() != null) {
-            XContentParser extParser = null;
-            try {
-                extParser = XContentFactory.xContent(source.ext()).createParser(source.ext());
-                XContentParser.Token token = extParser.nextToken();
-                String currentFieldName = null;
-                while ((token = extParser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                    if (token == XContentParser.Token.FIELD_NAME) {
-                        currentFieldName = extParser.currentName();
-                    } else {
-                        SearchParseElement parseElement = this.elementParsers.get(currentFieldName);
-                        if (parseElement == null) {
-                            if (currentFieldName != null && currentFieldName.equals("suggest")) {
-                                throw new SearchParseException(context,
-                                    "suggest is not supported in [ext], please use SearchSourceBuilder#suggest(SuggestBuilder) instead",
-                                    extParser.getTokenLocation());
-                            }
-                            throw new SearchParseException(context, "Unknown element [" + currentFieldName + "] in [ext]",
-                                    extParser.getTokenLocation());
-                        } else {
-                            parseElement.parse(extParser, context);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                String sSource = "_na_";
-                try {
-                    sSource = source.toString();
-                } catch (Exception inner) {
-                    e.addSuppressed(inner);
-                    // ignore
-                }
-                XContentLocation location = extParser != null ? extParser.getTokenLocation() : null;
-                throw new SearchParseException(context, "failed to parse ext source [" + sSource + "]", location, e);
-            } finally {
-                if (extParser != null) {
-                    extParser.close();
-                }
-            }
-        }
+    }
+
+    private void sourceExit(DefaultSearchContext context, SearchSourceBuilder source) {
         if (source.version() != null) {
             context.version(source.version());
         }
@@ -804,12 +742,7 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
             context.groupStats(source.stats());
         }
         if (source.searchAfter() != null && source.searchAfter().length > 0) {
-            if (context.scrollContext() != null) {
-                throw new SearchContextException(context, "`search_after` cannot be used in a scroll context.");
-            }
-            if (context.from() > 0) {
-                throw new SearchContextException(context, "`from` parameter must be set to 0 when `search_after` is used.");
-            }
+            throwException(context);
             FieldDoc fieldDoc = SearchAfterBuilder.buildFieldDoc(context.sort(), source.searchAfter());
             context.searchAfter(fieldDoc);
         }
@@ -823,14 +756,126 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
 
         if (source.storedFields() != null) {
             if (source.storedFields().fetchFields() == false) {
-                if (context.version()) {
-                    throw new SearchContextException(context, "`stored_fields` cannot be disabled if version is requested");
-                }
-                if (context.sourceRequested()) {
-                    throw new SearchContextException(context, "`stored_fields` cannot be disabled if _source is requested");
-                }
+                throwExceptions(context);
             }
             context.storedFieldsContext(source.storedFields());
+        }
+    }
+
+    private void throwExceptions(DefaultSearchContext context) {
+        if (context.version()) {
+            throw new SearchContextException(context, "`stored_fields` cannot be disabled if version is requested");
+        }
+        if (context.sourceRequested()) {
+            throw new SearchContextException(context, "`stored_fields` cannot be disabled if _source is requested");
+        }
+    }
+
+    private void throwException(DefaultSearchContext context) {
+        if (context.scrollContext() != null) {
+            throw new SearchContextException(context, "`search_after` cannot be used in a scroll context.");
+        }
+        if (context.from() > 0) {
+            throw new SearchContextException(context, "`from` parameter must be set to 0 when `search_after` is used.");
+        }
+    }
+
+    private String checkToken(DefaultSearchContext context, XContentParser extParser, XContentParser.Token token, String currentFieldName) throws Exception {
+        if (token == XContentParser.Token.FIELD_NAME) {
+            currentFieldName = extParser.currentName();
+        } else {
+            SearchParseElement parseElement = this.elementParsers.get(currentFieldName);
+            nullElement(context, extParser, currentFieldName, parseElement);
+        }
+        return currentFieldName;
+    }
+
+    private void nullElement(DefaultSearchContext context, XContentParser extParser, String currentFieldName, SearchParseElement parseElement) throws Exception {
+        if (parseElement == null) {
+            if (currentFieldName != null && currentFieldName.equals("suggest")) {
+                throw new SearchParseException(context,
+                    "suggest is not supported in [ext], please use SearchSourceBuilder#suggest(SuggestBuilder) instead",
+                    extParser.getTokenLocation());
+            }
+            throw new SearchParseException(context, "Unknown element [" + currentFieldName + "] in [ext]",
+                    extParser.getTokenLocation());
+        } else {
+            parseElement.parse(extParser, context);
+        }
+    }
+
+    private void addScript(DefaultSearchContext context, SearchSourceBuilder source) {
+        for (SearchSourceBuilder.ScriptField field : source.scriptFields()) {
+            SearchScript searchScript = context.scriptService().search(context.lookup(), field.script(), ScriptContext.Standard.SEARCH,
+                    Collections.emptyMap());
+            context.scriptFields().add(new ScriptField(field.fieldName(), searchScript, field.ignoreFailure()));
+        }
+    }
+
+    private void highlight(DefaultSearchContext context, SearchSourceBuilder source, QueryShardContext queryShardContext) {
+        HighlightBuilder highlightBuilder = source.highlighter();
+        try {
+            context.highlight(highlightBuilder.build(queryShardContext));
+        } catch (IOException e) {
+            throw new SearchContextException(context, "failed to create SearchContextHighlighter", e);
+        }
+    }
+
+    private void addValue(DefaultSearchContext context, SearchSourceBuilder source) {
+        DocValueFieldsContext docValuesFieldsContext = context.getFetchSubPhaseContext(DocValueFieldsFetchSubPhase.CONTEXT_FACTORY);
+        for (String field : source.docValueFields()) {
+            docValuesFieldsContext.add(new DocValueField(field));
+        }
+        docValuesFieldsContext.setHitExecutionNeeded(true);
+    }
+
+    private void addRescore(DefaultSearchContext context, SearchSourceBuilder source, QueryShardContext queryShardContext) {
+        try {
+            for (RescoreBuilder<?> rescore : source.rescores()) {
+                context.addRescore(rescore.build(queryShardContext));
+            }
+        } catch (IOException e) {
+            throw new SearchContextException(context, "failed to create RescoreSearchContext", e);
+        }
+    }
+
+    private void setSuggest(DefaultSearchContext context, SearchSourceBuilder source, QueryShardContext queryShardContext) {
+        try {
+            context.suggest(source.suggest().build(queryShardContext));
+        } catch (IOException e) {
+            throw new SearchContextException(context, "failed to create SuggestionSearchContext", e);
+        }
+    }
+
+    private void getContext(DefaultSearchContext context, SearchSourceBuilder source) {
+        try {
+            AggregationContext aggContext = new AggregationContext(context);
+            AggregatorFactories factories = source.aggregations().build(aggContext, null);
+            factories.validate();
+            context.aggregations(new SearchContextAggregations(factories));
+        } catch (IOException e) {
+            throw new AggregationInitializationException("Failed to create aggregators", e);
+        }
+    }
+
+    private void getQureyContext(DefaultSearchContext context, SearchSourceBuilder source) {
+        try {
+            Optional<SortAndFormats> optionalSort = SortBuilder.buildSort(source.sorts(), context.getQueryShardContext());
+            if (optionalSort.isPresent()) {
+                context.sort(optionalSort.get());
+            }
+        } catch (IOException e) {
+            throw new SearchContextException(context, "failed to create sort elements", e);
+        }
+    }
+
+    private void getValue(DefaultSearchContext context, Map<String, InnerHitBuilder> innerHitBuilders) {
+        for (Map.Entry<String, InnerHitBuilder> entry : innerHitBuilders.entrySet()) {
+            try {
+                entry.getValue().build(context, context.innerHits());
+            } catch (IOException e) {
+                throw new SearchContextException(context, "failed to build inner_hits", e);
+            }
         }
     }
 

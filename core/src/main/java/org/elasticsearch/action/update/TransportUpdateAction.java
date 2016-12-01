@@ -179,116 +179,133 @@ public class TransportUpdateAction extends TransportInstanceSingleOperationActio
         final UpdateHelper.Result result = updateHelper.prepare(request, indexShard);
         switch (result.getResponseResult()) {
             case CREATED:
-                IndexRequest upsertRequest = result.action();
-                // we fetch it from the index request so we don't generate the bytes twice, its already done in the index request
-                final BytesReference upsertSourceBytes = upsertRequest.source();
-                indexAction.execute(upsertRequest, new ActionListener<IndexResponse>() {
-                    @Override
-                    public void onResponse(IndexResponse response) {
-                        UpdateResponse update = new UpdateResponse(response.getShardInfo(), response.getShardId(), response.getType(), response.getId(), response.getVersion(), response.getResult());
-                        if (request.fields() != null && request.fields().length > 0) {
-                            Tuple<XContentType, Map<String, Object>> sourceAndContent = XContentHelper.convertToMap(upsertSourceBytes, true);
-                            update.setGetResult(updateHelper.extractGetResult(request, request.concreteIndex(), response.getVersion(), sourceAndContent.v2(), sourceAndContent.v1(), upsertSourceBytes));
-                        } else {
-                            update.setGetResult(null);
-                        }
-                        update.setForcedRefresh(response.forcedRefresh());
-                        listener.onResponse(update);
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        final Throwable cause = ExceptionsHelper.unwrapCause(e);
-                        if (cause instanceof VersionConflictEngineException) {
-                            if (retryCount < request.retryOnConflict()) {
-                                logger.trace("Retry attempt [{}] of [{}] on version conflict on [{}][{}][{}]",
-                                        retryCount + 1, request.retryOnConflict(), request.index(), request.getShardId(), request.id());
-                                threadPool.executor(executor()).execute(new ActionRunnable<UpdateResponse>(listener) {
-                                    @Override
-                                    protected void doRun() {
-                                        shardOperation(request, listener, retryCount + 1);
-                                    }
-                                });
-                                return;
-                            }
-                        }
-                        listener.onFailure(cause instanceof Exception ? (Exception) cause : new NotSerializableExceptionWrapper(cause));
-                    }
-                });
+                createdMethod(request, listener, retryCount, result);
                 break;
             case UPDATED:
-                IndexRequest indexRequest = result.action();
-                // we fetch it from the index request so we don't generate the bytes twice, its already done in the index request
-                final BytesReference indexSourceBytes = indexRequest.source();
-                indexAction.execute(indexRequest, new ActionListener<IndexResponse>() {
-                    @Override
-                    public void onResponse(IndexResponse response) {
-                        UpdateResponse update = new UpdateResponse(response.getShardInfo(), response.getShardId(), response.getType(), response.getId(), response.getVersion(), response.getResult());
-                        update.setGetResult(updateHelper.extractGetResult(request, request.concreteIndex(), response.getVersion(), result.updatedSourceAsMap(), result.updateSourceContentType(), indexSourceBytes));
-                        update.setForcedRefresh(response.forcedRefresh());
-                        listener.onResponse(update);
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        final Throwable cause = unwrapCause(e);
-                        if (cause instanceof VersionConflictEngineException) {
-                            if (retryCount < request.retryOnConflict()) {
-                                threadPool.executor(executor()).execute(new ActionRunnable<UpdateResponse>(listener) {
-                                    @Override
-                                    protected void doRun() {
-                                        shardOperation(request, listener, retryCount + 1);
-                                    }
-                                });
-                                return;
-                            }
-                        }
-                        listener.onFailure(cause instanceof Exception ? (Exception) cause : new NotSerializableExceptionWrapper(cause));
-                    }
-                });
+                updatedMethod(request, listener, retryCount, result);
                 break;
             case DELETED:
-                DeleteRequest deleteRequest = result.action();
-                deleteAction.execute(deleteRequest, new ActionListener<DeleteResponse>() {
-                    @Override
-                    public void onResponse(DeleteResponse response) {
-                        UpdateResponse update = new UpdateResponse(response.getShardInfo(), response.getShardId(), response.getType(), response.getId(), response.getVersion(), response.getResult());
-                        update.setGetResult(updateHelper.extractGetResult(request, request.concreteIndex(), response.getVersion(), result.updatedSourceAsMap(), result.updateSourceContentType(), null));
-                        update.setForcedRefresh(response.forcedRefresh());
-                        listener.onResponse(update);
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        final Throwable cause = unwrapCause(e);
-                        if (cause instanceof VersionConflictEngineException) {
-                            if (retryCount < request.retryOnConflict()) {
-                                threadPool.executor(executor()).execute(new ActionRunnable<UpdateResponse>(listener) {
-                                    @Override
-                                    protected void doRun() {
-                                        shardOperation(request, listener, retryCount + 1);
-                                    }
-                                });
-                                return;
-                            }
-                        }
-                        listener.onFailure(cause instanceof Exception ? (Exception) cause : new NotSerializableExceptionWrapper(cause));
-                    }
-                });
+                deletedMethod(request, listener, retryCount, result);
                 break;
             case NOOP:
-                UpdateResponse update = result.action();
-                IndexService indexServiceOrNull = indicesService.indexService(shardId.getIndex());
-                if (indexServiceOrNull !=  null) {
-                    IndexShard shard = indexService.getShardOrNull(shardId.getId());
-                    if (shard != null) {
-                        shard.noopUpdate(request.type());
-                    }
-                }
-                listener.onResponse(update);
+                noopMethod(request, listener, shardId, indexService, result);
                 break;
             default:
                 throw new IllegalStateException("Illegal result " + result.getResponseResult());
         }
+    }
+
+    private void noopMethod(UpdateRequest request, ActionListener<UpdateResponse> listener, ShardId shardId, IndexService indexService, UpdateHelper.Result result) {
+        UpdateResponse update = result.action();
+        IndexService indexServiceOrNull = indicesService.indexService(shardId.getIndex());
+        if (indexServiceOrNull !=  null) {
+            IndexShard shard = indexService.getShardOrNull(shardId.getId());
+            if (shard != null) {
+                shard.noopUpdate(request.type());
+            }
+        }
+        listener.onResponse(update);
+    }
+
+    private void deletedMethod(final UpdateRequest request, final ActionListener<UpdateResponse> listener, final int retryCount, final UpdateHelper.Result result) {
+        DeleteRequest deleteRequest = result.action();
+        deleteAction.execute(deleteRequest, new ActionListener<DeleteResponse>() {
+            @Override
+            public void onResponse(DeleteResponse response) {
+                UpdateResponse update = new UpdateResponse(response.getShardInfo(), response.getShardId(), response.getType(), response.getId(), response.getVersion(), response.getResult());
+                update.setGetResult(updateHelper.extractGetResult(request, request.concreteIndex(), response.getVersion(), result.updatedSourceAsMap(), result.updateSourceContentType(), null));
+                update.setForcedRefresh(response.forcedRefresh());
+                listener.onResponse(update);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                final Throwable cause = unwrapCause(e);
+                if (cause instanceof VersionConflictEngineException) {
+                    if (retryCount < request.retryOnConflict()) {
+                        threadPool.executor(executor()).execute(new ActionRunnable<UpdateResponse>(listener) {
+                            @Override
+                            protected void doRun() {
+                                shardOperation(request, listener, retryCount + 1);
+                            }
+                        });
+                        return;
+                    }
+                }
+                listener.onFailure(cause instanceof Exception ? (Exception) cause : new NotSerializableExceptionWrapper(cause));
+            }
+        });
+    }
+
+    private void updatedMethod(final UpdateRequest request, final ActionListener<UpdateResponse> listener, final int retryCount, final UpdateHelper.Result result) {
+        IndexRequest indexRequest = result.action();
+        // we fetch it from the index request so we don't generate the bytes twice, its already done in the index request
+        final BytesReference indexSourceBytes = indexRequest.source();
+        indexAction.execute(indexRequest, new ActionListener<IndexResponse>() {
+            @Override
+            public void onResponse(IndexResponse response) {
+                UpdateResponse update = new UpdateResponse(response.getShardInfo(), response.getShardId(), response.getType(), response.getId(), response.getVersion(), response.getResult());
+                update.setGetResult(updateHelper.extractGetResult(request, request.concreteIndex(), response.getVersion(), result.updatedSourceAsMap(), result.updateSourceContentType(), indexSourceBytes));
+                update.setForcedRefresh(response.forcedRefresh());
+                listener.onResponse(update);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                final Throwable cause = unwrapCause(e);
+                if (cause instanceof VersionConflictEngineException) {
+                    if (retryCount < request.retryOnConflict()) {
+                        threadPool.executor(executor()).execute(new ActionRunnable<UpdateResponse>(listener) {
+                            @Override
+                            protected void doRun() {
+                                shardOperation(request, listener, retryCount + 1);
+                            }
+                        });
+                        return;
+                    }
+                }
+                listener.onFailure(cause instanceof Exception ? (Exception) cause : new NotSerializableExceptionWrapper(cause));
+            }
+        });
+    }
+
+    private void createdMethod(final UpdateRequest request, final ActionListener<UpdateResponse> listener, final int retryCount, UpdateHelper.Result result) {
+        IndexRequest upsertRequest = result.action();
+        // we fetch it from the index request so we don't generate the bytes twice, its already done in the index request
+        final BytesReference upsertSourceBytes = upsertRequest.source();
+        indexAction.execute(upsertRequest, new ActionListener<IndexResponse>() {
+            @Override
+            public void onResponse(IndexResponse response) {
+                UpdateResponse update = new UpdateResponse(response.getShardInfo(), response.getShardId(), response.getType(), response.getId(), response.getVersion(), response.getResult());
+                if (request.fields() != null && request.fields().length > 0) {
+                    Tuple<XContentType, Map<String, Object>> sourceAndContent = XContentHelper.convertToMap(upsertSourceBytes, true);
+                    update.setGetResult(updateHelper.extractGetResult(request, request.concreteIndex(), response.getVersion(), sourceAndContent.v2(), sourceAndContent.v1(), upsertSourceBytes));
+                } else {
+                    update.setGetResult(null);
+                }
+                update.setForcedRefresh(response.forcedRefresh());
+                listener.onResponse(update);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                final Throwable cause = ExceptionsHelper.unwrapCause(e);
+                if (cause instanceof VersionConflictEngineException) {
+                    if (retryCount < request.retryOnConflict()) {
+                        logger.trace("Retry attempt [{}] of [{}] on version conflict on [{}][{}][{}]",
+                                retryCount + 1, request.retryOnConflict(), request.index(), request.getShardId(), request.id());
+                        threadPool.executor(executor()).execute(new ActionRunnable<UpdateResponse>(listener) {
+                            @Override
+                            protected void doRun() {
+                                shardOperation(request, listener, retryCount + 1);
+                            }
+                        });
+                        return;
+                    }
+                }
+                listener.onFailure(cause instanceof Exception ? (Exception) cause : new NotSerializableExceptionWrapper(cause));
+            }
+        });
+        return;
     }
 }

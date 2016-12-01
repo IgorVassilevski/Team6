@@ -155,49 +155,7 @@ public class TransportSnapshotsStatusAction extends TransportMasterNodeAction<Sn
                 nodeSnapshotStatusMap = new HashMap<>();
             }
 
-            for (SnapshotsInProgress.Entry entry : currentSnapshotEntries) {
-                currentSnapshotNames.add(entry.snapshot().getSnapshotId().getName());
-                List<SnapshotIndexShardStatus> shardStatusBuilder = new ArrayList<>();
-                for (ObjectObjectCursor<ShardId, SnapshotsInProgress.ShardSnapshotStatus> shardEntry : entry.shards()) {
-                    SnapshotsInProgress.ShardSnapshotStatus status = shardEntry.value;
-                    if (status.nodeId() != null) {
-                        // We should have information about this shard from the shard:
-                        TransportNodesSnapshotsStatus.NodeSnapshotStatus nodeStatus = nodeSnapshotStatusMap.get(status.nodeId());
-                        if (nodeStatus != null) {
-                            Map<ShardId, SnapshotIndexShardStatus> shardStatues = nodeStatus.status().get(entry.snapshot());
-                            if (shardStatues != null) {
-                                SnapshotIndexShardStatus shardStatus = shardStatues.get(shardEntry.key);
-                                if (shardStatus != null) {
-                                    // We have full information about this shard
-                                    shardStatusBuilder.add(shardStatus);
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                    final SnapshotIndexShardStage stage;
-                    switch (shardEntry.value.state()) {
-                        case FAILED:
-                        case ABORTED:
-                        case MISSING:
-                            stage = SnapshotIndexShardStage.FAILURE;
-                            break;
-                        case INIT:
-                        case WAITING:
-                        case STARTED:
-                            stage = SnapshotIndexShardStage.STARTED;
-                            break;
-                        case SUCCESS:
-                            stage = SnapshotIndexShardStage.DONE;
-                            break;
-                        default:
-                            throw new IllegalArgumentException("Unknown snapshot state " + shardEntry.value.state());
-                    }
-                    SnapshotIndexShardStatus shardStatus = new SnapshotIndexShardStatus(shardEntry.key, stage);
-                    shardStatusBuilder.add(shardStatus);
-                }
-                builder.add(new SnapshotStatus(entry.snapshot(), entry.state(), Collections.unmodifiableList(shardStatusBuilder)));
-            }
+            SnapshotInProgressEntry(currentSnapshotEntries, builder, currentSnapshotNames, nodeSnapshotStatusMap);
         }
         // Now add snapshots on disk that are not currently running
         final String repositoryName = request.repository();
@@ -251,6 +209,52 @@ public class TransportSnapshotsStatusAction extends TransportMasterNodeAction<Sn
         }
 
         return new SnapshotsStatusResponse(Collections.unmodifiableList(builder));
+    }
+
+    private void SnapshotInProgressEntry(List<SnapshotsInProgress.Entry> currentSnapshotEntries, List<SnapshotStatus> builder, Set<String> currentSnapshotNames, Map<String, TransportNodesSnapshotsStatus.NodeSnapshotStatus> nodeSnapshotStatusMap) {
+        for (SnapshotsInProgress.Entry entry : currentSnapshotEntries) {
+            currentSnapshotNames.add(entry.snapshot().getSnapshotId().getName());
+            List<SnapshotIndexShardStatus> shardStatusBuilder = new ArrayList<>();
+            for (ObjectObjectCursor<ShardId, SnapshotsInProgress.ShardSnapshotStatus> shardEntry : entry.shards()) {
+                SnapshotsInProgress.ShardSnapshotStatus status = shardEntry.value;
+                if (status.nodeId() != null) {
+                    // We should have information about this shard from the shard:
+                    TransportNodesSnapshotsStatus.NodeSnapshotStatus nodeStatus = nodeSnapshotStatusMap.get(status.nodeId());
+                    if (nodeStatus != null) {
+                        Map<ShardId, SnapshotIndexShardStatus> shardStatues = nodeStatus.status().get(entry.snapshot());
+                        if (shardStatues != null) {
+                            SnapshotIndexShardStatus shardStatus = shardStatues.get(shardEntry.key);
+                            if (shardStatus != null) {
+                                // We have full information about this shard
+                                shardStatusBuilder.add(shardStatus);
+                                continue;
+                            }
+                        }
+                    }
+                }
+                final SnapshotIndexShardStage stage;
+                switch (shardEntry.value.state()) {
+                    case FAILED:
+                    case ABORTED:
+                    case MISSING:
+                        stage = SnapshotIndexShardStage.FAILURE;
+                        break;
+                    case INIT:
+                    case WAITING:
+                    case STARTED:
+                        stage = SnapshotIndexShardStage.STARTED;
+                        break;
+                    case SUCCESS:
+                        stage = SnapshotIndexShardStage.DONE;
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown snapshot state " + shardEntry.value.state());
+                }
+                SnapshotIndexShardStatus shardStatus = new SnapshotIndexShardStatus(shardEntry.key, stage);
+                shardStatusBuilder.add(shardStatus);
+            }
+            builder.add(new SnapshotStatus(entry.snapshot(), entry.state(), Collections.unmodifiableList(shardStatusBuilder)));
+        }
     }
 
 }

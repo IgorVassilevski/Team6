@@ -544,15 +544,9 @@ public class MatchQueryBuilder extends AbstractQueryBuilder<MatchQueryBuilder> {
                         if (parseContext.getParseFieldMatcher().match(currentFieldName, QUERY_FIELD)) {
                             value = parser.objectText();
                         } else if (parseContext.getParseFieldMatcher().match(currentFieldName, TYPE_FIELD)) {
-                            String tStr = parser.text();
-                            if ("boolean".equals(tStr)) {
-                                type = MatchQuery.Type.BOOLEAN;
-                            } else if ("phrase".equals(tStr)) {
-                                type = MatchQuery.Type.PHRASE;
-                            } else if ("phrase_prefix".equals(tStr) || ("phrasePrefix".equals(tStr))) {
-                                type = MatchQuery.Type.PHRASE_PREFIX;
-                            } else {
-                                throw new ParsingException(parser.getTokenLocation(), "[" + NAME + "] query does not support type " + tStr);
+                            type = tokenParse(parser);
+                            if(type==null){
+                                throw new ParsingException(parser.getTokenLocation(), "[" + NAME + "] query does not support type " + parser.text());
                             }
                         } else if (parseContext.getParseFieldMatcher().match(currentFieldName, ANALYZER_FIELD)) {
                             analyzer = parser.text();
@@ -579,14 +573,10 @@ public class MatchQueryBuilder extends AbstractQueryBuilder<MatchQueryBuilder> {
                         } else if (parseContext.getParseFieldMatcher().match(currentFieldName, CUTOFF_FREQUENCY_FIELD)) {
                             cutOffFrequency = parser.floatValue();
                         } else if (parseContext.getParseFieldMatcher().match(currentFieldName, ZERO_TERMS_QUERY_FIELD)) {
-                            String zeroTermsDocs = parser.text();
-                            if ("none".equalsIgnoreCase(zeroTermsDocs)) {
-                                zeroTermsQuery = MatchQuery.ZeroTermsQuery.NONE;
-                            } else if ("all".equalsIgnoreCase(zeroTermsDocs)) {
-                                zeroTermsQuery = MatchQuery.ZeroTermsQuery.ALL;
-                            } else {
+                            zeroTermsQuery = getZeroTermsQuery(parser);
+                            if(zeroTermsQuery==null){
                                 throw new ParsingException(parser.getTokenLocation(),
-                                        "Unsupported zero_terms_docs value [" + zeroTermsDocs + "]");
+                                        "Unsupported zero_terms_docs value [" + parser.text() + "]");
                             }
                         } else if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.NAME_FIELD)) {
                             queryName = parser.text();
@@ -633,4 +623,42 @@ public class MatchQueryBuilder extends AbstractQueryBuilder<MatchQueryBuilder> {
         return Optional.of(matchQuery);
     }
 
+    private static ZeroTermsQuery getZeroTermsQuery(XContentParser parser) throws ParsingException {
+        try {
+            ZeroTermsQuery zeroTermsQuery;
+            String zeroTermsDocs = parser.text();
+            if ("none".equalsIgnoreCase(zeroTermsDocs)) {
+                zeroTermsQuery = MatchQuery.ZeroTermsQuery.NONE;
+            } else if ("all".equalsIgnoreCase(zeroTermsDocs)) {
+                zeroTermsQuery = MatchQuery.ZeroTermsQuery.ALL;
+            } else {
+                throw new ParsingException(parser.getTokenLocation(),
+                        "Unsupported zero_terms_docs value [" + zeroTermsDocs + "]");
+            }
+            return zeroTermsQuery;
+        }catch (IOException e) {
+            //Error
+            return null;
+        }
+    }
+
+    private static MatchQuery.Type tokenParse(XContentParser parser) throws ParsingException {
+        try {
+            MatchQuery.Type type;
+            String tStr = parser.text();
+            if ("boolean".equals(tStr)) {
+                type = MatchQuery.Type.BOOLEAN;
+            } else if ("phrase".equals(tStr)) {
+                type = MatchQuery.Type.PHRASE;
+            } else if ("phrase_prefix".equals(tStr) || ("phrasePrefix".equals(tStr))) {
+                type = MatchQuery.Type.PHRASE_PREFIX;
+            } else {
+                throw new ParsingException(parser.getTokenLocation(), "[" + NAME + "] query does not support type " + tStr);
+            }
+            return type;
+        } catch (IOException e) {
+            //Error
+            return null;
+        }
+    }
 }

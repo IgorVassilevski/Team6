@@ -129,19 +129,7 @@ public class OperationRouting extends AbstractComponent {
                 int index = preference.indexOf(';');
 
                 String shards;
-                if (index == -1) {
-                    shards = preference.substring(Preference.SHARDS.type().length() + 1);
-                } else {
-                    shards = preference.substring(Preference.SHARDS.type().length() + 1, index);
-                }
-                String[] ids = Strings.splitStringByCommaToArray(shards);
-                boolean found = false;
-                for (String id : ids) {
-                    if (Integer.parseInt(id) == indexShard.shardId().id()) {
-                        found = true;
-                        break;
-                    }
-                }
+                boolean found = processingMethod(indexShard, preference, index);
                 if (!found) {
                     return null;
                 }
@@ -158,31 +146,7 @@ public class OperationRouting extends AbstractComponent {
                 }
             }
             preferenceType = Preference.parse(preference);
-            switch (preferenceType) {
-                case PREFER_NODES:
-                    final Set<String> nodesIds =
-                            Arrays.stream(
-                                    preference.substring(Preference.PREFER_NODES.type().length() + 1).split(",")
-                            ).collect(Collectors.toSet());
-                    return indexShard.preferNodeActiveInitializingShardsIt(nodesIds);
-                case LOCAL:
-                    return indexShard.preferNodeActiveInitializingShardsIt(Collections.singleton(localNodeId));
-                case PRIMARY:
-                    return indexShard.primaryActiveInitializingShardIt();
-                case REPLICA:
-                    return indexShard.replicaActiveInitializingShardIt();
-                case PRIMARY_FIRST:
-                    return indexShard.primaryFirstActiveInitializingShardsIt();
-                case REPLICA_FIRST:
-                    return indexShard.replicaFirstActiveInitializingShardsIt();
-                case ONLY_LOCAL:
-                    return indexShard.onlyNodeActiveInitializingShardsIt(localNodeId);
-                case ONLY_NODES:
-                    String nodeAttributes = preference.substring(Preference.ONLY_NODES.type().length() + 1);
-                    return indexShard.onlyNodeSelectorActiveInitializingShardsIt(nodeAttributes.split(","), nodes);
-                default:
-                    throw new IllegalArgumentException("unknown preference [" + preferenceType + "]");
-            }
+            return switchCaseMethods(indexShard, localNodeId, nodes, preference, preferenceType);
         }
         // if not, then use it as the index
         if (awarenessAttributes.length == 0) {
@@ -190,6 +154,52 @@ public class OperationRouting extends AbstractComponent {
         } else {
             return indexShard.preferAttributesActiveInitializingShardsIt(awarenessAttributes, nodes, Murmur3HashFunction.hash(preference));
         }
+    }
+
+    private ShardIterator switchCaseMethods(IndexShardRoutingTable indexShard, String localNodeId, DiscoveryNodes nodes, @Nullable String preference, Preference preferenceType) {
+        switch (preferenceType) {
+            case PREFER_NODES:
+                final Set<String> nodesIds =
+                        Arrays.stream(
+                                preference.substring(Preference.PREFER_NODES.type().length() + 1).split(",")
+                        ).collect(Collectors.toSet());
+                return indexShard.preferNodeActiveInitializingShardsIt(nodesIds);
+            case LOCAL:
+                return indexShard.preferNodeActiveInitializingShardsIt(Collections.singleton(localNodeId));
+            case PRIMARY:
+                return indexShard.primaryActiveInitializingShardIt();
+            case REPLICA:
+                return indexShard.replicaActiveInitializingShardIt();
+            case PRIMARY_FIRST:
+                return indexShard.primaryFirstActiveInitializingShardsIt();
+            case REPLICA_FIRST:
+                return indexShard.replicaFirstActiveInitializingShardsIt();
+            case ONLY_LOCAL:
+                return indexShard.onlyNodeActiveInitializingShardsIt(localNodeId);
+            case ONLY_NODES:
+                String nodeAttributes = preference.substring(Preference.ONLY_NODES.type().length() + 1);
+                return indexShard.onlyNodeSelectorActiveInitializingShardsIt(nodeAttributes.split(","), nodes);
+            default:
+                throw new IllegalArgumentException("unknown preference [" + preferenceType + "]");
+        }
+    }
+
+    private boolean processingMethod(IndexShardRoutingTable indexShard, @Nullable String preference, int index) {
+        String shards;
+        if (index == -1) {
+            shards = preference.substring(Preference.SHARDS.type().length() + 1);
+        } else {
+            shards = preference.substring(Preference.SHARDS.type().length() + 1, index);
+        }
+        String[] ids = Strings.splitStringByCommaToArray(shards);
+        boolean found = false;
+        for (String id : ids) {
+            if (Integer.parseInt(id) == indexShard.shardId().id()) {
+                found = true;
+                break;
+            }
+        }
+        return found;
     }
 
     protected IndexRoutingTable indexRoutingTable(ClusterState clusterState, String index) {

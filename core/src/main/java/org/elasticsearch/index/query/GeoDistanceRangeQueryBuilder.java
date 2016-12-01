@@ -436,19 +436,9 @@ public class GeoDistanceRangeQueryBuilder extends AbstractQueryBuilder<GeoDistan
                 }
             } else if (token.isValue()) {
                 if (parseContext.getParseFieldMatcher().match(currentFieldName, FROM_FIELD)) {
-                    if (token == XContentParser.Token.VALUE_NULL) {
-                    } else if (token == XContentParser.Token.VALUE_STRING) {
-                        vFrom = parser.text(); // a String
-                    } else {
-                        vFrom = parser.numberValue(); // a Number
-                    }
+                    vFrom = parseText(parser, token, vTo);
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, TO_FIELD)) {
-                    if (token == XContentParser.Token.VALUE_NULL) {
-                    } else if (token == XContentParser.Token.VALUE_STRING) {
-                        vTo = parser.text(); // a String
-                    } else {
-                        vTo = parser.numberValue(); // a Number
-                    }
+                    vTo = parseText(parser, token, vTo);
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, INCLUDE_LOWER_FIELD)) {
                     includeLower = parser.booleanValue();
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, INCLUDE_UPPER_FIELD)) {
@@ -456,36 +446,16 @@ public class GeoDistanceRangeQueryBuilder extends AbstractQueryBuilder<GeoDistan
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, IGNORE_UNMAPPED_FIELD)) {
                     ignoreUnmapped = parser.booleanValue();
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, GT_FIELD)) {
-                    if (token == XContentParser.Token.VALUE_NULL) {
-                    } else if (token == XContentParser.Token.VALUE_STRING) {
-                        vFrom = parser.text(); // a String
-                    } else {
-                        vFrom = parser.numberValue(); // a Number
-                    }
+                    vFrom = parseText(parser, token, vTo);
                     includeLower = false;
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, GTE_FIELD)) {
-                    if (token == XContentParser.Token.VALUE_NULL) {
-                    } else if (token == XContentParser.Token.VALUE_STRING) {
-                        vFrom = parser.text(); // a String
-                    } else {
-                        vFrom = parser.numberValue(); // a Number
-                    }
+                    vFrom = parseText(parser, token, vTo);
                     includeLower = true;
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, LT_FIELD)) {
-                    if (token == XContentParser.Token.VALUE_NULL) {
-                    } else if (token == XContentParser.Token.VALUE_STRING) {
-                        vTo = parser.text(); // a String
-                    } else {
-                        vTo = parser.numberValue(); // a Number
-                    }
+                    vTo = parseText(parser, token, vTo);
                     includeUpper = false;
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, LTE_FIELD)) {
-                    if (token == XContentParser.Token.VALUE_NULL) {
-                    } else if (token == XContentParser.Token.VALUE_STRING) {
-                        vTo = parser.text(); // a String
-                    } else {
-                        vTo = parser.numberValue(); // a Number
-                    }
+                    vTo = parseText(parser, token, vTo);
                     includeUpper = true;
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, UNIT_FIELD)) {
                     unit = DistanceUnit.fromString(parser.text());
@@ -597,6 +567,22 @@ public class GeoDistanceRangeQueryBuilder extends AbstractQueryBuilder<GeoDistan
         }
         queryBuilder.ignoreUnmapped(ignoreUnmapped);
         return Optional.of(queryBuilder);
+    }
+
+    private static Object parseText(XContentParser parser, XContentParser.Token token, Object vTo) {
+        try {
+            Object tmp = vTo;
+            if (token == XContentParser.Token.VALUE_NULL) {
+            } else if (token == XContentParser.Token.VALUE_STRING) {
+                tmp = parser.text(); // a String
+            } else {
+                tmp = parser.numberValue(); // a Number
+            }
+            return tmp;
+        }catch(IOException e) {
+            //Error
+            return vTo;
+        }
     }
 
     @Override

@@ -19,19 +19,8 @@
 package org.elasticsearch.search.fetch.subphase.highlight;
 
 import org.apache.lucene.search.highlight.Encoder;
-import org.apache.lucene.search.vectorhighlight.BaseFragmentsBuilder;
-import org.apache.lucene.search.vectorhighlight.BoundaryScanner;
-import org.apache.lucene.search.vectorhighlight.CustomFieldQuery;
-import org.apache.lucene.search.vectorhighlight.FieldFragList;
+import org.apache.lucene.search.vectorhighlight.*;
 import org.apache.lucene.search.vectorhighlight.FieldPhraseList.WeightedPhraseInfo;
-import org.apache.lucene.search.vectorhighlight.FieldQuery;
-import org.apache.lucene.search.vectorhighlight.FragListBuilder;
-import org.apache.lucene.search.vectorhighlight.FragmentsBuilder;
-import org.apache.lucene.search.vectorhighlight.ScoreOrderFragmentsBuilder;
-import org.apache.lucene.search.vectorhighlight.SimpleBoundaryScanner;
-import org.apache.lucene.search.vectorhighlight.SimpleFieldFragList;
-import org.apache.lucene.search.vectorhighlight.SimpleFragListBuilder;
-import org.apache.lucene.search.vectorhighlight.SingleFragListBuilder;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.index.mapper.FieldMapper;
@@ -39,6 +28,7 @@ import org.elasticsearch.search.fetch.FetchPhaseExecutionException;
 import org.elasticsearch.search.fetch.FetchSubPhase;
 import org.elasticsearch.search.internal.SearchContext;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -177,27 +167,33 @@ public class FastVectorHighlighter implements Highlighter {
                         field.fieldOptions().postTags(), encoder);
             }
 
-            if (fragments != null && fragments.length > 0) {
-                return new HighlightField(highlighterContext.fieldName, Text.convertFromStringArray(fragments));
-            }
-
-            int noMatchSize = highlighterContext.field.fieldOptions().noMatchSize();
-            if (noMatchSize > 0) {
-                // Essentially we just request that a fragment is built from 0 to noMatchSize using the normal fragmentsBuilder
-                FieldFragList fieldFragList = new SimpleFieldFragList(-1 /*ignored*/);
-                fieldFragList.add(0, noMatchSize, Collections.<WeightedPhraseInfo>emptyList());
-                fragments = entry.fragmentsBuilder.createFragments(hitContext.reader(), hitContext.docId(), mapper.fieldType().name(),
-                        fieldFragList, 1, field.fieldOptions().preTags(), field.fieldOptions().postTags(), encoder);
-                if (fragments != null && fragments.length > 0) {
-                    return new HighlightField(highlighterContext.fieldName, Text.convertFromStringArray(fragments));
-                }
-            }
+            HighlightField fragments1 = getHighlightField(highlighterContext, field, hitContext, mapper, encoder, entry, fragments);
+            if (fragments1 != null) return fragments1;
 
             return null;
 
         } catch (Exception e) {
             throw new FetchPhaseExecutionException(context, "Failed to highlight field [" + highlighterContext.fieldName + "]", e);
         }
+    }
+
+    private HighlightField getHighlightField(HighlighterContext highlighterContext, SearchContextHighlight.Field field, FetchSubPhase.HitContext hitContext, FieldMapper mapper, Encoder encoder, MapperHighlightEntry entry, String[] fragments) throws IOException {
+        if (fragments != null && fragments.length > 0) {
+            return new HighlightField(highlighterContext.fieldName, Text.convertFromStringArray(fragments));
+        }
+
+        int noMatchSize = highlighterContext.field.fieldOptions().noMatchSize();
+        if (noMatchSize > 0) {
+            // Essentially we just request that a fragment is built from 0 to noMatchSize using the normal fragmentsBuilder
+            FieldFragList fieldFragList = new SimpleFieldFragList(-1 /*ignored*/);
+            fieldFragList.add(0, noMatchSize, Collections.<WeightedPhraseInfo>emptyList());
+            fragments = entry.fragmentsBuilder.createFragments(hitContext.reader(), hitContext.docId(), mapper.fieldType().name(),
+                    fieldFragList, 1, field.fieldOptions().preTags(), field.fieldOptions().postTags(), encoder);
+            if (fragments != null && fragments.length > 0) {
+                return new HighlightField(highlighterContext.fieldName, Text.convertFromStringArray(fragments));
+            }
+        }
+        return null;
     }
 
     @Override

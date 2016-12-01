@@ -29,6 +29,7 @@ import org.elasticsearch.common.unit.TimeValue;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -235,38 +236,42 @@ public class NetworkService extends AbstractComponent {
                     }
                 }
             }
-            switch (host) {
-                case "local":
-                    return NetworkUtils.getLoopbackAddresses();
-                case "local:ipv4":
-                    return NetworkUtils.filterIPV4(NetworkUtils.getLoopbackAddresses());
-                case "local:ipv6":
-                    return NetworkUtils.filterIPV6(NetworkUtils.getLoopbackAddresses());
-                case "site":
-                    return NetworkUtils.getSiteLocalAddresses();
-                case "site:ipv4":
-                    return NetworkUtils.filterIPV4(NetworkUtils.getSiteLocalAddresses());
-                case "site:ipv6":
-                    return NetworkUtils.filterIPV6(NetworkUtils.getSiteLocalAddresses());
-                case "global":
-                    return NetworkUtils.getGlobalAddresses();
-                case "global:ipv4":
-                    return NetworkUtils.filterIPV4(NetworkUtils.getGlobalAddresses());
-                case "global:ipv6":
-                    return NetworkUtils.filterIPV6(NetworkUtils.getGlobalAddresses());
-                default:
-                    /* an interface specification */
-                    if (host.endsWith(":ipv4")) {
-                        host = host.substring(0, host.length() - 5);
-                        return NetworkUtils.filterIPV4(NetworkUtils.getAddressesForInterface(host));
-                    } else if (host.endsWith(":ipv6")) {
-                        host = host.substring(0, host.length() - 5);
-                        return NetworkUtils.filterIPV6(NetworkUtils.getAddressesForInterface(host));
-                    } else {
-                        return NetworkUtils.getAddressesForInterface(host);
-                    }
-            }
+            return getInetAddresses(host);
         }
         return InetAddress.getAllByName(host);
+    }
+
+    private InetAddress[] getInetAddresses(String host) throws SocketException {
+        switch (host) {
+            case "local":
+                return NetworkUtils.getLoopbackAddresses();
+            case "local:ipv4":
+                return NetworkUtils.filterIPV4(NetworkUtils.getLoopbackAddresses());
+            case "local:ipv6":
+                return NetworkUtils.filterIPV6(NetworkUtils.getLoopbackAddresses());
+            case "site":
+                return NetworkUtils.getSiteLocalAddresses();
+            case "site:ipv4":
+                return NetworkUtils.filterIPV4(NetworkUtils.getSiteLocalAddresses());
+            case "site:ipv6":
+                return NetworkUtils.filterIPV6(NetworkUtils.getSiteLocalAddresses());
+            case "global":
+                return NetworkUtils.getGlobalAddresses();
+            case "global:ipv4":
+                return NetworkUtils.filterIPV4(NetworkUtils.getGlobalAddresses());
+            case "global:ipv6":
+                return NetworkUtils.filterIPV6(NetworkUtils.getGlobalAddresses());
+            default:
+                /* an interface specification */
+                if (host.endsWith(":ipv4")) {
+                    host = host.substring(0, host.length() - 5);
+                    return NetworkUtils.filterIPV4(NetworkUtils.getAddressesForInterface(host));
+                } else if (host.endsWith(":ipv6")) {
+                    host = host.substring(0, host.length() - 5);
+                    return NetworkUtils.filterIPV6(NetworkUtils.getAddressesForInterface(host));
+                } else {
+                    return NetworkUtils.getAddressesForInterface(host);
+                }
+        }
     }
 }

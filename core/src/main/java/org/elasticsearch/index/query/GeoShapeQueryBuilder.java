@@ -488,15 +488,42 @@ public class GeoShapeQueryBuilder extends AbstractQueryBuilder<GeoShapeQueryBuil
                     if (token == XContentParser.Token.FIELD_NAME) {
                         currentFieldName = parser.currentName();
                         token = parser.nextToken();
-                        ChechParseFieldMatcher chechParseFieldMatcher = new ChechParseFieldMatcher(parseContext, parser, shapeRelation, strategy, shape, id, type, index, shapePath, currentFieldName).invoke();
-                        currentFieldName = chechParseFieldMatcher.getCurrentFieldName();
-                        shape = chechParseFieldMatcher.getShape();
-                        id = chechParseFieldMatcher.getId();
-                        type = chechParseFieldMatcher.getType();
-                        index = chechParseFieldMatcher.getIndex();
-                        shapePath = chechParseFieldMatcher.getShapePath();
-                        shapeRelation = chechParseFieldMatcher.getShapeRelation();
-                        strategy = chechParseFieldMatcher.getStrategy();
+                        if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_FIELD)) {
+                            shape = ShapeBuilder.parse(parser);
+                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, STRATEGY_FIELD)) {
+                            String strategyName = parser.text();
+                            strategy = SpatialStrategy.fromString(strategyName);
+                            if (strategy == null) {
+                                throw new ParsingException(parser.getTokenLocation(), "Unknown strategy [" + strategyName + " ]");
+                            }
+                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, RELATION_FIELD)) {
+                            shapeRelation = ShapeRelation.getRelationByName(parser.text());
+                            if (shapeRelation == null) {
+                                throw new ParsingException(parser.getTokenLocation(), "Unknown shape operation [" + parser.text() + " ]");
+                            }
+                        } else if (parseContext.getParseFieldMatcher().match(currentFieldName, INDEXED_SHAPE_FIELD)) {
+                            while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
+                                if (token == XContentParser.Token.FIELD_NAME) {
+                                    currentFieldName = parser.currentName();
+                                } else if (token.isValue()) {
+                                    if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_ID_FIELD)) {
+                                        id = parser.text();
+                                    } else if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_TYPE_FIELD)) {
+                                        type = parser.text();
+                                    } else if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_INDEX_FIELD)) {
+                                        index = parser.text();
+                                    } else if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_PATH_FIELD)) {
+                                        shapePath = parser.text();
+                                    }
+                                } else {
+                                    throw new ParsingException(parser.getTokenLocation(), "[" + GeoShapeQueryBuilder.NAME +
+                                            "] unknown token [" + token + "] after [" + currentFieldName + "]");
+                                }
+                            }
+                        } else {
+                            throw new ParsingException(parser.getTokenLocation(), "[" + GeoShapeQueryBuilder.NAME +
+                                    "] query does not support [" + currentFieldName + "]");
+                        }
                     }
                 }
             } else if (token.isValue()) {
@@ -512,14 +539,6 @@ public class GeoShapeQueryBuilder extends AbstractQueryBuilder<GeoShapeQueryBuil
                 }
             }
         }
-        GeoShapeQueryBuilder builder;
-        builder = getGeoShapeQueryBuilder(fieldName, shapeRelation, strategy, shape, id, type, index, shapePath, queryName);
-        builder.boost(boost);
-        builder.ignoreUnmapped(ignoreUnmapped);
-        return Optional.of(builder);
-    }
-
-    private static GeoShapeQueryBuilder getGeoShapeQueryBuilder(String fieldName, ShapeRelation shapeRelation, SpatialStrategy strategy, ShapeBuilder shape, String id, String type, String index, String shapePath, String queryName) {
         GeoShapeQueryBuilder builder;
         if (shape != null) {
             builder = new GeoShapeQueryBuilder(fieldName, shape);
@@ -541,7 +560,9 @@ public class GeoShapeQueryBuilder extends AbstractQueryBuilder<GeoShapeQueryBuil
         if (queryName != null) {
             builder.queryName(queryName);
         }
-        return builder;
+        builder.boost(boost);
+        builder.ignoreUnmapped(ignoreUnmapped);
+        return Optional.of(builder);
     }
 
     @Override
@@ -576,154 +597,5 @@ public class GeoShapeQueryBuilder extends AbstractQueryBuilder<GeoShapeQueryBuil
             return new GeoShapeQueryBuilder(this.fieldName, shape).relation(relation).strategy(strategy);
         }
         return this;
-    }
-
-    private static class ChechValue {
-        private QueryParseContext parseContext;
-        private XContentParser parser;
-        private String id;
-        private String type;
-        private String index;
-        private String shapePath;
-        private String currentFieldName;
-
-        public ChechValue(QueryParseContext parseContext, XContentParser parser, String id, String type, String index, String shapePath, String currentFieldName) {
-            this.parseContext = parseContext;
-            this.parser = parser;
-            this.id = id;
-            this.type = type;
-            this.index = index;
-            this.shapePath = shapePath;
-            this.currentFieldName = currentFieldName;
-        }
-
-        public String getId() {
-            return id;
-        }
-
-        public String getType() {
-            return type;
-        }
-
-        public String getIndex() {
-            return index;
-        }
-
-        public String getShapePath() {
-            return shapePath;
-        }
-
-        public ChechValue invoke() throws IOException {
-            if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_ID_FIELD)) {
-                id = parser.text();
-            } else if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_TYPE_FIELD)) {
-                type = parser.text();
-            } else if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_INDEX_FIELD)) {
-                index = parser.text();
-            } else if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_PATH_FIELD)) {
-                shapePath = parser.text();
-            }
-            return this;
-        }
-    }
-
-    private static class ChechParseFieldMatcher {
-        private QueryParseContext parseContext;
-        private XContentParser parser;
-        private ShapeRelation shapeRelation;
-        private SpatialStrategy strategy;
-        private ShapeBuilder shape;
-        private String id;
-        private String type;
-        private String index;
-        private String shapePath;
-        private String currentFieldName;
-
-        public ChechParseFieldMatcher(QueryParseContext parseContext, XContentParser parser, ShapeRelation shapeRelation, SpatialStrategy strategy, ShapeBuilder shape, String id, String type, String index, String shapePath, String currentFieldName) {
-            this.parseContext = parseContext;
-            this.parser = parser;
-            this.shapeRelation = shapeRelation;
-            this.strategy = strategy;
-            this.shape = shape;
-            this.id = id;
-            this.type = type;
-            this.index = index;
-            this.shapePath = shapePath;
-            this.currentFieldName = currentFieldName;
-        }
-
-        public ShapeRelation getShapeRelation() {
-            return shapeRelation;
-        }
-
-        public SpatialStrategy getStrategy() {
-            return strategy;
-        }
-
-        public ShapeBuilder getShape() {
-            return shape;
-        }
-
-        public String getId() {
-            return id;
-        }
-
-        public String getType() {
-            return type;
-        }
-
-        public String getIndex() {
-            return index;
-        }
-
-        public String getShapePath() {
-            return shapePath;
-        }
-
-        public String getCurrentFieldName() {
-            return currentFieldName;
-        }
-
-        public ChechParseFieldMatcher invoke() throws IOException {
-            XContentParser.Token token;
-            if (parseContext.getParseFieldMatcher().match(currentFieldName, SHAPE_FIELD)) {
-                shape = ShapeBuilder.parse(parser);
-            } else if (parseContext.getParseFieldMatcher().match(currentFieldName, STRATEGY_FIELD)) {
-                String strategyName = parser.text();
-                strategy = SpatialStrategy.fromString(strategyName);
-                if (strategy == null) {
-                    throw new ParsingException(parser.getTokenLocation(), "Unknown strategy [" + strategyName + " ]");
-                }
-            } else if (parseContext.getParseFieldMatcher().match(currentFieldName, RELATION_FIELD)) {
-                shapeRelation = ShapeRelation.getRelationByName(parser.text());
-                if (shapeRelation == null) {
-                    throw new ParsingException(parser.getTokenLocation(), "Unknown shape operation [" + parser.text() + " ]");
-                }
-            } else if (parseContext.getParseFieldMatcher().match(currentFieldName, INDEXED_SHAPE_FIELD)) {
-                tokens();
-            } else {
-                throw new ParsingException(parser.getTokenLocation(), "[" + GeoShapeQueryBuilder.NAME +
-                        "] query does not support [" + currentFieldName + "]");
-            }
-            return this;
-        }
-
-        private void tokens() throws IOException {
-            XContentParser.Token token;
-            while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                if (token == XContentParser.Token.FIELD_NAME) {
-                    currentFieldName = parser.currentName();
-                } else if (token.isValue()) {
-                    ChechValue chechValue = new ChechValue(parseContext, parser, id, type, index, shapePath, currentFieldName).invoke();
-                    id = chechValue.getId();
-                    type = chechValue.getType();
-                    index = chechValue.getIndex();
-                    shapePath = chechValue.getShapePath();
-                } else {
-                    throw new ParsingException(parser.getTokenLocation(), "[" + GeoShapeQueryBuilder.NAME +
-                            "] unknown token [" + token + "] after [" + currentFieldName + "]");
-                }
-            }
-        }
     }
 }

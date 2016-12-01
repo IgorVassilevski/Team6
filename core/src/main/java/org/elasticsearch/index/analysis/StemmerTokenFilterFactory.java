@@ -82,8 +82,6 @@ import org.tartarus.snowball.ext.SpanishStemmer;
 import org.tartarus.snowball.ext.SwedishStemmer;
 import org.tartarus.snowball.ext.TurkishStemmer;
 
-/**
- */
 public class StemmerTokenFilterFactory extends AbstractTokenFilterFactory {
 
     private String language;
@@ -97,13 +95,6 @@ public class StemmerTokenFilterFactory extends AbstractTokenFilterFactory {
     public TokenStream create(TokenStream tokenStream) {
         final Version indexVersion = indexSettings.getIndexVersionCreated();
 
-        TokenStream x = getTokenStream(tokenStream);
-        if (x != null) return x;
-
-        return new SnowballFilter(tokenStream, language);
-    }
-
-    private TokenStream getTokenStream(TokenStream tokenStream) {
         if ("arabic".equalsIgnoreCase(language)) {
             return new ArabicStemFilter(tokenStream);
         } else if ("armenian".equalsIgnoreCase(language)) {
@@ -259,7 +250,8 @@ public class StemmerTokenFilterFactory extends AbstractTokenFilterFactory {
         } else if ("turkish".equalsIgnoreCase(language)) {
             return new SnowballFilter(tokenStream, new TurkishStemmer());
         }
-        return null;
+
+        return new SnowballFilter(tokenStream, language);
     }
 
 }

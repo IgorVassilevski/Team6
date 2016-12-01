@@ -21,7 +21,6 @@ package org.elasticsearch.search.aggregations;
 import org.elasticsearch.common.ParseFieldMatcher;
 import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.xcontent.ParseFieldRegistry;
-import org.elasticsearch.common.xcontent.XContentLocation;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.query.QueryParseContext;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
@@ -88,7 +87,21 @@ public class AggregatorParsers {
         XContentParser.Token token = null;
         XContentParser parser = parseContext.parser();
         while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-            final String aggregationName = getString(validAggMatcher, token, parser);
+            if (token != XContentParser.Token.FIELD_NAME) {
+                throw new ParsingException(parser.getTokenLocation(),
+                        "Unexpected token " + token + " in [aggs]: aggregations definitions must start with the name of the aggregation.");
+            }
+            final String aggregationName = parser.currentName();
+            if (!validAggMatcher.reset(aggregationName).matches()) {
+                throw new ParsingException(parser.getTokenLocation(), "Invalid aggregation name [" + aggregationName
+                        + "]. Aggregation names must be alpha-numeric and can only contain '_' and '-'");
+            }
+
+            token = parser.nextToken();
+            if (token != XContentParser.Token.START_OBJECT) {
+                throw new ParsingException(parser.getTokenLocation(), "Aggregation definition for [" + aggregationName + " starts with a ["
+                        + token + "], expected a [" + XContentParser.Token.START_OBJECT + "].");
+            }
 
             AggregationBuilder aggFactory = null;
             PipelineAggregationBuilder pipelineAggregatorFactory = null;
@@ -114,99 +127,70 @@ public class AggregatorParsers {
                     case "aggregations":
                     case "aggs":
                         if (subFactories != null) {
-                            getBuilder(parser.getTokenLocation(), "Found two sub aggregation definitions under [" + aggregationName + "]");
+                            throw new ParsingException(parser.getTokenLocation(),
+                                    "Found two sub aggregation definitions under [" + aggregationName + "]");
                         }
                         subFactories = parseAggregators(parseContext, level + 1);
                         break;
                     default:
-                        throwExpection(parser, aggregationName, aggFactory, pipelineAggregatorFactory, fieldName);
+                        if (aggFactory != null) {
+                            throw new ParsingException(parser.getTokenLocation(), "Found two aggregation type definitions in ["
+                                    + aggregationName + "]: [" + aggFactory.type + "] and [" + fieldName + "]");
+                        }
+                        if (pipelineAggregatorFactory != null) {
+                            throw new ParsingException(parser.getTokenLocation(), "Found two aggregation type definitions in ["
+                                    + aggregationName + "]: [" + pipelineAggregatorFactory + "] and [" + fieldName + "]");
+                        }
 
                         Aggregator.Parser aggregatorParser = parser(fieldName, parseContext.getParseFieldMatcher());
                         if (aggregatorParser == null) {
-                                PipelineAggregator.Parser pipelineAggregatorParser = pipelineParser(fieldName,
-                                        parseContext.getParseFieldMatcher());
-                                if (pipelineAggregatorParser == null) {
-                                    return getBuilder(parser.getTokenLocation(), "Could not find aggregator type [" + fieldName + "] in [" + aggregationName + "]");
-                                } else {
-                                    pipelineAggregatorFactory = pipelineAggregatorParser.parse(aggregationName, parseContext);
-                                }
+                            PipelineAggregator.Parser pipelineAggregatorParser = pipelineParser(fieldName,
+                                    parseContext.getParseFieldMatcher());
+                            if (pipelineAggregatorParser == null) {
+                                throw new ParsingException(parser.getTokenLocation(),
+                                        "Could not find aggregator type [" + fieldName + "] in [" + aggregationName + "]");
+                            } else {
+                                pipelineAggregatorFactory = pipelineAggregatorParser.parse(aggregationName, parseContext);
+                            }
                         } else {
                             aggFactory = aggregatorParser.parse(aggregationName, parseContext);
                         }
                     }
                 } else {
-                    getBuilder(parser.getTokenLocation(), "Expected [" + XContentParser.Token.START_OBJECT + "] under ["
+                    throw new ParsingException(parser.getTokenLocation(), "Expected [" + XContentParser.Token.START_OBJECT + "] under ["
                             + fieldName + "], but got a [" + token + "] in [" + aggregationName + "]");
                 }
             }
 
-            noAggFactoryOrPipline(factories, parser, aggregationName, aggFactory, pipelineAggregatorFactory, subFactories, metaData);
+            if (aggFactory == null && pipelineAggregatorFactory == null) {
+                throw new ParsingException(parser.getTokenLocation(), "Missing definition for aggregation [" + aggregationName + "]",
+                        parser.getTokenLocation());
+            } else if (aggFactory != null) {
+                assert pipelineAggregatorFactory == null;
+            if (metaData != null) {
+                    aggFactory.setMetaData(metaData);
+            }
+
+            if (subFactories != null) {
+                    aggFactory.subAggregations(subFactories);
+            }
+
+                factories.addAggregator(aggFactory);
+            } else {
+                assert pipelineAggregatorFactory != null;
+                if (subFactories != null) {
+                    throw new ParsingException(parser.getTokenLocation(),
+                            "Aggregation [" + aggregationName + "] cannot define sub-aggregations",
+                            parser.getTokenLocation());
+                }
+                if (metaData != null) {
+                    pipelineAggregatorFactory.setMetaData(metaData);
+                }
+                factories.addPipelineAggregator(pipelineAggregatorFactory);
+            }
         }
 
         return factories;
-    }
-
-    private void noAggFactoryOrPipline(AggregatorFactories.Builder factories, XContentParser parser, String aggregationName, AggregationBuilder aggFactory, PipelineAggregationBuilder pipelineAggregatorFactory, AggregatorFactories.Builder subFactories, Map<String, Object> metaData) {
-        if (aggFactory == null && pipelineAggregatorFactory == null) {
-            throw new ParsingException(parser.getTokenLocation(), "Missing definition for aggregation [" + aggregationName + "]",
-                    parser.getTokenLocation());
-        } else if (aggFactory != null) {
-            assert pipelineAggregatorFactory == null;
-        if (metaData != null) {
-                aggFactory.setMetaData(metaData);
-        }
-
-        if (subFactories != null) {
-                aggFactory.subAggregations(subFactories);
-        }
-
-            factories.addAggregator(aggFactory);
-        } else {
-            assert pipelineAggregatorFactory != null;
-            if (subFactories != null) {
-                throw new ParsingException(parser.getTokenLocation(),
-                        "Aggregation [" + aggregationName + "] cannot define sub-aggregations",
-                        parser.getTokenLocation());
-            }
-            if (metaData != null) {
-                pipelineAggregatorFactory.setMetaData(metaData);
-            }
-            factories.addPipelineAggregator(pipelineAggregatorFactory);
-        }
-    }
-
-    private String getString(Matcher validAggMatcher, XContentParser.Token token, XContentParser parser) throws IOException {
-        if (token != XContentParser.Token.FIELD_NAME) {
-            getBuilder(parser.getTokenLocation(), "Unexpected token " + token + " in [aggs]: aggregations definitions must start with the name of the aggregation.");
-        }
-        final String aggregationName = parser.currentName();
-        if (!validAggMatcher.reset(aggregationName).matches()) {
-            getBuilder(parser.getTokenLocation(), "Invalid aggregation name [" + aggregationName
-                    + "]. Aggregation names must be alpha-numeric and can only contain '_' and '-'");
-        }
-
-        token = parser.nextToken();
-        if (token != XContentParser.Token.START_OBJECT) {
-            getBuilder(parser.getTokenLocation(), "Aggregation definition for [" + aggregationName + " starts with a ["
-                    + token + "], expected a [" + XContentParser.Token.START_OBJECT + "].");
-        }
-        return aggregationName;
-    }
-
-    private AggregatorFactories.Builder getBuilder(XContentLocation tokenLocation, String msg) {
-        throw new ParsingException(tokenLocation,
-                msg);
-    }
-
-    private void throwExpection(XContentParser parser, String aggregationName, AggregationBuilder aggFactory, PipelineAggregationBuilder pipelineAggregatorFactory, String fieldName) {
-        if (aggFactory != null) {
-            getBuilder(parser.getTokenLocation(), "Found two aggregation type definitions in ["
-                    + aggregationName + "]: [" + aggFactory.type + "] and [" + fieldName + "]");
-        }
-        if (pipelineAggregatorFactory != null) {
-            getBuilder(parser.getTokenLocation(), "Found two aggregation type definitions in ["
-                    + aggregationName + "]: [" + pipelineAggregatorFactory + "] and [" + fieldName + "]");
-        }
     }
 
 }

@@ -208,7 +208,7 @@ public class GeolocationContextMapping extends ContextMapping {
 
     @Override
     protected XContentBuilder toInnerXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.field(FIELD_PRECISION, precision);
+        builder.array(FIELD_PRECISION, precision);
         builder.field(FIELD_NEIGHBORS, neighbors);
         if (defaultLocations != null) {
             builder.startArray(FIELD_MISSING);
@@ -400,7 +400,13 @@ public class GeolocationContextMapping extends ContextMapping {
                 }
             }
 
-            point = getGeoPoint(lat, lon, point);
+            if (point == null) {
+                if (Double.isNaN(lat) || Double.isNaN(lon)) {
+                    throw new ElasticsearchParseException("location is missing");
+                } else {
+                    point = new GeoPoint(lat, lon);
+                }
+            }
 
             if (precision == null || precision.length == 0) {
                 precision = this.precision;
@@ -410,17 +416,6 @@ public class GeolocationContextMapping extends ContextMapping {
         } else {
             return new GeoQuery(name, GeoUtils.parseGeoPoint(parser).getGeohash(), precision);
         }
-    }
-
-    private GeoPoint getGeoPoint(double lat, double lon, GeoPoint point) throws ElasticsearchParseException {
-        if (point == null) {
-            if (Double.isNaN(lat) || Double.isNaN(lon)) {
-                throw new ElasticsearchParseException("location is missing");
-            } else {
-                point = new GeoPoint(lat, lon);
-            }
-        }
-        return point;
     }
 
     @Override
@@ -746,7 +741,7 @@ public class GeolocationContextMapping extends ContextMapping {
             } else {
                 builder.startObject(name);
                 builder.field(FIELD_VALUE, location);
-                builder.field(FIELD_PRECISION, precisions);
+                builder.array(FIELD_PRECISION, precisions);
                 builder.endObject();
             }
             return builder;

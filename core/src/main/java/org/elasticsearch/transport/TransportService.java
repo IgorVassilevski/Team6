@@ -25,10 +25,10 @@ import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.cluster.node.liveness.TransportLivenessAction;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.node.DiscoveryNode;
+import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.collect.MapBuilder;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
-import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.logging.Loggers;
@@ -46,6 +46,8 @@ import org.elasticsearch.common.util.concurrent.ConcurrentMapLong;
 import org.elasticsearch.common.util.concurrent.EsRejectedExecutionException;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
+import org.elasticsearch.tasks.Task;
+import org.elasticsearch.tasks.TaskCancelledException;
 import org.elasticsearch.tasks.TaskManager;
 import org.elasticsearch.threadpool.ThreadPool;
 
@@ -66,9 +68,6 @@ import java.util.function.Supplier;
 import static java.util.Collections.emptyList;
 import static org.elasticsearch.common.settings.Setting.listSetting;
 
-/**
- *
- */
 public class TransportService extends AbstractLifecycleComponent {
 
     public static final String DIRECT_RESPONSE_PROFILE = ".direct";
@@ -79,15 +78,18 @@ public class TransportService extends AbstractLifecycleComponent {
     protected final ThreadPool threadPool;
     protected final ClusterName clusterName;
     protected final TaskManager taskManager;
+    private final TransportInterceptor.AsyncSender asyncSender;
 
     volatile Map<String, RequestHandlerRegistry> requestHandlers = Collections.emptyMap();
     final Object requestHandlerMutex = new Object();
 
     final ConcurrentMapLong<RequestHolder> clientHandlers = ConcurrentCollections.newConcurrentMapLongWithAggressiveConcurrency();
 
-    final AtomicLong requestIds = new AtomicLong();
+    private final AtomicLong requestIds = new AtomicLong();
 
     final CopyOnWriteArrayList<TransportConnectionListener> connectionListeners = new CopyOnWriteArrayList<>();
+
+    private final TransportInterceptor interceptor;
 
     // An LRU (don't really care about concurrency here) that holds the latest timed out requests so if they
     // do show up, we can print more descriptive information about them
@@ -101,6 +103,8 @@ public class TransportService extends AbstractLifecycleComponent {
 
     private final TransportService.Adapter adapter;
 
+    public static final TransportInterceptor NOOP_TRANSPORT_INTERCEPTOR = new TransportInterceptor() {};
+
     // tracer log
 
     public static final Setting<List<String>> TRACE_LOG_INCLUDE_SETTING =
@@ -112,13 +116,19 @@ public class TransportService extends AbstractLifecycleComponent {
     private final Logger tracerLog;
 
     volatile String[] tracerLogInclude;
-    volatile String[] tracelLogExclude;
+    volatile String[] tracerLogExclude;
 
     /** if set will call requests sent to this id to shortcut and executed locally */
     volatile DiscoveryNode localNode = null;
 
-    @Inject
-    public TransportService(Settings settings, Transport transport, ThreadPool threadPool) {
+    /**
+     * Build the service.
+     *
+     * @param clusterSettings if non null the the {@linkplain TransportService} will register with the {@link ClusterSettings} for settings
+     *        updates for {@link #TRACE_LOG_EXCLUDE_SETTING} and {@link #TRACE_LOG_INCLUDE_SETTING}.
+     */
+    public TransportService(Settings settings, Transport transport, ThreadPool threadPool, TransportInterceptor transportInterceptor,
+            @Nullable ClusterSettings clusterSettings) {
         super(settings);
         this.transport = transport;
         this.threadPool = threadPool;
@@ -128,6 +138,12 @@ public class TransportService extends AbstractLifecycleComponent {
         tracerLog = Loggers.getLogger(logger, ".tracer");
         adapter = createAdapter();
         taskManager = createTaskManager();
+        this.interceptor = transportInterceptor;
+        this.asyncSender = interceptor.interceptSender(this::sendRequestInternal);
+        if (clusterSettings != null) {
+            clusterSettings.addSettingsUpdateConsumer(TRACE_LOG_INCLUDE_SETTING, this::setTracerLogInclude);
+            clusterSettings.addSettingsUpdateConsumer(TRACE_LOG_EXCLUDE_SETTING, this::setTracerLogExclude);
+        }
     }
 
     /**
@@ -155,19 +171,12 @@ public class TransportService extends AbstractLifecycleComponent {
         return new TaskManager(settings);
     }
 
-    // These need to be optional as they don't exist in the context of a transport client
-    @Inject(optional = true)
-    public void setDynamicSettings(ClusterSettings clusterSettings) {
-        clusterSettings.addSettingsUpdateConsumer(TRACE_LOG_INCLUDE_SETTING, this::setTracerLogInclude);
-        clusterSettings.addSettingsUpdateConsumer(TRACE_LOG_EXCLUDE_SETTING, this::setTracerLogExclude);
-    }
-
     void setTracerLogInclude(List<String> tracerLogInclude) {
         this.tracerLogInclude = tracerLogInclude.toArray(Strings.EMPTY_ARRAY);
     }
 
-    void setTracerLogExclude(List<String> tracelLogExclude) {
-        this.tracelLogExclude = tracelLogExclude.toArray(Strings.EMPTY_ARRAY);
+    void setTracerLogExclude(List<String> tracerLogExclude) {
+        this.tracerLogExclude = tracerLogExclude.toArray(Strings.EMPTY_ARRAY);
     }
 
     @Override
@@ -241,11 +250,11 @@ public class TransportService extends AbstractLifecycleComponent {
      * when the transport layer starts up it will block any incoming requests until
      * this method is called
      */
-    public void acceptIncomingRequests() {
+    public final void acceptIncomingRequests() {
         blockIncomingRequestsLatch.countDown();
     }
 
-    public boolean addressSupported(Class<? extends TransportAddress> address) {
+    public final boolean addressSupported(Class<? extends TransportAddress> address) {
         return transport.addressSupported(address);
     }
 
@@ -362,16 +371,11 @@ public class TransportService extends AbstractLifecycleComponent {
 
         if (checkClusterName && !Objects.equals(clusterName, response.clusterName)) {
             throw new IllegalStateException("handshake failed, mismatched cluster name [" + response.clusterName + "] - " + node);
-        } else if (!isVersionCompatible(response.version)) {
+        } else if (response.version.isCompatible((localNode != null ? localNode.getVersion() : Version.CURRENT)) == false) {
             throw new IllegalStateException("handshake failed, incompatible version [" + response.version + "] - " + node);
         }
 
         return response.discoveryNode;
-    }
-
-    private boolean isVersionCompatible(Version version) {
-        return version.minimumCompatibilityVersion().equals(
-                localNode != null ? localNode.getVersion().minimumCompatibilityVersion() : Version.CURRENT.minimumCompatibilityVersion());
     }
 
     static class HandshakeRequest extends TransportRequest {
@@ -442,13 +446,44 @@ public class TransportService extends AbstractLifecycleComponent {
         return futureHandler;
     }
 
-    public <T extends TransportResponse> void sendRequest(final DiscoveryNode node, final String action, final TransportRequest request,
-                                                          final TransportResponseHandler<T> handler) {
+    public final <T extends TransportResponse> void sendRequest(final DiscoveryNode node, final String action,
+                                                                final TransportRequest request,
+                                                                final TransportResponseHandler<T> handler) {
         sendRequest(node, action, request, TransportRequestOptions.EMPTY, handler);
     }
 
-    public <T extends TransportResponse> void sendRequest(final DiscoveryNode node, final String action, final TransportRequest request,
-                                                          final TransportRequestOptions options, TransportResponseHandler<T> handler) {
+    public final <T extends TransportResponse> void sendRequest(final DiscoveryNode node, final String action,
+                                                                final TransportRequest request,
+                                                                final TransportRequestOptions options,
+                                                                TransportResponseHandler<T> handler) {
+        asyncSender.sendRequest(node, action, request, options, handler);
+    }
+
+    public <T extends TransportResponse> void sendChildRequest(final DiscoveryNode node, final String action,
+                                                               final TransportRequest request, final Task parentTask,
+                                                               final TransportResponseHandler<T> handler) {
+        sendChildRequest(node, action, request, parentTask, TransportRequestOptions.EMPTY, handler);
+    }
+
+    public <T extends TransportResponse> void sendChildRequest(final DiscoveryNode node, final String action,
+                                                               final TransportRequest request, final Task parentTask,
+                                                               final TransportRequestOptions options,
+                                                               final TransportResponseHandler<T> handler) {
+        request.setParentTask(localNode.getId(), parentTask.getId());
+        try {
+            taskManager.registerChildTask(parentTask, node.getId());
+            sendRequest(node, action, request, options, handler);
+        } catch (TaskCancelledException ex) {
+            // The parent task is already cancelled - just fail the request
+            handler.handleException(new TransportException(ex));
+        }
+
+    }
+
+    private <T extends TransportResponse> void sendRequestInternal(final DiscoveryNode node, final String action,
+                                                                   final TransportRequest request,
+                                                                   final TransportRequestOptions options,
+                                                                   TransportResponseHandler<T> handler) {
         if (node == null) {
             throw new IllegalStateException("can't send request to a null node");
         }
@@ -572,8 +607,8 @@ public class TransportService extends AbstractLifecycleComponent {
                 return false;
             }
         }
-        if (tracelLogExclude.length > 0) {
-            return !Regex.simpleMatch(tracelLogExclude, action);
+        if (tracerLogExclude.length > 0) {
+            return !Regex.simpleMatch(tracerLogExclude, action);
         }
         return true;
     }
@@ -594,8 +629,9 @@ public class TransportService extends AbstractLifecycleComponent {
      * @param executor       The executor the request handling will be executed on
      * @param handler        The handler itself that implements the request handling
      */
-    public <Request extends TransportRequest> void registerRequestHandler(String action, Supplier<Request> requestFactory, String executor,
-                                                                          TransportRequestHandler<Request> handler) {
+    public final <Request extends TransportRequest> void registerRequestHandler(String action, Supplier<Request> requestFactory,
+                                                    String executor, TransportRequestHandler<Request> handler) {
+        handler = interceptor.interceptHandler(action, executor, handler);
         RequestHandlerRegistry<Request> reg = new RequestHandlerRegistry<>(
             action, requestFactory, taskManager, handler, executor, false, true);
         registerRequestHandler(reg);
@@ -605,34 +641,28 @@ public class TransportService extends AbstractLifecycleComponent {
      * Registers a new request handler
      *
      * @param action                The action the request handler is associated with
-     * @param request               The request class that will be used to constrcut new instances for streaming
+     * @param request               The request class that will be used to construct new instances for streaming
      * @param executor              The executor the request handling will be executed on
      * @param forceExecution        Force execution on the executor queue and never reject it
      * @param canTripCircuitBreaker Check the request size and raise an exception in case the limit is breached.
      * @param handler               The handler itself that implements the request handling
      */
-    public <Request extends TransportRequest> void registerRequestHandler(String action, Supplier<Request> request,
+    public final <Request extends TransportRequest> void registerRequestHandler(String action, Supplier<Request> request,
                                                                           String executor, boolean forceExecution,
                                                                           boolean canTripCircuitBreaker,
                                                                           TransportRequestHandler<Request> handler) {
+        handler = interceptor.interceptHandler(action, executor, handler);
         RequestHandlerRegistry<Request> reg = new RequestHandlerRegistry<>(
             action, request, taskManager, handler, executor, forceExecution, canTripCircuitBreaker);
         registerRequestHandler(reg);
     }
 
-    protected <Request extends TransportRequest> void registerRequestHandler(RequestHandlerRegistry<Request> reg) {
+    private <Request extends TransportRequest> void registerRequestHandler(RequestHandlerRegistry<Request> reg) {
         synchronized (requestHandlerMutex) {
-            RequestHandlerRegistry replaced = requestHandlers.get(reg.getAction());
-            requestHandlers = MapBuilder.newMapBuilder(requestHandlers).put(reg.getAction(), reg).immutableMap();
-            if (replaced != null) {
-                logger.warn("registered two transport handlers for action {}, handlers: {}, {}", reg.getAction(), reg, replaced);
+            if (requestHandlers.containsKey(reg.getAction())) {
+                throw new IllegalArgumentException("transport handlers for action " + reg.getAction() + " is already registered");
             }
-        }
-    }
-
-    public void removeHandler(String action) {
-        synchronized (requestHandlerMutex) {
-            requestHandlers = MapBuilder.newMapBuilder(requestHandlers).remove(action).immutableMap();
+            requestHandlers = MapBuilder.newMapBuilder(requestHandlers).put(reg.getAction(), reg).immutableMap();
         }
     }
 
@@ -751,12 +781,9 @@ public class TransportService extends AbstractLifecycleComponent {
 
         @Override
         public void raiseNodeConnected(final DiscoveryNode node) {
-            threadPool.generic().execute(new Runnable() {
-                @Override
-                public void run() {
-                    for (TransportConnectionListener connectionListener : connectionListeners) {
-                        connectionListener.onNodeConnected(node);
-                    }
+            threadPool.generic().execute(() -> {
+                for (TransportConnectionListener connectionListener : connectionListeners) {
+                    connectionListener.onNodeConnected(node);
                 }
             });
         }
@@ -765,12 +792,7 @@ public class TransportService extends AbstractLifecycleComponent {
         public void raiseNodeDisconnected(final DiscoveryNode node) {
             try {
                 for (final TransportConnectionListener connectionListener : connectionListeners) {
-                    threadPool.generic().execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            connectionListener.onNodeDisconnected(node);
-                        }
-                    });
+                    threadPool.generic().execute(() -> connectionListener.onNodeDisconnected(node));
                 }
                 for (Map.Entry<Long, RequestHolder> entry : clientHandlers.entrySet()) {
                     RequestHolder holder = entry.getValue();
@@ -779,12 +801,8 @@ public class TransportService extends AbstractLifecycleComponent {
                         if (holderToNotify != null) {
                             // callback that an exception happened, but on a different thread since we don't
                             // want handlers to worry about stack overflows
-                            threadPool.generic().execute(new Runnable() {
-                                @Override
-                                public void run() {
-                                    holderToNotify.handler().handleException(new NodeDisconnectedException(node, holderToNotify.action()));
-                                }
-                            });
+                            threadPool.generic().execute(() -> holderToNotify.handler().handleException(new NodeDisconnectedException(node,
+                                holderToNotify.action())));
                         }
                     }
                 }
@@ -932,6 +950,7 @@ public class TransportService extends AbstractLifecycleComponent {
      * are invoked we restore the context.
      */
     private static final class ContextRestoreResponseHandler<T extends TransportResponse> implements TransportResponseHandler<T> {
+
         private final TransportResponseHandler<T> delegate;
         private final ThreadContext.StoredContext threadContext;
 
@@ -961,6 +980,12 @@ public class TransportService extends AbstractLifecycleComponent {
         public String executor() {
             return delegate.executor();
         }
+
+        @Override
+        public String toString() {
+            return getClass().getName() + "/" + delegate.toString();
+        }
+
     }
 
     static class DirectResponseChannel implements TransportChannel {
@@ -1072,6 +1097,5 @@ public class TransportService extends AbstractLifecycleComponent {
         public String getChannelType() {
             return "direct";
         }
-
     }
 }

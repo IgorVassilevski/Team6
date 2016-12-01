@@ -29,8 +29,10 @@ import org.elasticsearch.common.geo.GeoDistance;
 import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.geo.GeoUtils;
 import org.elasticsearch.common.unit.DistanceUnit;
+import org.elasticsearch.index.mapper.LatLonPointFieldMapper;
 import org.elasticsearch.index.mapper.MapperService;
 import org.elasticsearch.index.search.geo.GeoDistanceRangeQuery;
+import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.test.AbstractQueryTestCase;
 import org.elasticsearch.test.geo.RandomGeoGenerator;
 
@@ -117,9 +119,9 @@ public class GeoDistanceRangeQueryTests extends AbstractQueryTestCase<GeoDistanc
     }
 
     @Override
-    protected void doAssertLuceneQuery(GeoDistanceRangeQueryBuilder queryBuilder, Query query, QueryShardContext context)
+    protected void doAssertLuceneQuery(GeoDistanceRangeQueryBuilder queryBuilder, Query query, SearchContext context)
             throws IOException {
-        Version version = context.indexVersionCreated();
+        Version version = context.getQueryShardContext().indexVersionCreated();
         if (version.before(Version.V_2_2_0)) {
             assertLegacyQuery(queryBuilder, query);
         } else {
@@ -204,7 +206,9 @@ public class GeoDistanceRangeQueryTests extends AbstractQueryTestCase<GeoDistanc
     @Override
     public void testToQuery() throws IOException {
         assumeTrue("test runs only when at least a type is registered", getCurrentTypes().length > 0);
-        super.testToQuery();
+        if (createShardContext().indexVersionCreated().before(LatLonPointFieldMapper.LAT_LON_FIELD_VERSION)) {
+            super.testToQuery();
+        }
     }
 
     public void testNullFieldName() {
@@ -254,6 +258,11 @@ public class GeoDistanceRangeQueryTests extends AbstractQueryTestCase<GeoDistanc
     }
 
     public void testNestedRangeQuery() throws IOException {
+        // geo distance range queries are no longer supported in 5.0 they are replaced by using aggregations or sort
+        if (createShardContext().indexVersionCreated().onOrAfter(LatLonPointFieldMapper.LAT_LON_FIELD_VERSION)) {
+            return;
+        }
+
         // create a nested geo_point type with a subfield named "geohash" (explicit testing for ISSUE #15179)
         MapperService mapperService = createShardContext().getMapperService();
         String nestedMapping =
@@ -367,7 +376,9 @@ public class GeoDistanceRangeQueryTests extends AbstractQueryTestCase<GeoDistanc
     @Override
     public void testMustRewrite() throws IOException {
         assumeTrue("test runs only when at least a type is registered", getCurrentTypes().length > 0);
-        super.testMustRewrite();
+        if (createShardContext().indexVersionCreated().before(LatLonPointFieldMapper.LAT_LON_FIELD_VERSION)) {
+            super.testMustRewrite();
+        }
     }
 
     public void testIgnoreUnmapped() throws IOException {

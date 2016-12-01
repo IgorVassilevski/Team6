@@ -796,6 +796,11 @@ public final class Walker extends PainlessParserBaseVisitor<ANode> {
 
     @Override
     public ANode visitRegex(RegexContext ctx) {
+        if (false == settings.areRegexesEnabled()) {
+            throw location(ctx).createError(new IllegalStateException("Regexes are disabled. Set [script.painless.regex.enabled] to [true] "
+                    + "in elasticsearch.yaml to allow them. Be careful though, regexes break out of Painless's protection against deep "
+                    + "recursion and long loops."));
+        }
         String text = ctx.REGEX().getText();
         int lastSlash = text.lastIndexOf('/');
         String pattern = text.substring(1, lastSlash);
@@ -893,7 +898,7 @@ public final class Walker extends PainlessParserBaseVisitor<ANode> {
         String name = ctx.DOTID().getText();
         List<AExpression> arguments = collectArguments(ctx.arguments());
 
-        return new PCallInvoke(location(ctx), prefix, name, arguments);
+        return new PCallInvoke(location(ctx), prefix, name, ctx.COND() != null, arguments);
     }
 
     @Override
@@ -912,7 +917,7 @@ public final class Walker extends PainlessParserBaseVisitor<ANode> {
             throw location(ctx).createError(new IllegalStateException("Illegal tree structure."));
         }
 
-        return new PField(location(ctx), prefix, value);
+        return new PField(location(ctx), prefix, ctx.COND() != null, value);
     }
 
     @Override

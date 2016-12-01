@@ -25,7 +25,7 @@ import org.apache.lucene.document.SortedSetDocValuesField;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.XPointValues;
+import org.apache.lucene.index.PointValues;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.util.BytesRef;
@@ -178,7 +178,7 @@ public class IpFieldMapper extends FieldMapper {
         }
 
         @Override
-        public Query rangeQuery(Object lowerTerm, Object upperTerm, boolean includeLower, boolean includeUpper) {
+        public Query rangeQuery(Object lowerTerm, Object upperTerm, boolean includeLower, boolean includeUpper, QueryShardContext context) {
             failIfNotIndexed();
             InetAddress lower;
             if (lowerTerm == null) {
@@ -212,13 +212,13 @@ public class IpFieldMapper extends FieldMapper {
         @Override
         public FieldStats.Ip stats(IndexReader reader) throws IOException {
             String field = name();
-            long size = XPointValues.size(reader, field);
+            long size = PointValues.size(reader, field);
             if (size == 0) {
                 return null;
             }
-            int docCount = XPointValues.getDocCount(reader, field);
-            byte[] min = XPointValues.getMinPackedValue(reader, field);
-            byte[] max = XPointValues.getMaxPackedValue(reader, field);
+            int docCount = PointValues.getDocCount(reader, field);
+            byte[] min = PointValues.getMinPackedValue(reader, field);
+            byte[] max = PointValues.getMaxPackedValue(reader, field);
             return new FieldStats.Ip(reader.maxDoc(), docCount, -1L, size,
                 isSearchable(), isAggregatable(),
                 InetAddressPoint.decode(min), InetAddressPoint.decode(max));
@@ -231,7 +231,7 @@ public class IpFieldMapper extends FieldMapper {
         }
 
         @Override
-        public Object valueForSearch(Object value) {
+        public Object valueForDisplay(Object value) {
             if (value == null) {
                 return null;
             }

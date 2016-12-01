@@ -29,15 +29,11 @@ import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.lucene.all.AllEntries;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.analysis.AnalysisService;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-/**
- *
- */
 public abstract class ParseContext {
 
     /** Fork of {@link org.apache.lucene.document.Document} with additional functionality. */
@@ -243,11 +239,6 @@ public abstract class ParseContext {
         }
 
         @Override
-        public AnalysisService analysisService() {
-            return in.analysisService();
-        }
-
-        @Override
         public MapperService mapperService() {
             return in.mapperService();
         }
@@ -260,6 +251,16 @@ public abstract class ParseContext {
         @Override
         public void version(Field version) {
             in.version(version);
+        }
+
+        @Override
+        public Field seqNo() {
+            return in.seqNo();
+        }
+
+        @Override
+        public void seqNo(Field seqNo) {
+            in.seqNo(seqNo);
         }
 
         @Override
@@ -308,6 +309,8 @@ public abstract class ParseContext {
         private final SourceToParse sourceToParse;
 
         private Field version;
+
+        private Field seqNo;
 
         private final AllEntries allEntries;
 
@@ -386,11 +389,6 @@ public abstract class ParseContext {
         }
 
         @Override
-        public AnalysisService analysisService() {
-            return docMapperParser.analysisService;
-        }
-
-        @Override
         public MapperService mapperService() {
             return docMapperParser.mapperService;
         }
@@ -404,6 +402,17 @@ public abstract class ParseContext {
         public void version(Field version) {
             this.version = version;
         }
+
+        @Override
+        public Field seqNo() {
+            return this.seqNo;
+        }
+
+        @Override
+        public void seqNo(Field seqNo) {
+            this.seqNo = seqNo;
+        }
+
 
         @Override
         public AllEntries allEntries() {
@@ -525,13 +534,15 @@ public abstract class ParseContext {
 
     public abstract DocumentMapper docMapper();
 
-    public abstract AnalysisService analysisService();
-
     public abstract MapperService mapperService();
 
     public abstract Field version();
 
     public abstract void version(Field version);
+
+    public abstract Field seqNo();
+
+    public abstract void seqNo(Field seqNo);
 
     public final boolean includeInAll(Boolean includeInAll, FieldMapper mapper) {
         return includeInAll(includeInAll, mapper.fieldType().indexOptions() != IndexOptions.NONE);

@@ -24,13 +24,11 @@ import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.network.NetworkAddress;
 import org.elasticsearch.common.regex.Regex;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.InetSocketTransportAddress;
+import org.elasticsearch.common.transport.TransportAddress;
 
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- */
 public class DiscoveryNodeFilters {
 
     public enum OpType {
@@ -82,8 +80,8 @@ public class DiscoveryNodeFilters {
             if ("_ip".equals(attr)) {
                 // We check both the host_ip or the publish_ip
                 String publishAddress = null;
-                if (node.getAddress() instanceof InetSocketTransportAddress) {
-                    publishAddress = NetworkAddress.format(((InetSocketTransportAddress) node.getAddress()).address().getAddress());
+                if (node.getAddress() instanceof TransportAddress) {
+                    publishAddress = NetworkAddress.format(node.getAddress().address().getAddress());
                 }
 
                 boolean match = matchByIP(values, node.getHostAddress(), publishAddress);
@@ -116,8 +114,8 @@ public class DiscoveryNodeFilters {
             } else if ("_publish_ip".equals(attr)) {
                 // We check explicitly only the publish_ip
                 String address = null;
-                if (node.getAddress() instanceof InetSocketTransportAddress) {
-                    address = NetworkAddress.format(((InetSocketTransportAddress) node.getAddress()).address().getAddress());
+                if (node.getAddress() instanceof TransportAddress) {
+                    address = NetworkAddress.format(node.getAddress().address().getAddress());
                 }
 
                 boolean match = matchByIP(values, address, null);
@@ -134,15 +132,49 @@ public class DiscoveryNodeFilters {
                 }
             } else if ("_host".equals(attr)) {
                 for (String value : values) {
-                    Boolean x = hostMethod(node, value);
-                    if (x != null) return x;
+                    if (Regex.simpleMatch(value, node.getHostName())) {
+                        if (opType == OpType.OR) {
+                            return true;
+                        }
+                    } else {
+                        if (opType == OpType.AND) {
+                            return false;
+                        }
+                    }
+                    if (Regex.simpleMatch(value, node.getHostAddress())) {
+                        if (opType == OpType.OR) {
+                            return true;
+                        }
+                    } else {
+                        if (opType == OpType.AND) {
+                            return false;
+                        }
+                    }
                 }
             } else if ("_id".equals(attr)) {
-                Boolean x = idMethod(node, values);
-                if (x != null) return x;
+                for (String value : values) {
+                    if (node.getId().equals(value)) {
+                        if (opType == OpType.OR) {
+                            return true;
+                        }
+                    } else {
+                        if (opType == OpType.AND) {
+                            return false;
+                        }
+                    }
+                }
             } else if ("_name".equals(attr) || "name".equals(attr)) {
-                Boolean x = nameMethod(node, values);
-                if (x != null) return x;
+                for (String value : values) {
+                    if (Regex.simpleMatch(value, node.getName())) {
+                        if (opType == OpType.OR) {
+                            return true;
+                        }
+                    } else {
+                        if (opType == OpType.AND) {
+                            return false;
+                        }
+                    }
+                }
             } else {
                 String nodeAttributeValue = node.getAttributes().get(attr);
                 if (nodeAttributeValue == null) {
@@ -153,8 +185,15 @@ public class DiscoveryNodeFilters {
                     }
                 }
                 for (String value : values) {
-                    Boolean x = matchMethod(nodeAttributeValue, value);
-                    if (x != null) return x;
+                    if (Regex.simpleMatch(value, nodeAttributeValue)) {
+                        if (opType == OpType.OR) {
+                            return true;
+                        }
+                    } else {
+                        if (opType == OpType.AND) {
+                            return false;
+                        }
+                    }
                 }
             }
         }
@@ -163,71 +202,6 @@ public class DiscoveryNodeFilters {
         } else {
             return true;
         }
-    }
-
-    private Boolean matchMethod(String nodeAttributeValue, String value) {
-        if (Regex.simpleMatch(value, nodeAttributeValue)) {
-            if (opType == OpType.OR) {
-                return true;
-            }
-        } else {
-            if (opType == OpType.AND) {
-                return false;
-            }
-        }
-        return null;
-    }
-
-    private Boolean nameMethod(DiscoveryNode node, String[] values) {
-        for (String value : values) {
-            if (Regex.simpleMatch(value, node.getName())) {
-                if (opType == OpType.OR) {
-                    return true;
-                }
-            } else {
-                if (opType == OpType.AND) {
-                    return false;
-                }
-            }
-        }
-        return null;
-    }
-
-    private Boolean idMethod(DiscoveryNode node, String[] values) {
-        for (String value : values) {
-            if (node.getId().equals(value)) {
-                if (opType == OpType.OR) {
-                    return true;
-                }
-            } else {
-                if (opType == OpType.AND) {
-                    return false;
-                }
-            }
-        }
-        return null;
-    }
-
-    private Boolean hostMethod(DiscoveryNode node, String value) {
-        if (Regex.simpleMatch(value, node.getHostName())) {
-            if (opType == OpType.OR) {
-                return true;
-            }
-        } else {
-            if (opType == OpType.AND) {
-                return false;
-            }
-        }
-        if (Regex.simpleMatch(value, node.getHostAddress())) {
-            if (opType == OpType.OR) {
-                return true;
-            }
-        } else {
-            if (opType == OpType.AND) {
-                return false;
-            }
-        }
-        return null;
     }
 
     /**

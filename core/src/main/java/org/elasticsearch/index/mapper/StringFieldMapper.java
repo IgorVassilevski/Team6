@@ -193,98 +193,6 @@ public class StringFieldMapper extends FieldMapper {
 
         @Override
         public Mapper.Builder parse(String fieldName, Map<String, Object> node, ParserContext parserContext) throws MapperParsingException {
-            Mapper.Builder x = upgradeMappingsV5OrOlder(fieldName, node, parserContext);
-            if (x != null) return x;
-
-            StringFieldMapper.Builder builder = new StringFieldMapper.Builder(fieldName);
-            // hack for the fact that string can't just accept true/false for
-            // the index property and still accepts no/not_analyzed/analyzed
-            final Object index = node.remove("index");
-            if (index != null) {
-                final String normalizedIndex = index.toString();
-                switch (normalizedIndex) {
-                case "analyzed":
-                    builder.tokenized(true);
-                    node.put("index", true);
-                    break;
-                case "not_analyzed":
-                    builder.tokenized(false);
-                    node.put("index", true);
-                    break;
-                case "no":
-                    node.put("index", false);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Can't parse [index] value [" + index + "] for field [" + fieldName + "], expected [no], [not_analyzed] or [analyzed]");
-                }
-            }
-            final Object fielddataObject = node.get("fielddata");
-            if (fielddataObject instanceof Map) {
-                Map<?,?> fielddata = (Map<?, ?>) fielddataObject;
-                final Object loading = fielddata.get("loading");
-                if (loading != null) {
-                    node.put("eager_global_ordinals", "eager_global_ordinals".equals(loading));
-                }
-                Map<?,?> fielddataFilter = (Map<?, ?>) fielddata.get("filter");
-                if (fielddataFilter != null) {
-                    Map<?,?> frequencyFilter = (Map<?, ?>) fielddataFilter.get("frequency");
-                    frequencyFilter.keySet().retainAll(Arrays.asList("min", "max", "min_segment_size"));
-                    node.put("fielddata_frequency_filter", frequencyFilter);
-                }
-                node.put("fielddata", "disabled".equals(fielddata.get("format")) == false);
-            }
-            parseTextField(builder, fieldName, node, parserContext);
-            for (Iterator<Map.Entry<String, Object>> iterator = node.entrySet().iterator(); iterator.hasNext();) {
-                Map.Entry<String, Object> entry = iterator.next();
-                String propName = entry.getKey();
-                Object propNode = entry.getValue();
-                if (propName.equals("null_value")) {
-                    if (propNode == null) {
-                        throw new MapperParsingException("Property [null_value] cannot be null.");
-                    }
-                    builder.nullValue(propNode.toString());
-                    iterator.remove();
-                } else if (propName.equals("position_increment_gap")) {
-                    int newPositionIncrementGap = XContentMapValues.nodeIntegerValue(propNode, -1);
-                    if (newPositionIncrementGap < 0) {
-                        throw new MapperParsingException("positions_increment_gap less than 0 aren't allowed.");
-                    }
-                    builder.positionIncrementGap(newPositionIncrementGap);
-                    // we need to update to actual analyzers if they are not set in this case...
-                    // so we can inject the position increment gap...
-                    if (builder.fieldType().indexAnalyzer() == null) {
-                        builder.fieldType().setIndexAnalyzer(parserContext.analysisService().defaultIndexAnalyzer());
-                    }
-                    if (builder.fieldType().searchAnalyzer() == null) {
-                        builder.fieldType().setSearchAnalyzer(parserContext.analysisService().defaultSearchAnalyzer());
-                    }
-                    if (builder.fieldType().searchQuoteAnalyzer() == null) {
-                        builder.fieldType().setSearchQuoteAnalyzer(parserContext.analysisService().defaultSearchQuoteAnalyzer());
-                    }
-                    iterator.remove();
-                } else if (propName.equals("ignore_above")) {
-                    builder.ignoreAbove(XContentMapValues.nodeIntegerValue(propNode, -1));
-                    iterator.remove();
-                } else if (propName.equals("fielddata")) {
-                    builder.fielddata(XContentMapValues.nodeBooleanValue(propNode));
-                    iterator.remove();
-                } else if (propName.equals("eager_global_ordinals")) {
-                    builder.eagerGlobalOrdinals(XContentMapValues.nodeBooleanValue(propNode));
-                    iterator.remove();
-                } else if (propName.equals("fielddata_frequency_filter")) {
-                    Map<?,?> frequencyFilter = (Map<?, ?>) propNode;
-                    double minFrequency = XContentMapValues.nodeDoubleValue(frequencyFilter.remove("min"), 0);
-                    double maxFrequency = XContentMapValues.nodeDoubleValue(frequencyFilter.remove("max"), Integer.MAX_VALUE);
-                    int minSegmentSize = XContentMapValues.nodeIntegerValue(frequencyFilter.remove("min_segment_size"), 0);
-                    builder.fielddataFrequencyFilter(minFrequency, maxFrequency, minSegmentSize);
-                    DocumentMapperParser.checkNoRemainingFields(propName, frequencyFilter, parserContext.indexVersionCreated());
-                    iterator.remove();
-                }
-            }
-            return builder;
-        }
-
-        private Mapper.Builder upgradeMappingsV5OrOlder(String fieldName, Map<String, Object> node, ParserContext parserContext) throws IllegalArgumentException {
             if (parserContext.indexVersionCreated().onOrAfter(Version.V_5_0_0_alpha1)) {
                 final Object index = node.get("index");
                 if (Arrays.asList(null, "no", "not_analyzed", "analyzed").contains(index) == false) {
@@ -352,7 +260,93 @@ public class StringFieldMapper extends FieldMapper {
                         + unsupportedParameters + " are not supported for automatic upgrades. You should now use either a [text] "
                         + "or [keyword] field instead for field [" + fieldName + "]");
             }
-            return null;
+
+            StringFieldMapper.Builder builder = new StringFieldMapper.Builder(fieldName);
+            // hack for the fact that string can't just accept true/false for
+            // the index property and still accepts no/not_analyzed/analyzed
+            final Object index = node.remove("index");
+            if (index != null) {
+                final String normalizedIndex = index.toString();
+                switch (normalizedIndex) {
+                case "analyzed":
+                    builder.tokenized(true);
+                    node.put("index", true);
+                    break;
+                case "not_analyzed":
+                    builder.tokenized(false);
+                    node.put("index", true);
+                    break;
+                case "no":
+                    node.put("index", false);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Can't parse [index] value [" + index + "] for field [" + fieldName + "], expected [no], [not_analyzed] or [analyzed]");
+                }
+            }
+            final Object fielddataObject = node.get("fielddata");
+            if (fielddataObject instanceof Map) {
+                Map<?,?> fielddata = (Map<?, ?>) fielddataObject;
+                final Object loading = fielddata.get("loading");
+                if (loading != null) {
+                    node.put("eager_global_ordinals", "eager_global_ordinals".equals(loading));
+                }
+                Map<?,?> fielddataFilter = (Map<?, ?>) fielddata.get("filter");
+                if (fielddataFilter != null) {
+                    Map<?,?> frequencyFilter = (Map<?, ?>) fielddataFilter.get("frequency");
+                    frequencyFilter.keySet().retainAll(Arrays.asList("min", "max", "min_segment_size"));
+                    node.put("fielddata_frequency_filter", frequencyFilter);
+                }
+                node.put("fielddata", "disabled".equals(fielddata.get("format")) == false);
+            }
+            parseTextField(builder, fieldName, node, parserContext);
+            for (Iterator<Map.Entry<String, Object>> iterator = node.entrySet().iterator(); iterator.hasNext();) {
+                Map.Entry<String, Object> entry = iterator.next();
+                String propName = entry.getKey();
+                Object propNode = entry.getValue();
+                if (propName.equals("null_value")) {
+                    if (propNode == null) {
+                        throw new MapperParsingException("Property [null_value] cannot be null.");
+                    }
+                    builder.nullValue(propNode.toString());
+                    iterator.remove();
+                } else if (propName.equals("position_increment_gap")) {
+                    int newPositionIncrementGap = XContentMapValues.nodeIntegerValue(propNode, -1);
+                    if (newPositionIncrementGap < 0) {
+                        throw new MapperParsingException("positions_increment_gap less than 0 aren't allowed.");
+                    }
+                    builder.positionIncrementGap(newPositionIncrementGap);
+                    // we need to update to actual analyzers if they are not set in this case...
+                    // so we can inject the position increment gap...
+                    if (builder.fieldType().indexAnalyzer() == null) {
+                        builder.fieldType().setIndexAnalyzer(parserContext.getIndexAnalyzers().getDefaultIndexAnalyzer());
+                    }
+                    if (builder.fieldType().searchAnalyzer() == null) {
+                        builder.fieldType().setSearchAnalyzer(parserContext.getIndexAnalyzers().getDefaultSearchAnalyzer());
+                    }
+                    if (builder.fieldType().searchQuoteAnalyzer() == null) {
+                        builder.fieldType().setSearchQuoteAnalyzer(parserContext.getIndexAnalyzers().getDefaultSearchQuoteAnalyzer());
+                    }
+                    iterator.remove();
+                } else if (propName.equals("ignore_above")) {
+                    builder.ignoreAbove(XContentMapValues.nodeIntegerValue(propNode, -1));
+                    iterator.remove();
+                } else if (propName.equals("fielddata")) {
+                    builder.fielddata(XContentMapValues.nodeBooleanValue(propNode));
+                    iterator.remove();
+                } else if (propName.equals("eager_global_ordinals")) {
+                    builder.eagerGlobalOrdinals(XContentMapValues.nodeBooleanValue(propNode));
+                    iterator.remove();
+                } else if (propName.equals("fielddata_frequency_filter")) {
+                    Map<?,?> frequencyFilter = (Map<?, ?>) propNode;
+                    double minFrequency = XContentMapValues.nodeDoubleValue(frequencyFilter.remove("min"), 0);
+                    double maxFrequency = XContentMapValues.nodeDoubleValue(frequencyFilter.remove("max"), Integer.MAX_VALUE);
+                    int minSegmentSize = XContentMapValues.nodeIntegerValue(frequencyFilter.remove("min_segment_size"), 0);
+                    builder.fielddataFrequencyFilter(minFrequency, maxFrequency, minSegmentSize);
+                    DocumentMapperParser.checkNoRemainingFields(propName, frequencyFilter, parserContext.indexVersionCreated());
+                    iterator.remove();
+                }
+            }
+            return builder;
         }
     }
 

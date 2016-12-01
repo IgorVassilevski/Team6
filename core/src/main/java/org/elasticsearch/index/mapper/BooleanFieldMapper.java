@@ -34,6 +34,7 @@ import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.IndexNumericFieldData.NumericType;
 import org.elasticsearch.index.fielddata.plain.DocValuesIndexFieldData;
+import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.search.DocValueFormat;
 import org.joda.time.DateTimeZone;
 
@@ -151,20 +152,19 @@ public class BooleanFieldMapper extends FieldMapper {
             } else {
                 sValue = value.toString();
             }
-            if (sValue.length() == 0) {
-                return Values.FALSE;
+            switch (sValue) {
+                case "true":
+                    return Values.TRUE;
+                case "false":
+                    return Values.FALSE;
+                default:
+                    throw new IllegalArgumentException("Can't parse boolean value [" +
+                                    sValue + "], expected [true] or [false]");
             }
-            if (sValue.length() == 1 && sValue.charAt(0) == 'F') {
-                return Values.FALSE;
-            }
-            if (Booleans.parseBoolean(sValue, false)) {
-                return Values.TRUE;
-            }
-            return Values.FALSE;
         }
 
         @Override
-        public Boolean valueForSearch(Object value) {
+        public Boolean valueForDisplay(Object value) {
             if (value == null) {
                 return null;
             }
@@ -197,7 +197,7 @@ public class BooleanFieldMapper extends FieldMapper {
         }
 
         @Override
-        public Query rangeQuery(Object lowerTerm, Object upperTerm, boolean includeLower, boolean includeUpper) {
+        public Query rangeQuery(Object lowerTerm, Object upperTerm, boolean includeLower, boolean includeUpper, QueryShardContext context) {
             failIfNotIndexed();
             return new TermRangeQuery(name(),
                 lowerTerm == null ? null : indexedValueForSearch(lowerTerm),

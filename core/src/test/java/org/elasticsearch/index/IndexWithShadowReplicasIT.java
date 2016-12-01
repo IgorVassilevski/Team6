@@ -142,7 +142,7 @@ public class IndexWithShadowReplicasIT extends ESIntegTestCase {
         for (int i = 0; i < numDocs; i++) {
             client().prepareIndex("foo", "doc", ""+i).setSource("foo", "bar").get();
         }
-        assertNoFailures(client().admin().indices().prepareFlush().setForce(true).setWaitIfOngoing(true).execute().actionGet());
+        assertNoFailures(client().admin().indices().prepareFlush().setForce(true).execute().actionGet());
 
         assertAcked(client().admin().cluster().preparePutRepository("test-repo")
                 .setType("fs").setSettings(Settings.builder()
@@ -184,7 +184,7 @@ public class IndexWithShadowReplicasIT extends ESIntegTestCase {
 
     }
 
-    @TestLogging("gateway:TRACE")
+    @TestLogging("org.elasticsearch.gateway:TRACE")
     public void testIndexWithFewDocuments() throws Exception {
         final Path dataPath = createTempDir();
         Settings nodeSettings = nodeSettings(dataPath);
@@ -291,13 +291,14 @@ public class IndexWithShadowReplicasIT extends ESIntegTestCase {
         assertThat(gResp2.getSource().get("foo"), equalTo("bar"));
 
         // Node1 has the primary, now node2 has the replica
-        String node2 = internalCluster().startNode(nodeSettings);
+        internalCluster().startNode(nodeSettings);
         ensureGreen(IDX);
         client().admin().cluster().prepareHealth().setWaitForNodes("2").get();
         flushAndRefresh(IDX);
 
         logger.info("--> stopping node1 [{}]", node1);
         internalCluster().stopRandomNode(InternalTestCluster.nameFilter(node1));
+        ensureClusterSizeConsistency(); // wait for the new node to be elected and process the node leave
         ensureYellow(IDX);
 
         logger.info("--> performing query");
@@ -594,6 +595,12 @@ public class IndexWithShadowReplicasIT extends ESIntegTestCase {
      * Tests that shadow replicas can be "naturally" rebalanced and relocated
      * around the cluster. By "naturally" I mean without using the reroute API
      */
+    // This test failed on CI when trying to assert that all the shard data has been deleted
+    // from the index path. It has not been reproduced locally. Despite the IndicesService
+    // deleting the index and hence, deleting all the shard data for the index, the test
+    // failure still showed some Lucene files in the data directory for that index. Not sure
+    // why that is, so turning on more logging here.
+    @TestLogging("org.elasticsearch.indices:TRACE,org.elasticsearch.env:TRACE,_root:DEBUG")
     public void testShadowReplicaNaturalRelocation() throws Exception {
         Path dataPath = createTempDir();
         Settings nodeSettings = nodeSettings(dataPath);

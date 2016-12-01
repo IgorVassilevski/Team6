@@ -149,6 +149,7 @@ final class DocumentParser {
     private static ParsedDocument parsedDocument(SourceToParse source, ParseContext.InternalParseContext context, Mapping update) {
         return new ParsedDocument(
             context.version(),
+            context.seqNo(),
             context.sourceToParse().id(),
             context.sourceToParse().type(),
             source.routing(),
@@ -667,13 +668,6 @@ final class DocumentParser {
     }
 
     private static Mapper.Builder<?,?> createBuilderFromDynamicValue(final ParseContext context, XContentParser.Token token, String currentFieldName) throws IOException {
-        Mapper.Builder<?, ?> builder = getBuilder(context, token, currentFieldName);
-        if (builder != null) return builder;
-        // TODO how do we identify dynamically that its a binary value?
-        throw new IllegalStateException("Can't handle serializing a dynamic type with content token [" + token + "] and field name [" + currentFieldName + "]");
-    }
-
-    private static Mapper.Builder<?, ?> getBuilder(ParseContext context, XContentParser.Token token, String currentFieldName) throws IOException {
         if (token == XContentParser.Token.VALUE_STRING) {
             if (context.root().dateDetection()) {
                 String text = context.parser().text();
@@ -693,8 +687,29 @@ final class DocumentParser {
                     }
                 }
             }
-            Mapper.Builder<?, ?> builder1 = getBuilder(context, currentFieldName);
-            if (builder1 != null) return builder1;
+            if (context.root().numericDetection()) {
+                String text = context.parser().text();
+                try {
+                    Long.parseLong(text);
+                    Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.LONG);
+                    if (builder == null) {
+                        builder = newLongBuilder(currentFieldName, Version.indexCreated(context.indexSettings()));
+                    }
+                    return builder;
+                } catch (NumberFormatException e) {
+                    // not a long number
+                }
+                try {
+                    Double.parseDouble(text);
+                    Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.DOUBLE);
+                    if (builder == null) {
+                        builder = newFloatBuilder(currentFieldName, Version.indexCreated(context.indexSettings()));
+                    }
+                    return builder;
+                } catch (NumberFormatException e) {
+                    // not a long number
+                }
+            }
             Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.STRING);
             if (builder == null) {
                 builder = new TextFieldMapper.Builder(currentFieldName)
@@ -703,8 +718,22 @@ final class DocumentParser {
             return builder;
         } else if (token == XContentParser.Token.VALUE_NUMBER) {
             XContentParser.NumberType numberType = context.parser().numberType();
-            Mapper.Builder<?, ?> builder = getBuilder(context, currentFieldName, numberType);
-            if (builder != null) return builder;
+            if (numberType == XContentParser.NumberType.INT || numberType == XContentParser.NumberType.LONG) {
+                Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.LONG);
+                if (builder == null) {
+                    builder = newLongBuilder(currentFieldName, Version.indexCreated(context.indexSettings()));
+                }
+                return builder;
+            } else if (numberType == XContentParser.NumberType.FLOAT || numberType == XContentParser.NumberType.DOUBLE) {
+                Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.DOUBLE);
+                if (builder == null) {
+                    // no templates are defined, we use float by default instead of double
+                    // since this is much more space-efficient and should be enough most of
+                    // the time
+                    builder = newFloatBuilder(currentFieldName, Version.indexCreated(context.indexSettings()));
+                }
+                return builder;
+            }
         } else if (token == XContentParser.Token.VALUE_BOOLEAN) {
             Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.BOOLEAN);
             if (builder == null) {
@@ -723,54 +752,8 @@ final class DocumentParser {
                 return builder;
             }
         }
-        return null;
-    }
-
-    private static Mapper.Builder<?, ?> getBuilder(ParseContext context, String currentFieldName, XContentParser.NumberType numberType) {
-        if (numberType == XContentParser.NumberType.INT || numberType == XContentParser.NumberType.LONG) {
-            Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.LONG);
-            if (builder == null) {
-                builder = newLongBuilder(currentFieldName, Version.indexCreated(context.indexSettings()));
-            }
-            return builder;
-        } else if (numberType == XContentParser.NumberType.FLOAT || numberType == XContentParser.NumberType.DOUBLE) {
-            Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.DOUBLE);
-            if (builder == null) {
-                // no templates are defined, we use float by default instead of double
-                // since this is much more space-efficient and should be enough most of
-                // the time
-                builder = newFloatBuilder(currentFieldName, Version.indexCreated(context.indexSettings()));
-            }
-            return builder;
-        }
-        return null;
-    }
-
-    private static Mapper.Builder<?, ?> getBuilder(ParseContext context, String currentFieldName) throws IOException {
-        if (context.root().numericDetection()) {
-            String text = context.parser().text();
-            try {
-                Long.parseLong(text);
-                Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.LONG);
-                if (builder == null) {
-                    builder = newLongBuilder(currentFieldName, Version.indexCreated(context.indexSettings()));
-                }
-                return builder;
-            } catch (NumberFormatException e) {
-                // not a long number
-            }
-            try {
-                Double.parseDouble(text);
-                Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.DOUBLE);
-                if (builder == null) {
-                    builder = newFloatBuilder(currentFieldName, Version.indexCreated(context.indexSettings()));
-                }
-                return builder;
-            } catch (NumberFormatException e) {
-                // not a long number
-            }
-        }
-        return null;
+        // TODO how do we identify dynamically that its a binary value?
+        throw new IllegalStateException("Can't handle serializing a dynamic type with content token [" + token + "] and field name [" + currentFieldName + "]");
     }
 
     private static void parseDynamicValue(final ParseContext context, ObjectMapper parentMapper, String currentFieldName, XContentParser.Token token) throws IOException {

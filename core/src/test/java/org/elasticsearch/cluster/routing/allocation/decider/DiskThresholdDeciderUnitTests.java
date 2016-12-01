@@ -23,6 +23,7 @@ import org.elasticsearch.Version;
 import org.elasticsearch.cluster.ClusterInfo;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.DiskUsage;
+import org.elasticsearch.cluster.ESAllocationTestCase;
 import org.elasticsearch.cluster.MockInternalClusterInfoService.DevNullClusterInfo;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
@@ -42,10 +43,8 @@ import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.LocalTransportAddress;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.shard.ShardId;
-import org.elasticsearch.cluster.ESAllocationTestCase;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -70,9 +69,9 @@ public class DiskThresholdDeciderUnitTests extends ESAllocationTestCase {
         final Index index = metaData.index("test").getIndex();
 
         ShardRouting test_0 = ShardRouting.newUnassigned(new ShardId(index, 0), true, StoreRecoverySource.EMPTY_STORE_INSTANCE, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, "foo"));
-        DiscoveryNode node_0 = new DiscoveryNode("node_0", LocalTransportAddress.buildUnique(), Collections.emptyMap(),
+        DiscoveryNode node_0 = new DiscoveryNode("node_0", buildNewFakeTransportAddress(), Collections.emptyMap(),
                 new HashSet<>(Arrays.asList(DiscoveryNode.Role.values())), Version.CURRENT);
-        DiscoveryNode node_1 = new DiscoveryNode("node_1", LocalTransportAddress.buildUnique(), Collections.emptyMap(),
+        DiscoveryNode node_1 = new DiscoveryNode("node_1", buildNewFakeTransportAddress(), Collections.emptyMap(),
                 new HashSet<>(Arrays.asList(DiscoveryNode.Role.values())), Version.CURRENT);
 
         RoutingTable routingTable = RoutingTable.builder()
@@ -108,9 +107,9 @@ public class DiskThresholdDeciderUnitTests extends ESAllocationTestCase {
         DiskThresholdDecider decider = new DiskThresholdDecider(Settings.EMPTY, nss);
         ImmutableOpenMap.Builder<ShardRouting, String> shardRoutingMap = ImmutableOpenMap.builder();
 
-        DiscoveryNode node_0 = new DiscoveryNode("node_0", LocalTransportAddress.buildUnique(), Collections.emptyMap(),
+        DiscoveryNode node_0 = new DiscoveryNode("node_0", buildNewFakeTransportAddress(), Collections.emptyMap(),
                 new HashSet<>(Arrays.asList(DiscoveryNode.Role.values())), Version.CURRENT);
-        DiscoveryNode node_1 = new DiscoveryNode("node_1", LocalTransportAddress.buildUnique(), Collections.emptyMap(),
+        DiscoveryNode node_1 = new DiscoveryNode("node_1", buildNewFakeTransportAddress(), Collections.emptyMap(),
                 new HashSet<>(Arrays.asList(DiscoveryNode.Role.values())), Version.CURRENT);
 
         MetaData metaData = MetaData.builder()
@@ -224,7 +223,7 @@ public class DiskThresholdDeciderUnitTests extends ESAllocationTestCase {
         assertEquals(100L, DiskThresholdDecider.getExpectedShardSize(test_1, allocation, 0));
         assertEquals(10L, DiskThresholdDecider.getExpectedShardSize(test_0, allocation, 0));
 
-        RoutingNode node = new RoutingNode("node1", new DiscoveryNode("node1", new LocalTransportAddress("test"),
+        RoutingNode node = new RoutingNode("node1", new DiscoveryNode("node1", buildNewFakeTransportAddress(),
                 emptyMap(), emptySet(), Version.CURRENT), test_0, test_1.getTargetRelocatingShard(), test_2);
         assertEquals(100L, DiskThresholdDecider.sizeOfRelocatingShards(node, allocation, false, "/dev/null"));
         assertEquals(90L, DiskThresholdDecider.sizeOfRelocatingShards(node, allocation, true, "/dev/null"));
@@ -242,7 +241,7 @@ public class DiskThresholdDeciderUnitTests extends ESAllocationTestCase {
         other_0 = ShardRoutingHelper.moveToStarted(other_0);
         other_0 = ShardRoutingHelper.relocate(other_0, "node1");
 
-        node = new RoutingNode("node1", new DiscoveryNode("node1", new LocalTransportAddress("test"),
+        node = new RoutingNode("node1", new DiscoveryNode("node1", buildNewFakeTransportAddress(),
                 emptyMap(), emptySet(), Version.CURRENT), test_0, test_1.getTargetRelocatingShard(), test_2, other_0.getTargetRelocatingShard());
         if (other_0.primary()) {
             assertEquals(10100L, DiskThresholdDecider.sizeOfRelocatingShards(node, allocation, false, "/dev/null"));
@@ -279,12 +278,10 @@ public class DiskThresholdDeciderUnitTests extends ESAllocationTestCase {
         AllocationService allocationService = createAllocationService();
         clusterState = ClusterState.builder(clusterState).nodes(DiscoveryNodes.builder().add(newNode("node1")))
             .build();
-        RoutingAllocation.Result result = allocationService.reroute(clusterState, "foo");
-        clusterState = ClusterState.builder(clusterState).routingTable(result.routingTable()).build();
+        clusterState = allocationService.reroute(clusterState, "foo");
 
-        result = allocationService.applyStartedShards(clusterState,
+        clusterState = allocationService.applyStartedShards(clusterState,
             clusterState.getRoutingTable().index("test").shardsWithState(ShardRoutingState.UNASSIGNED));
-        clusterState = ClusterState.builder(clusterState).routingTable(result.routingTable()).build();
 
         RoutingAllocation allocation = new RoutingAllocation(null, clusterState.getRoutingNodes(), clusterState, info, 0, false);
 

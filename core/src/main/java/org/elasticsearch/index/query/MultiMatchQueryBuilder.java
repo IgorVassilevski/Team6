@@ -585,7 +585,16 @@ public class MultiMatchQueryBuilder extends AbstractQueryBuilder<MultiMatchQuery
             if (token == XContentParser.Token.FIELD_NAME) {
                 currentFieldName = parser.currentName();
             } else if (parseContext.getParseFieldMatcher().match(currentFieldName, FIELDS_FIELD)) {
-                tokenParse(parser, fieldsBoosts, token, currentFieldName);
+                if (token == XContentParser.Token.START_ARRAY) {
+                    while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
+                        parseFieldAndBoost(parser, fieldsBoosts);
+                    }
+                } else if (token.isValue()) {
+                    parseFieldAndBoost(parser, fieldsBoosts);
+                } else {
+                    throw new ParsingException(parser.getTokenLocation(),
+                            "[" + NAME + "] query does not support [" + currentFieldName + "]");
+                }
             } else if (token.isValue()) {
                 if (parseContext.getParseFieldMatcher().match(currentFieldName, QUERY_FIELD)) {
                     value = parser.objectText();
@@ -618,7 +627,14 @@ public class MultiMatchQueryBuilder extends AbstractQueryBuilder<MultiMatchQuery
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, LENIENT_FIELD)) {
                     lenient = parser.booleanValue();
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, ZERO_TERMS_QUERY_FIELD)) {
-                    zeroTermsQuery = getZeroTermsQuery(parser);
+                    String zeroTermsDocs = parser.text();
+                    if ("none".equalsIgnoreCase(zeroTermsDocs)) {
+                        zeroTermsQuery = MatchQuery.ZeroTermsQuery.NONE;
+                    } else if ("all".equalsIgnoreCase(zeroTermsDocs)) {
+                        zeroTermsQuery = MatchQuery.ZeroTermsQuery.ALL;
+                    } else {
+                        throw new ParsingException(parser.getTokenLocation(), "Unsupported zero_terms_docs value [" + zeroTermsDocs + "]");
+                    }
                 } else if (parseContext.getParseFieldMatcher().match(currentFieldName, AbstractQueryBuilder.NAME_FIELD)) {
                     queryName = parser.text();
                 } else {
@@ -664,37 +680,6 @@ public class MultiMatchQueryBuilder extends AbstractQueryBuilder<MultiMatchQuery
                 .queryName(queryName));
     }
 
-    private static MatchQuery.ZeroTermsQuery getZeroTermsQuery(XContentParser parser) throws ParsingException {
-        try {
-            MatchQuery.ZeroTermsQuery zeroTermsQuery;
-            String zeroTermsDocs = parser.text();
-            if ("none".equalsIgnoreCase(zeroTermsDocs)) {
-                zeroTermsQuery = MatchQuery.ZeroTermsQuery.NONE;
-            } else if ("all".equalsIgnoreCase(zeroTermsDocs)) {
-                zeroTermsQuery = MatchQuery.ZeroTermsQuery.ALL;
-            } else {
-                throw new ParsingException(parser.getTokenLocation(), "Unsupported zero_terms_docs value [" + zeroTermsDocs + "]");
-            }
-            return zeroTermsQuery;
-        }catch(IOException e){
-            //Error
-            return null;
-        }
-    }
-
-    private static void tokenParse(XContentParser parser, Map<String, Float> fieldsBoosts, XContentParser.Token token, String currentFieldName) throws IOException, ParsingException {
-        if (token == XContentParser.Token.START_ARRAY) {
-            while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                parseFieldAndBoost(parser, fieldsBoosts);
-            }
-        } else if (token.isValue()) {
-            parseFieldAndBoost(parser, fieldsBoosts);
-        } else {
-            throw new ParsingException(parser.getTokenLocation(),
-                    "[" + NAME + "] query does not support [" + currentFieldName + "]");
-        }
-    }
-
     private static void parseFieldAndBoost(XContentParser parser, Map<String, Float> fieldsBoosts) throws IOException {
         String fField = null;
         Float fBoost = AbstractQueryBuilder.DEFAULT_BOOST;
@@ -723,7 +708,7 @@ public class MultiMatchQueryBuilder extends AbstractQueryBuilder<MultiMatchQuery
     protected Query doToQuery(QueryShardContext context) throws IOException {
         MultiMatchQuery multiMatchQuery = new MultiMatchQuery(context);
         if (analyzer != null) {
-            if (context.getAnalysisService().analyzer(analyzer) == null) {
+            if (context.getIndexAnalyzers().get(analyzer) == null) {
                 throw new QueryShardException(context, "[" + NAME + "] analyzer [" + analyzer + "] not found");
             }
             multiMatchQuery.setAnalyzer(analyzer);

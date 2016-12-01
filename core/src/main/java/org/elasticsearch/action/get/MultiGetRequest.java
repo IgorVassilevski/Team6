@@ -28,6 +28,7 @@ import org.elasticsearch.action.RealtimeRequest;
 import org.elasticsearch.action.ValidateActions;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -47,7 +48,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
-public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements Iterable<MultiGetRequest.Item>, CompositeIndicesRequest, RealtimeRequest {
+public class MultiGetRequest extends ActionRequest implements Iterable<MultiGetRequest.Item>, CompositeIndicesRequest, RealtimeRequest {
 
     /**
      * A single get item.
@@ -58,7 +59,7 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
         private String id;
         private String routing;
         private String parent;
-        private String[] fields;
+        private String[] storedFields;
         private long version = Versions.MATCH_ANY;
         private VersionType versionType = VersionType.INTERNAL;
         private FetchSourceContext fetchSourceContext;
@@ -136,13 +137,13 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
             return parent;
         }
 
-        public Item fields(String... fields) {
-            this.fields = fields;
+        public Item storedFields(String... fields) {
+            this.storedFields = fields;
             return this;
         }
 
-        public String[] fields() {
-            return this.fields;
+        public String[] storedFields() {
+            return this.storedFields;
         }
 
         public long version() {
@@ -188,17 +189,11 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
             id = in.readString();
             routing = in.readOptionalString();
             parent = in.readOptionalString();
-            int size = in.readVInt();
-            if (size > 0) {
-                fields = new String[size];
-                for (int i = 0; i < size; i++) {
-                    fields[i] = in.readString();
-                }
-            }
+            storedFields = in.readOptionalStringArray();
             version = in.readLong();
             versionType = VersionType.fromValue(in.readByte());
 
-            fetchSourceContext = in.readOptionalStreamable(FetchSourceContext::new);
+            fetchSourceContext = in.readOptionalWriteable(FetchSourceContext::new);
         }
 
         @Override
@@ -208,19 +203,11 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
             out.writeString(id);
             out.writeOptionalString(routing);
             out.writeOptionalString(parent);
-            if (fields == null) {
-                out.writeVInt(0);
-            } else {
-                out.writeVInt(fields.length);
-                for (String field : fields) {
-                    out.writeString(field);
-                }
-            }
-
+            out.writeOptionalStringArray(storedFields);
             out.writeLong(version);
             out.writeByte(versionType.getValue());
 
-            out.writeOptionalStreamable(fetchSourceContext);
+            out.writeOptionalWriteable(fetchSourceContext);
         }
 
         @Override
@@ -233,7 +220,7 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
             if (version != item.version) return false;
             if (fetchSourceContext != null ? !fetchSourceContext.equals(item.fetchSourceContext) : item.fetchSourceContext != null)
                 return false;
-            if (!Arrays.equals(fields, item.fields)) return false;
+            if (!Arrays.equals(storedFields, item.storedFields)) return false;
             if (!id.equals(item.id)) return false;
             if (!index.equals(item.index)) return false;
             if (routing != null ? !routing.equals(item.routing) : item.routing != null) return false;
@@ -251,7 +238,7 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
             result = 31 * result + id.hashCode();
             result = 31 * result + (routing != null ? routing.hashCode() : 0);
             result = 31 * result + (parent != null ? parent.hashCode() : 0);
-            result = 31 * result + (fields != null ? Arrays.hashCode(fields) : 0);
+            result = 31 * result + (storedFields != null ? Arrays.hashCode(storedFields) : 0);
             result = 31 * result + Long.hashCode(version);
             result = 31 * result + versionType.hashCode();
             result = 31 * result + (fetchSourceContext != null ? fetchSourceContext.hashCode() : 0);
@@ -262,8 +249,6 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
     String preference;
     boolean realtime = true;
     boolean refresh;
-    public boolean ignoreErrorsOnGeneratedFields = false;
-
     List<Item> items = new ArrayList<>();
 
     public List<Item> getItems() {
@@ -338,11 +323,6 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
     }
 
 
-    public MultiGetRequest ignoreErrorsOnGeneratedFields(boolean ignoreErrorsOnGeneratedFields) {
-        this.ignoreErrorsOnGeneratedFields = ignoreErrorsOnGeneratedFields;
-        return this;
-    }
-
     public MultiGetRequest add(@Nullable String defaultIndex, @Nullable String defaultType, @Nullable String[] defaultFields, @Nullable FetchSourceContext defaultFetchSource, byte[] data, int from, int length) throws Exception {
         return add(defaultIndex, defaultType, defaultFields, defaultFetchSource, new BytesArray(data, from, length), true);
     }
@@ -355,7 +335,7 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
         return add(defaultIndex, defaultType, defaultFields, defaultFetchSource, null, data, allowExplicitIndex);
     }
 
-    public MultiGetRequest add(@Nullable String defaultIndex, @Nullable String defaultType, @Nullable String[] defaultFields, @Nullable FetchSourceContext defaultFetchSource, @Nullable String defaultRouting, BytesReference data, boolean allowExplicitIndex) throws Exception {
+    public MultiGetRequest add(@Nullable String defaultIndex, @Nullable String defaultType, @Nullable String[] defaultFields, @Nullable FetchSourceContext defaultFetchSource, @Nullable String defaultRouting, BytesReference data, boolean allowExplicitIndex) throws IOException {
         try (XContentParser parser = XContentFactory.xContent(data).createParser(data)) {
             XContentParser.Token token;
             String currentFieldName = null;
@@ -386,53 +366,107 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
             String id = null;
             String routing = defaultRouting;
             String parent = null;
-            List<String> fields = null;
+            List<String> storedFields = null;
             long version = Versions.MATCH_ANY;
             VersionType versionType = VersionType.INTERNAL;
 
-            FetchSourceContext fetchSourceContext = null;
+            FetchSourceContext fetchSourceContext = FetchSourceContext.FETCH_SOURCE;
 
             while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
                 if (token == XContentParser.Token.FIELD_NAME) {
                     currentFieldName = parser.currentName();
                 } else if (token.isValue()) {
-                    ParseDocumentIndex parseDocumentIndex = new ParseDocumentIndex(parser, allowExplicitIndex, currentFieldName, token, index, type, id, routing, parent, fields, version, versionType, fetchSourceContext).invoke();
-                    fields = parseDocumentIndex.getFields();
-                    fetchSourceContext = parseDocumentIndex.getFetchSourceContext();
-                    index = parseDocumentIndex.getIndex();
-                    type = parseDocumentIndex.getType();
-                    id = parseDocumentIndex.getId();
-                    routing = parseDocumentIndex.getRouting();
-                    parent = parseDocumentIndex.getParent();
-                    version = parseDocumentIndex.getVersion();
-                    versionType = parseDocumentIndex.getVersionType();
+                    if ("_index".equals(currentFieldName)) {
+                        if (!allowExplicitIndex) {
+                            throw new IllegalArgumentException("explicit index in multi get is not allowed");
+                        }
+                        index = parser.text();
+                    } else if ("_type".equals(currentFieldName)) {
+                        type = parser.text();
+                    } else if ("_id".equals(currentFieldName)) {
+                        id = parser.text();
+                    } else if ("_routing".equals(currentFieldName) || "routing".equals(currentFieldName)) {
+                        routing = parser.text();
+                    } else if ("_parent".equals(currentFieldName) || "parent".equals(currentFieldName)) {
+                        parent = parser.text();
+                    } else if ("fields".equals(currentFieldName)) {
+                        throw new ParsingException(parser.getTokenLocation(),
+                            "Unsupported field [fields] used, expected [stored_fields] instead");
+                    } else if ("stored_fields".equals(currentFieldName)) {
+                        storedFields = new ArrayList<>();
+                        storedFields.add(parser.text());
+                    } else if ("_version".equals(currentFieldName) || "version".equals(currentFieldName)) {
+                        version = parser.longValue();
+                    } else if ("_version_type".equals(currentFieldName) || "_versionType".equals(currentFieldName) || "version_type".equals(currentFieldName) || "versionType".equals(currentFieldName)) {
+                        versionType = VersionType.fromString(parser.text());
+                    } else if ("_source".equals(currentFieldName)) {
+                        if (parser.isBooleanValue()) {
+                            fetchSourceContext = new FetchSourceContext(parser.booleanValue(), fetchSourceContext.includes(),
+                                fetchSourceContext.excludes());
+                        } else if (token == XContentParser.Token.VALUE_STRING) {
+                            fetchSourceContext = new FetchSourceContext(fetchSourceContext.fetchSource(),
+                                new String[]{parser.text()}, fetchSourceContext.excludes());
+                        } else {
+                            throw new ElasticsearchParseException("illegal type for _source: [{}]", token);
+                        }
+                    }
                 } else if (token == XContentParser.Token.START_ARRAY) {
                     if ("fields".equals(currentFieldName)) {
-                        fields = new ArrayList<>();
+                        throw new ParsingException(parser.getTokenLocation(),
+                            "Unsupported field [fields] used, expected [stored_fields] instead");
+                    } else if ("stored_fields".equals(currentFieldName)) {
+                        storedFields = new ArrayList<>();
                         while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                            fields.add(parser.text());
+                            storedFields.add(parser.text());
                         }
                     } else if ("_source".equals(currentFieldName)) {
                         ArrayList<String> includes = new ArrayList<>();
                         while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
                             includes.add(parser.text());
                         }
-                        fetchSourceContext = new FetchSourceContext(includes.toArray(Strings.EMPTY_ARRAY));
+                        fetchSourceContext = new FetchSourceContext(fetchSourceContext.fetchSource(), includes.toArray(Strings.EMPTY_ARRAY)
+                            , fetchSourceContext.excludes());
                     }
 
                 } else if (token == XContentParser.Token.START_OBJECT) {
-                    ParseDocumentStartObject parseDocumentStartObject = new ParseDocumentStartObject(parser, currentFieldName, fetchSourceContext).invoke();
-                    fetchSourceContext = parseDocumentStartObject.getFetchSourceContext();
+                    if ("_source".equals(currentFieldName)) {
+                        List<String> currentList = null, includes = null, excludes = null;
+
+                        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
+                            if (token == XContentParser.Token.FIELD_NAME) {
+                                currentFieldName = parser.currentName();
+                                if ("includes".equals(currentFieldName) || "include".equals(currentFieldName)) {
+                                    currentList = includes != null ? includes : (includes = new ArrayList<>(2));
+                                } else if ("excludes".equals(currentFieldName) || "exclude".equals(currentFieldName)) {
+                                    currentList = excludes != null ? excludes : (excludes = new ArrayList<>(2));
+                                } else {
+                                    throw new ElasticsearchParseException("source definition may not contain [{}]", parser.text());
+                                }
+                            } else if (token == XContentParser.Token.START_ARRAY) {
+                                while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
+                                    currentList.add(parser.text());
+                                }
+                            } else if (token.isValue()) {
+                                currentList.add(parser.text());
+                            } else {
+                                throw new ElasticsearchParseException("unexpected token while parsing source settings");
+                            }
+                        }
+
+                        fetchSourceContext = new FetchSourceContext(fetchSourceContext.fetchSource(),
+                                includes == null ? Strings.EMPTY_ARRAY : includes.toArray(new String[includes.size()]),
+                                excludes == null ? Strings.EMPTY_ARRAY : excludes.toArray(new String[excludes.size()]));
+                    }
                 }
             }
             String[] aFields;
-            if (fields != null) {
-                aFields = fields.toArray(new String[fields.size()]);
+            if (storedFields != null) {
+                aFields = storedFields.toArray(new String[storedFields.size()]);
             } else {
                 aFields = defaultFields;
             }
-            items.add(new Item(index, type, id).routing(routing).fields(aFields).parent(parent).version(version).versionType(versionType)
-                    .fetchSourceContext(fetchSourceContext == null ? defaultFetchSource : fetchSourceContext));
+            items.add(new Item(index, type, id).routing(routing).storedFields(aFields).parent(parent).version(version).versionType(versionType)
+                    .fetchSourceContext(fetchSourceContext == FetchSourceContext.FETCH_SOURCE ? defaultFetchSource : fetchSourceContext));
         }
     }
 
@@ -446,7 +480,7 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
             if (!token.isValue()) {
                 throw new IllegalArgumentException("ids array element should only contain ids");
             }
-            items.add(new Item(defaultIndex, defaultType, parser.text()).fields(defaultFields).fetchSourceContext(defaultFetchSource).routing(defaultRouting));
+            items.add(new Item(defaultIndex, defaultType, parser.text()).storedFields(defaultFields).fetchSourceContext(defaultFetchSource).routing(defaultRouting));
         }
     }
 
@@ -465,7 +499,6 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
         preference = in.readOptionalString();
         refresh = in.readBoolean();
         realtime = in.readBoolean();
-        ignoreErrorsOnGeneratedFields = in.readBoolean();
 
         int size = in.readVInt();
         items = new ArrayList<>(size);
@@ -480,165 +513,10 @@ public class MultiGetRequest extends ActionRequest<MultiGetRequest> implements I
         out.writeOptionalString(preference);
         out.writeBoolean(refresh);
         out.writeBoolean(realtime);
-        out.writeBoolean(ignoreErrorsOnGeneratedFields);
 
         out.writeVInt(items.size());
         for (Item item : items) {
             item.writeTo(out);
-        }
-    }
-
-    private static class ParseDocumentStartObject {
-        private XContentParser parser;
-        private String currentFieldName;
-        private FetchSourceContext fetchSourceContext;
-
-        public ParseDocumentStartObject(XContentParser parser, String currentFieldName, FetchSourceContext fetchSourceContext) {
-            this.parser = parser;
-            this.currentFieldName = currentFieldName;
-            this.fetchSourceContext = fetchSourceContext;
-        }
-
-        public String getCurrentFieldName() {
-            return currentFieldName;
-        }
-
-        public FetchSourceContext getFetchSourceContext() {
-            return fetchSourceContext;
-        }
-
-        public ParseDocumentStartObject invoke() throws IOException {
-            XContentParser.Token token;
-            if ("_source".equals(currentFieldName)) {
-                List<String> currentList = null, includes = null, excludes = null;
-
-                while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                    if (token == XContentParser.Token.FIELD_NAME) {
-                        currentFieldName = parser.currentName();
-                        if ("includes".equals(currentFieldName) || "include".equals(currentFieldName)) {
-                            currentList = includes != null ? includes : (includes = new ArrayList<>(2));
-                        } else if ("excludes".equals(currentFieldName) || "exclude".equals(currentFieldName)) {
-                            currentList = excludes != null ? excludes : (excludes = new ArrayList<>(2));
-                        } else {
-                            throw new ElasticsearchParseException("source definition may not contain [{}]", parser.text());
-                        }
-                    } else if (token == XContentParser.Token.START_ARRAY) {
-                        while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                            currentList.add(parser.text());
-                        }
-                    } else if (token.isValue()) {
-                        currentList.add(parser.text());
-                    } else {
-                        throw new ElasticsearchParseException("unexpected token while parsing source settings");
-                    }
-                }
-
-                fetchSourceContext = new FetchSourceContext(
-                        includes == null ? Strings.EMPTY_ARRAY : includes.toArray(new String[includes.size()]),
-                        excludes == null ? Strings.EMPTY_ARRAY : excludes.toArray(new String[excludes.size()]));
-            }
-            return this;
-        }
-    }
-
-    private static class ParseDocumentIndex {
-        private XContentParser parser;
-        private boolean allowExplicitIndex;
-        private String currentFieldName;
-        private XContentParser.Token token;
-        private String index;
-        private String type;
-        private String id;
-        private String routing;
-        private String parent;
-        private List<String> fields;
-        private long version;
-        private VersionType versionType;
-        private FetchSourceContext fetchSourceContext;
-
-        public ParseDocumentIndex(XContentParser parser, boolean allowExplicitIndex, String currentFieldName, XContentParser.Token token, String index, String type, String id, String routing, String parent, List<String> fields, long version, VersionType versionType, FetchSourceContext fetchSourceContext) {
-            this.parser = parser;
-            this.allowExplicitIndex = allowExplicitIndex;
-            this.currentFieldName = currentFieldName;
-            this.token = token;
-            this.index = index;
-            this.type = type;
-            this.id = id;
-            this.routing = routing;
-            this.parent = parent;
-            this.fields = fields;
-            this.version = version;
-            this.versionType = versionType;
-            this.fetchSourceContext = fetchSourceContext;
-        }
-
-        public String getIndex() {
-            return index;
-        }
-
-        public String getType() {
-            return type;
-        }
-
-        public String getId() {
-            return id;
-        }
-
-        public String getRouting() {
-            return routing;
-        }
-
-        public String getParent() {
-            return parent;
-        }
-
-        public List<String> getFields() {
-            return fields;
-        }
-
-        public long getVersion() {
-            return version;
-        }
-
-        public VersionType getVersionType() {
-            return versionType;
-        }
-
-        public FetchSourceContext getFetchSourceContext() {
-            return fetchSourceContext;
-        }
-
-        public ParseDocumentIndex invoke() throws IOException {
-            if ("_index".equals(currentFieldName)) {
-                if (!allowExplicitIndex) {
-                    throw new IllegalArgumentException("explicit index in multi get is not allowed");
-                }
-                index = parser.text();
-            } else if ("_type".equals(currentFieldName)) {
-                type = parser.text();
-            } else if ("_id".equals(currentFieldName)) {
-                id = parser.text();
-            } else if ("_routing".equals(currentFieldName) || "routing".equals(currentFieldName)) {
-                routing = parser.text();
-            } else if ("_parent".equals(currentFieldName) || "parent".equals(currentFieldName)) {
-                parent = parser.text();
-            } else if ("fields".equals(currentFieldName)) {
-                fields = new ArrayList<>();
-                fields.add(parser.text());
-            } else if ("_version".equals(currentFieldName) || "version".equals(currentFieldName)) {
-                version = parser.longValue();
-            } else if ("_version_type".equals(currentFieldName) || "_versionType".equals(currentFieldName) || "version_type".equals(currentFieldName) || "versionType".equals(currentFieldName)) {
-                versionType = VersionType.fromString(parser.text());
-            } else if ("_source".equals(currentFieldName)) {
-                if (parser.isBooleanValue()) {
-                    fetchSourceContext = new FetchSourceContext(parser.booleanValue());
-                } else if (token == XContentParser.Token.VALUE_STRING) {
-                    fetchSourceContext = new FetchSourceContext(new String[]{parser.text()});
-                } else {
-                    throw new ElasticsearchParseException("illegal type for _source: [{}]", token);
-                }
-            }
-            return this;
         }
     }
 }

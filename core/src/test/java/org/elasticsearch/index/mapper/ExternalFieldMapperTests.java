@@ -25,9 +25,11 @@ import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.compress.CompressedXContent;
+import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.index.IndexService;
+import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.indices.mapper.MapperRegistry;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESSingleNodeTestCase;
@@ -38,12 +40,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
+import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
-/**
- */
 public class ExternalFieldMapperTests extends ESSingleNodeTestCase {
 
     @Override
@@ -59,8 +61,11 @@ public class ExternalFieldMapperTests extends ESSingleNodeTestCase {
                 Collections.singletonMap(ExternalMapperPlugin.EXTERNAL, new ExternalMapper.TypeParser(ExternalMapperPlugin.EXTERNAL, "foo")),
                 Collections.singletonMap(ExternalMetadataMapper.CONTENT_TYPE, new ExternalMetadataMapper.TypeParser()));
 
+        Supplier<QueryShardContext> queryShardContext = () -> {
+            return indexService.newQueryShardContext(0, null, () -> { throw new UnsupportedOperationException(); });
+        };
         DocumentMapperParser parser = new DocumentMapperParser(indexService.getIndexSettings(), indexService.mapperService(),
-                indexService.analysisService(), indexService.similarityService(), mapperRegistry, indexService::newQueryShardContext);
+                indexService.getIndexAnalyzers(), indexService.similarityService(), mapperRegistry, queryShardContext);
         DocumentMapper documentMapper = parser.parse("type", new CompressedXContent(
                 XContentFactory.jsonBuilder().startObject().startObject("type")
                 .startObject(ExternalMetadataMapper.CONTENT_TYPE)
@@ -83,8 +88,10 @@ public class ExternalFieldMapperTests extends ESSingleNodeTestCase {
         assertThat(doc.rootDoc().getField("field.point"), notNullValue());
         if (version.before(Version.V_2_2_0)) {
             assertThat(doc.rootDoc().getField("field.point").stringValue(), is("42.0,51.0"));
-        } else {
-            assertThat(Long.parseLong(doc.rootDoc().getField("field.point").stringValue()), is(GeoPointField.encodeLatLon(42.0, 51.0)));
+        } else if (version.onOrAfter(LatLonPointFieldMapper.LAT_LON_FIELD_VERSION)) {
+            GeoPoint point = new GeoPoint().resetFromIndexableField(doc.rootDoc().getField("field.point"));
+            assertThat(point.lat(), closeTo(42.0, 1e-5));
+            assertThat(point.lon(), closeTo(51.0, 1e-5));
         }
 
         assertThat(doc.rootDoc().getField("field.shape"), notNullValue());
@@ -106,8 +113,11 @@ public class ExternalFieldMapperTests extends ESSingleNodeTestCase {
         mapperParsers.put(KeywordFieldMapper.CONTENT_TYPE, new KeywordFieldMapper.TypeParser());
         MapperRegistry mapperRegistry = new MapperRegistry(mapperParsers, Collections.emptyMap());
 
+        Supplier<QueryShardContext> queryShardContext = () -> {
+            return indexService.newQueryShardContext(0, null, () -> { throw new UnsupportedOperationException(); });
+        };
         DocumentMapperParser parser = new DocumentMapperParser(indexService.getIndexSettings(), indexService.mapperService(),
-                indexService.analysisService(), indexService.similarityService(), mapperRegistry, indexService::newQueryShardContext);
+                indexService.getIndexAnalyzers(), indexService.similarityService(), mapperRegistry, queryShardContext);
 
         DocumentMapper documentMapper = parser.parse("type", new CompressedXContent(
                 XContentFactory.jsonBuilder().startObject().startObject("type").startObject("properties")
@@ -141,8 +151,12 @@ public class ExternalFieldMapperTests extends ESSingleNodeTestCase {
         assertThat(doc.rootDoc().getField("field.point"), notNullValue());
         if (version.before(Version.V_2_2_0)) {
             assertThat(doc.rootDoc().getField("field.point").stringValue(), is("42.0,51.0"));
-        } else {
+        } else if (version.before(LatLonPointFieldMapper.LAT_LON_FIELD_VERSION)) {
             assertThat(Long.parseLong(doc.rootDoc().getField("field.point").stringValue()), is(GeoPointField.encodeLatLon(42.0, 51.0)));
+        } else {
+            GeoPoint point = new GeoPoint().resetFromIndexableField(doc.rootDoc().getField("field.point"));
+            assertThat(point.lat(), closeTo(42.0, 1E-5));
+            assertThat(point.lon(), closeTo(51.0, 1E-5));
         }
 
         IndexableField shape = doc.rootDoc().getField("field.shape");
@@ -172,8 +186,11 @@ public class ExternalFieldMapperTests extends ESSingleNodeTestCase {
         mapperParsers.put(TextFieldMapper.CONTENT_TYPE, new TextFieldMapper.TypeParser());
         MapperRegistry mapperRegistry = new MapperRegistry(mapperParsers, Collections.emptyMap());
 
+        Supplier<QueryShardContext> queryShardContext = () -> {
+            return indexService.newQueryShardContext(0, null, () -> { throw new UnsupportedOperationException(); });
+        };
         DocumentMapperParser parser = new DocumentMapperParser(indexService.getIndexSettings(), indexService.mapperService(),
-                indexService.analysisService(), indexService.similarityService(), mapperRegistry, indexService::newQueryShardContext);
+                indexService.getIndexAnalyzers(), indexService.similarityService(), mapperRegistry, queryShardContext);
 
         DocumentMapper documentMapper = parser.parse("type", new CompressedXContent(
                 XContentFactory.jsonBuilder().startObject().startObject("type").startObject("properties")
@@ -211,7 +228,7 @@ public class ExternalFieldMapperTests extends ESSingleNodeTestCase {
         assertThat(doc.rootDoc().getField("field.point"), notNullValue());
         if (version.before(Version.V_2_2_0)) {
             assertThat(doc.rootDoc().getField("field.point").stringValue(), is("42.0,51.0"));
-        } else {
+        } else if (version.before(LatLonPointFieldMapper.LAT_LON_FIELD_VERSION)) {
             assertThat(Long.parseLong(doc.rootDoc().getField("field.point").stringValue()), is(GeoPointField.encodeLatLon(42.0, 51.0)));
         }
 

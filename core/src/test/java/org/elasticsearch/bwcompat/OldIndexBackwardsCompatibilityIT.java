@@ -23,16 +23,20 @@ import org.apache.lucene.search.Explanation;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
 import org.elasticsearch.Version;
+import org.elasticsearch.VersionTests;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
+import org.elasticsearch.action.admin.indices.recovery.RecoveryResponse;
 import org.elasticsearch.action.admin.indices.segments.IndexSegments;
 import org.elasticsearch.action.admin.indices.segments.IndexShardSegments;
 import org.elasticsearch.action.admin.indices.segments.IndicesSegmentResponse;
 import org.elasticsearch.action.admin.indices.segments.ShardSegments;
+import org.elasticsearch.action.admin.indices.settings.get.GetSettingsResponse;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
+import org.elasticsearch.cluster.routing.RecoverySource;
 import org.elasticsearch.common.io.FileSystemUtils;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
@@ -47,6 +51,7 @@ import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.engine.Segment;
 import org.elasticsearch.index.mapper.StringFieldMapperPositionIncrementGapTests;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.indices.recovery.RecoveryState;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.search.SearchHit;
@@ -78,7 +83,9 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import static org.elasticsearch.test.OldIndexUtils.assertUpgradeWorks;
+import static org.elasticsearch.test.OldIndexUtils.getIndexDir;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 // needs at least 2 nodes since it bumps replicas to 1
@@ -103,8 +110,8 @@ public class OldIndexBackwardsCompatibilityIT extends ESIntegTestCase {
 
     @Before
     public void initIndexesList() throws Exception {
-        indexes = OldIndexUtils.loadIndexesList("index", getBwcIndicesPath());
-        unsupportedIndexes = OldIndexUtils.loadIndexesList("unsupported", getBwcIndicesPath());
+        indexes = OldIndexUtils.loadDataFilesList("index", getBwcIndicesPath());
+        unsupportedIndexes = OldIndexUtils.loadDataFilesList("unsupported", getBwcIndicesPath());
     }
 
     @AfterClass
@@ -180,7 +187,7 @@ public class OldIndexBackwardsCompatibilityIT extends ESIntegTestCase {
         SortedSet<String> expectedVersions = new TreeSet<>();
         for (Version v : VersionUtils.allVersions()) {
             if (VersionUtils.isSnapshot(v)) continue;  // snapshots are unreleased, so there is no backcompat yet
-            if (v.isAlpha()) continue; // no guarantees for alpha releases
+            if (v.isRelease() == false) continue; // no guarantees for prereleases
             if (v.onOrBefore(Version.V_2_0_0_beta1)) continue; // we can only test back one major lucene version
             if (v.equals(Version.CURRENT)) continue; // the current version is always compatible with itself
             expectedVersions.add("index-" + v.toString() + ".zip");
@@ -239,6 +246,7 @@ public class OldIndexBackwardsCompatibilityIT extends ESIntegTestCase {
         assertUpgradeWorks(client(), indexName, version);
         assertDeleteByQueryWorked(indexName, version);
         assertPositionIncrementGapDefaults(indexName, version);
+        assertAliasWithBadName(indexName, version);
         unloadIndex(indexName);
     }
 
@@ -249,15 +257,43 @@ public class OldIndexBackwardsCompatibilityIT extends ESIntegTestCase {
         Version actualVersionCreated = Version.indexCreated(getIndexResponse.getSettings().get(indexName));
         assertEquals(indexCreated, actualVersionCreated);
         ensureYellow(indexName);
-        IndicesSegmentResponse segmentsResponse = client().admin().indices().prepareSegments(indexName).get();
-        IndexSegments segments = segmentsResponse.getIndices().get(indexName);
-        for (IndexShardSegments indexShardSegments : segments) {
-            for (ShardSegments shardSegments : indexShardSegments) {
-                for (Segment segment : shardSegments) {
-                    assertEquals(indexCreated.luceneVersion, segment.version);
+        RecoveryResponse recoveryResponse = client().admin().indices().prepareRecoveries(indexName)
+            .setDetailed(true).setActiveOnly(false).get();
+        boolean foundTranslog = false;
+        for (List<RecoveryState> states : recoveryResponse.shardRecoveryStates().values()) {
+            for (RecoveryState state : states) {
+                if (state.getStage() == RecoveryState.Stage.DONE
+                    && state.getPrimary()
+                    && state.getRecoverySource().getType() == RecoverySource.Type.EXISTING_STORE) {
+                    assertFalse("more than one primary recoverd?", foundTranslog);
+                    assertNotEquals(0, state.getTranslog().recoveredOperations());
+                    foundTranslog = true;
                 }
             }
         }
+        assertTrue("expected translog but nothing was recovered", foundTranslog);
+        IndicesSegmentResponse segmentsResponse = client().admin().indices().prepareSegments(indexName).get();
+        IndexSegments segments = segmentsResponse.getIndices().get(indexName);
+        int numCurrent = 0;
+        int numBWC = 0;
+        for (IndexShardSegments indexShardSegments : segments) {
+            for (ShardSegments shardSegments : indexShardSegments) {
+                for (Segment segment : shardSegments) {
+                    if (indexCreated.luceneVersion.equals(segment.version)) {
+                        numBWC++;
+                        if (Version.CURRENT.luceneVersion.equals(segment.version)) {
+                            numCurrent++;
+                        }
+                    } else if (Version.CURRENT.luceneVersion.equals(segment.version)) {
+                        numCurrent++;
+                    } else {
+                        fail("unexpected version " + segment.version);
+                    }
+                }
+            }
+        }
+        assertNotEquals("expected at least 1 current segment after translog recovery", 0, numCurrent);
+        assertNotEquals("expected at least 1 old segment", 0, numBWC);
         SearchResponse test = client().prepareSearch(indexName).get();
         assertThat(test.getHits().getTotalHits(), greaterThanOrEqualTo(1L));
     }
@@ -279,6 +315,14 @@ public class OldIndexBackwardsCompatibilityIT extends ESIntegTestCase {
         searchRsp = searchReq.get();
         ElasticsearchAssertions.assertNoFailures(searchRsp);
         assertEquals(numDocs, searchRsp.getHits().getTotalHits());
+        GetSettingsResponse getSettingsResponse = client().admin().indices().prepareGetSettings(indexName).get();
+        Version versionCreated = Version.fromId(Integer.parseInt(getSettingsResponse.getSetting(indexName, "index.version.created")));
+        if (versionCreated.onOrAfter(Version.V_2_4_0)) {
+            searchReq = client().prepareSearch(indexName).setQuery(QueryBuilders.existsQuery("field.with.dots"));
+            searchRsp = searchReq.get();
+            ElasticsearchAssertions.assertNoFailures(searchRsp);
+            assertEquals(numDocs, searchRsp.getHits().getTotalHits());
+        }
     }
 
     boolean findPayloadBoostInExplanation(Explanation expl) {
@@ -388,6 +432,31 @@ public class OldIndexBackwardsCompatibilityIT extends ESIntegTestCase {
         }
     }
 
+    private static final Version VERSION_5_1_0_UNRELEASED = Version.fromString("5.1.0");
+
+    public void testUnreleasedVersion() {
+        VersionTests.assertUnknownVersion(VERSION_5_1_0_UNRELEASED);
+    }
+
+    /**
+     * Search on an alias that contains illegal characters that would prevent it from being created after 5.1.0. It should still be
+     * search-able though.
+     */
+    void assertAliasWithBadName(String indexName, Version version) throws Exception {
+        if (version.onOrAfter(VERSION_5_1_0_UNRELEASED)) {
+            return;
+        }
+        // We can read from the alias just like we can read from the index.
+        String aliasName = "#" + indexName;
+        long totalDocs = client().prepareSearch(indexName).setSize(0).get().getHits().totalHits();
+        assertHitCount(client().prepareSearch(aliasName).setSize(0).get(), totalDocs);
+        assertThat(totalDocs, greaterThanOrEqualTo(2000L));
+
+        // We can remove the alias.
+        assertAcked(client().admin().indices().prepareAliases().removeAlias(indexName, aliasName).get());
+        assertFalse(client().admin().indices().prepareAliasesExist(aliasName).get().exists());
+    }
+
     private Path getNodeDir(String indexFile) throws IOException {
         Path unzipDir = createTempDir();
         Path unzipDataDir = unzipDir.resolve("data");
@@ -405,8 +474,15 @@ public class OldIndexBackwardsCompatibilityIT extends ESIntegTestCase {
             throw new IllegalStateException("Backwards index must contain exactly one cluster");
         }
 
-        // the bwc scripts packs the indices under this path
-        return list[0].resolve("nodes/0/");
+        int zipIndex = indexFile.indexOf(".zip");
+        final Version version = Version.fromString(indexFile.substring("index-".length(), zipIndex));
+        if (version.before(Version.V_5_0_0_alpha1)) {
+            // the bwc scripts packs the indices under this path
+            return list[0].resolve("nodes/0/");
+        } else {
+            // after 5.0.0, data folders do not include the cluster name
+            return list[0].resolve("0");
+        }
     }
 
     public void testOldClusterStates() throws Exception {
@@ -441,9 +517,19 @@ public class OldIndexBackwardsCompatibilityIT extends ESIntegTestCase {
             String indexName = indexFile.replace(".zip", "").toLowerCase(Locale.ROOT).replace("unsupported-", "index-");
             Path nodeDir = getNodeDir(indexFile);
             logger.info("Parsing cluster state files from index [{}]", indexName);
-            assertNotNull(globalFormat.loadLatestState(logger, nodeDir)); // no exception
-            Path indexDir = nodeDir.resolve("indices").resolve(indexName);
-            assertNotNull(indexFormat.loadLatestState(logger, indexDir)); // no exception
+            final MetaData metaData = globalFormat.loadLatestState(logger, nodeDir);
+            assertNotNull(metaData);
+
+            final Version version = Version.fromString(indexName.substring("index-".length()));
+            final Path dataDir;
+            if (version.before(Version.V_5_0_0_alpha1)) {
+                dataDir = nodeDir.getParent().getParent();
+            } else {
+                dataDir = nodeDir.getParent();
+            }
+            final Path indexDir = getIndexDir(logger, indexName, indexFile, dataDir);
+            assertNotNull(indexFormat.loadLatestState(logger, indexDir));
         }
     }
+
 }

@@ -24,11 +24,14 @@ import org.apache.lucene.queries.TermsQuery;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.unit.DistanceUnit;
 import org.elasticsearch.index.mapper.BaseGeoPointFieldMapper;
 import org.elasticsearch.index.mapper.GeoPointFieldMapper;
+import org.elasticsearch.index.mapper.LatLonPointFieldMapper;
 import org.elasticsearch.index.query.GeohashCellQuery.Builder;
+import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.test.AbstractQueryTestCase;
 import org.elasticsearch.test.geo.RandomShapeGenerator;
 import org.locationtech.spatial4j.shape.Point;
@@ -62,7 +65,7 @@ public class GeohashCellQueryBuilderTests extends AbstractQueryTestCase<Builder>
     }
 
     @Override
-    protected void doAssertLuceneQuery(Builder queryBuilder, Query query, QueryShardContext context) throws IOException {
+    protected void doAssertLuceneQuery(Builder queryBuilder, Query query, SearchContext context) throws IOException {
         if (queryBuilder.neighbors()) {
             assertThat(query, instanceOf(TermsQuery.class));
         } else {
@@ -87,7 +90,10 @@ public class GeohashCellQueryBuilderTests extends AbstractQueryTestCase<Builder>
     @Override
     public void testToQuery() throws IOException {
         assumeTrue("test runs only when at least a type is registered", getCurrentTypes().length > 0);
-        super.testToQuery();
+        Version version = createShardContext().indexVersionCreated();
+        if (version.before(LatLonPointFieldMapper.LAT_LON_FIELD_VERSION)) {
+            super.testToQuery();
+        }
     }
 
     public void testNullField() {
@@ -140,7 +146,10 @@ public class GeohashCellQueryBuilderTests extends AbstractQueryTestCase<Builder>
     @Override
     public void testMustRewrite() throws IOException {
         assumeTrue("test runs only when at least a type is registered", getCurrentTypes().length > 0);
-        super.testMustRewrite();
+        Version version = createShardContext().indexVersionCreated();
+        if (version.before(LatLonPointFieldMapper.LAT_LON_FIELD_VERSION)) {
+            super.testMustRewrite();
+        }
     }
 
     public void testIgnoreUnmapped() throws IOException {

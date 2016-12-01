@@ -32,18 +32,16 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.query.QueryParseContext;
-import org.elasticsearch.indices.query.IndicesQueriesRegistry;
 import org.elasticsearch.script.ExecutableScript;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.SearchRequestParsers;
-import org.elasticsearch.search.aggregations.AggregatorParsers;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
-import org.elasticsearch.search.suggest.Suggesters;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
-import static java.util.Collections.emptyMap;
+import java.util.Collections;
+
 import static org.elasticsearch.script.ScriptContext.Standard.SEARCH;
 
 public class TransportSearchTemplateAction extends HandledTransportAction<SearchTemplateRequest, SearchTemplateResponse> {
@@ -69,8 +67,9 @@ public class TransportSearchTemplateAction extends HandledTransportAction<Search
     protected void doExecute(SearchTemplateRequest request, ActionListener<SearchTemplateResponse> listener) {
         final SearchTemplateResponse response = new SearchTemplateResponse();
         try {
-            Script script = new Script(request.getScript(), request.getScriptType(), TEMPLATE_LANG, request.getScriptParams());
-            ExecutableScript executable = scriptService.executable(script, SEARCH, emptyMap());
+            Script script = new Script(request.getScriptType(), TEMPLATE_LANG, request.getScript(),
+                request.getScriptParams() == null ? Collections.emptyMap() : request.getScriptParams());
+            ExecutableScript executable = scriptService.executable(script, SEARCH);
 
             BytesReference source = (BytesReference) executable.run();
             response.setSource(source);
@@ -86,7 +85,9 @@ public class TransportSearchTemplateAction extends HandledTransportAction<Search
             try (XContentParser parser = XContentFactory.xContent(source).createParser(source)) {
                 SearchSourceBuilder builder = SearchSourceBuilder.searchSource();
                 builder.parseXContent(new QueryParseContext(searchRequestParsers.queryParsers, parser, parseFieldMatcher),
-                    searchRequestParsers.aggParsers, searchRequestParsers.suggesters);
+                    searchRequestParsers.aggParsers, searchRequestParsers.suggesters, searchRequestParsers.searchExtParsers);
+                builder.explain(request.isExplain());
+                builder.profile(request.isProfile());
                 searchRequest.source(builder);
 
                 searchAction.execute(searchRequest, new ActionListener<SearchResponse>() {

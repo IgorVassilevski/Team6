@@ -147,73 +147,61 @@ public interface IndexFieldData<FD extends AtomicFieldData> extends IndexCompone
 
         /** Return the missing object value according to the reduced type of the comparator. */
         protected final Object missingObject(Object missingValue, boolean reversed) {
-            return getObject(missingValue, reversed);
-        }
-
-        private Object getObject(Object missingValue, boolean reversed) {
             if (sortMissingFirst(missingValue) || sortMissingLast(missingValue)) {
                 final boolean min = sortMissingFirst(missingValue) ^ reversed;
-                return getObject(min);
+                switch (reducedType()) {
+                case INT:
+                    return min ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+                case LONG:
+                    return min ? Long.MIN_VALUE : Long.MAX_VALUE;
+                case FLOAT:
+                    return min ? Float.NEGATIVE_INFINITY : Float.POSITIVE_INFINITY;
+                case DOUBLE:
+                    return min ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
+                case STRING:
+                case STRING_VAL:
+                    return null;
+                default:
+                    throw new UnsupportedOperationException("Unsupported reduced type: " + reducedType());
+                }
             } else {
-                return getObject(missingValue);
-            }
-        }
-
-        private Object getObject(Object missingValue) {
-            switch (reducedType()) {
-            case INT:
-                if (missingValue instanceof Number) {
-                    return ((Number) missingValue).intValue();
-                } else {
-                    return Integer.parseInt(missingValue.toString());
+                switch (reducedType()) {
+                case INT:
+                    if (missingValue instanceof Number) {
+                        return ((Number) missingValue).intValue();
+                    } else {
+                        return Integer.parseInt(missingValue.toString());
+                    }
+                case LONG:
+                    if (missingValue instanceof Number) {
+                        return ((Number) missingValue).longValue();
+                    } else {
+                        return Long.parseLong(missingValue.toString());
+                    }
+                case FLOAT:
+                    if (missingValue instanceof Number) {
+                        return ((Number) missingValue).floatValue();
+                    } else {
+                        return Float.parseFloat(missingValue.toString());
+                    }
+                case DOUBLE:
+                    if (missingValue instanceof Number) {
+                        return ((Number) missingValue).doubleValue();
+                    } else {
+                        return Double.parseDouble(missingValue.toString());
+                    }
+                case STRING:
+                case STRING_VAL:
+                    if (missingValue instanceof BytesRef) {
+                        return (BytesRef) missingValue;
+                    } else if (missingValue instanceof byte[]) {
+                        return new BytesRef((byte[]) missingValue);
+                    } else {
+                        return new BytesRef(missingValue.toString());
+                    }
+                default:
+                    throw new UnsupportedOperationException("Unsupported reduced type: " + reducedType());
                 }
-            case LONG:
-                if (missingValue instanceof Number) {
-                    return ((Number) missingValue).longValue();
-                } else {
-                    return Long.parseLong(missingValue.toString());
-                }
-            case FLOAT:
-                if (missingValue instanceof Number) {
-                    return ((Number) missingValue).floatValue();
-                } else {
-                    return Float.parseFloat(missingValue.toString());
-                }
-            case DOUBLE:
-                if (missingValue instanceof Number) {
-                    return ((Number) missingValue).doubleValue();
-                } else {
-                    return Double.parseDouble(missingValue.toString());
-                }
-            case STRING:
-            case STRING_VAL:
-                if (missingValue instanceof BytesRef) {
-                    return (BytesRef) missingValue;
-                } else if (missingValue instanceof byte[]) {
-                    return new BytesRef((byte[]) missingValue);
-                } else {
-                    return new BytesRef(missingValue.toString());
-                }
-            default:
-                throw new UnsupportedOperationException("Unsupported reduced type: " + reducedType());
-            }
-        }
-
-        private Object getObject(boolean min) {
-            switch (reducedType()) {
-            case INT:
-                return min ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-            case LONG:
-                return min ? Long.MIN_VALUE : Long.MAX_VALUE;
-            case FLOAT:
-                return min ? Float.NEGATIVE_INFINITY : Float.POSITIVE_INFINITY;
-            case DOUBLE:
-                return min ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
-            case STRING:
-            case STRING_VAL:
-                return null;
-            default:
-                throw new UnsupportedOperationException("Unsupported reduced type: " + reducedType());
             }
         }
 

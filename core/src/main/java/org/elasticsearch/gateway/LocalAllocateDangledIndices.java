@@ -30,7 +30,6 @@ import org.elasticsearch.cluster.metadata.MetaDataIndexUpgradeService;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.RoutingTable;
 import org.elasticsearch.cluster.routing.allocation.AllocationService;
-import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
@@ -51,8 +50,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 
-/**
- */
 public class LocalAllocateDangledIndices extends AbstractComponent {
 
     public static final String ACTION_NAME = "internal:gateway/local/allocate_dangled";
@@ -169,10 +166,8 @@ public class LocalAllocateDangledIndices extends AbstractComponent {
                     ClusterState updatedState = ClusterState.builder(currentState).metaData(metaData).blocks(blocks).routingTable(routingTable).build();
 
                     // now, reroute
-                    RoutingAllocation.Result routingResult = allocationService.reroute(
+                    return allocationService.reroute(
                             ClusterState.builder(updatedState).routingTable(routingTable).build(), "dangling indices allocated");
-
-                    return ClusterState.builder(updatedState).routingResult(routingResult).build();
                 }
 
                 @Override

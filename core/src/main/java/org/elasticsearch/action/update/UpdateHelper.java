@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.update;
 
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.index.IndexRequest;
@@ -27,10 +28,11 @@ import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.component.AbstractComponent;
-import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.VersionType;
@@ -51,19 +53,19 @@ import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
 import org.elasticsearch.search.lookup.SourceLookup;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.LongSupplier;
 
 /**
  * Helper for translating an update request to an index, delete request or update response.
  */
 public class UpdateHelper extends AbstractComponent {
-
     private final ScriptService scriptService;
 
-    @Inject
     public UpdateHelper(Settings settings, ScriptService scriptService) {
         super(settings);
         this.scriptService = scriptService;
@@ -72,22 +74,23 @@ public class UpdateHelper extends AbstractComponent {
     /**
      * Prepares an update request by converting it into an index or delete request or an update response (no action).
      */
-    @SuppressWarnings("unchecked")
-    public Result prepare(UpdateRequest request, IndexShard indexShard) {
+    public Result prepare(UpdateRequest request, IndexShard indexShard, LongSupplier nowInMillis) {
         final GetResult getResult = indexShard.getService().get(request.type(), request.id(),
                 new String[]{RoutingFieldMapper.NAME, ParentFieldMapper.NAME, TTLFieldMapper.NAME, TimestampFieldMapper.NAME},
-                true, request.version(), request.versionType(), FetchSourceContext.FETCH_SOURCE, false);
-        return prepare(indexShard.shardId(), request, getResult);
+                true, request.version(), request.versionType(), FetchSourceContext.FETCH_SOURCE);
+        return prepare(indexShard.shardId(), request, getResult, nowInMillis);
     }
 
     /**
      * Prepares an update request by converting it into an index or delete request or an update response (no action).
      */
     @SuppressWarnings("unchecked")
-    protected Result prepare(ShardId shardId, UpdateRequest request, final GetResult getResult) {
+    protected Result prepare(ShardId shardId, UpdateRequest request, final GetResult getResult, LongSupplier nowInMillis) {
         long getDateNS = System.nanoTime();
         if (!getResult.isExists()) {
-            checkingDcoumentMethod(shardId, request);
+            if (request.upsertRequest() == null && !request.docAsUpsert()) {
+                throw new DocumentMissingException(shardId, request.type(), request.id());
+            }
             IndexRequest indexRequest = request.docAsUpsert() ? request.doc() : request.upsertRequest();
             TimeValue ttl = indexRequest.ttl();
             if (request.scriptedUpsert() && request.script() != null) {
@@ -98,6 +101,7 @@ public class UpdateHelper extends AbstractComponent {
                 // Tell the script that this is a create and not an update
                 ctx.put("op", "create");
                 ctx.put("_source", upsertDoc);
+                ctx.put("_now", nowInMillis.getAsLong());
                 ctx = executeScript(request.script, ctx);
                 //Allow the script to set TTL using ctx._ttl
                 if (ttl == null) {
@@ -112,7 +116,7 @@ public class UpdateHelper extends AbstractComponent {
                 if (!"create".equals(scriptOpChoice)) {
                     if (!"none".equals(scriptOpChoice)) {
                         logger.warn("Used upsert operation [{}] for script [{}], doing nothing...", scriptOpChoice,
-                                request.script.getScript());
+                                request.script.getIdOrCode());
                     }
                     UpdateResponse update = new UpdateResponse(shardId, getResult.getType(), getResult.getId(),
                             getResult.getVersion(), DocWriteResponse.Result.NOOP);
@@ -191,6 +195,7 @@ public class UpdateHelper extends AbstractComponent {
             ctx.put("_timestamp", originalTimestamp);
             ctx.put("_ttl", originalTtl);
             ctx.put("_source", sourceAndContent.v2());
+            ctx.put("_now", nowInMillis.getAsLong());
 
             ctx = executeScript(request.script, ctx);
 
@@ -218,10 +223,6 @@ public class UpdateHelper extends AbstractComponent {
             }
         }
 
-        return getResultMethod(shardId, request, getResult, updateVersion, operation, timestamp, ttl, updatedSourceAsMap, updateSourceContentType, routing, parent);
-    }
-
-    private Result getResultMethod(ShardId shardId, UpdateRequest request, GetResult getResult, long updateVersion, String operation, String timestamp, TimeValue ttl, Map<String, Object> updatedSourceAsMap, XContentType updateSourceContentType, String routing, String parent) {
         if (operation == null || "index".equals(operation)) {
             final IndexRequest indexRequest = Requests.indexRequest(request.index()).type(request.type()).id(request.id()).routing(routing).parent(parent)
                     .source(updatedSourceAsMap, updateSourceContentType)
@@ -241,22 +242,16 @@ public class UpdateHelper extends AbstractComponent {
             update.setGetResult(extractGetResult(request, request.index(), getResult.getVersion(), updatedSourceAsMap, updateSourceContentType, getResult.internalSourceRef()));
             return new Result(update, DocWriteResponse.Result.NOOP, updatedSourceAsMap, updateSourceContentType);
         } else {
-            logger.warn("Used update operation [{}] for script [{}], doing nothing...", operation, request.script.getScript());
+            logger.warn("Used update operation [{}] for script [{}], doing nothing...", operation, request.script.getIdOrCode());
             UpdateResponse update = new UpdateResponse(shardId, getResult.getType(), getResult.getId(), getResult.getVersion(), DocWriteResponse.Result.NOOP);
             return new Result(update, DocWriteResponse.Result.NOOP, updatedSourceAsMap, updateSourceContentType);
-        }
-    }
-
-    private void checkingDcoumentMethod(ShardId shardId, UpdateRequest request) {
-        if (request.upsertRequest() == null && !request.docAsUpsert()) {
-            throw new DocumentMissingException(shardId, request.type(), request.id());
         }
     }
 
     private Map<String, Object> executeScript(Script script, Map<String, Object> ctx) {
         try {
             if (scriptService != null) {
-                ExecutableScript executableScript = scriptService.executable(script, ScriptContext.Standard.UPDATE, Collections.emptyMap());
+                ExecutableScript executableScript = scriptService.executable(script, ScriptContext.Standard.UPDATE);
                 executableScript.setNextVar("ctx", ctx);
                 executableScript.run();
                 // we need to unwrap the ctx...
@@ -280,17 +275,19 @@ public class UpdateHelper extends AbstractComponent {
     }
 
     /**
-     * Extracts the fields from the updated document to be returned in a update response
+     * Applies {@link UpdateRequest#fetchSource()} to the _source of the updated document to be returned in a update response.
+     * For BWC this function also extracts the {@link UpdateRequest#fields()} from the updated document to be returned in a update response
      */
     public GetResult extractGetResult(final UpdateRequest request, String concreteIndex, long version, final Map<String, Object> source, XContentType sourceContentType, @Nullable final BytesReference sourceAsBytes) {
-        if (request.fields() == null || request.fields().length == 0) {
+        if ((request.fields() == null || request.fields().length == 0) &&
+            (request.fetchSource() == null || request.fetchSource().fetchSource() == false)) {
             return null;
         }
+        SourceLookup sourceLookup = new SourceLookup();
+        sourceLookup.setSource(source);
         boolean sourceRequested = false;
         Map<String, GetField> fields = null;
         if (request.fields() != null && request.fields().length > 0) {
-            SourceLookup sourceLookup = new SourceLookup();
-            sourceLookup.setSource(source);
             for (String field : request.fields()) {
                 if (field.equals("_source")) {
                     sourceRequested = true;
@@ -311,8 +308,26 @@ public class UpdateHelper extends AbstractComponent {
             }
         }
 
+        BytesReference sourceFilteredAsBytes = sourceAsBytes;
+        if (request.fetchSource() != null && request.fetchSource().fetchSource()) {
+            sourceRequested = true;
+            if (request.fetchSource().includes().length > 0 || request.fetchSource().excludes().length > 0) {
+                Object value = sourceLookup.filter(request.fetchSource());
+                try {
+                    final int initialCapacity = Math.min(1024, sourceAsBytes.length());
+                    BytesStreamOutput streamOutput = new BytesStreamOutput(initialCapacity);
+                    try (XContentBuilder builder = new XContentBuilder(sourceContentType.xContent(), streamOutput)) {
+                        builder.value(value);
+                        sourceFilteredAsBytes = builder.bytes();
+                    }
+                } catch (IOException e) {
+                    throw new ElasticsearchException("Error filtering source", e);
+                }
+            }
+        }
+
         // TODO when using delete/none, we can still return the source as bytes by generating it (using the sourceContentType)
-        return new GetResult(concreteIndex, request.type(), request.id(), version, true, sourceRequested ? sourceAsBytes : null, fields);
+        return new GetResult(concreteIndex, request.type(), request.id(), version, true, sourceRequested ? sourceFilteredAsBytes : null, fields);
     }
 
     public static class Result {

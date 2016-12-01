@@ -21,7 +21,6 @@ package org.elasticsearch.action.termvectors;
 
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.action.ActionRequestValidationException;
-import org.elasticsearch.action.DocumentRequest;
 import org.elasticsearch.action.RealtimeRequest;
 import org.elasticsearch.action.ValidateActions;
 import org.elasticsearch.action.get.MultiGetRequest;
@@ -56,7 +55,7 @@ import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
  * Note, the {@link #index()}, {@link #type(String)} and {@link #id(String)} are
  * required.
  */
-public class TermVectorsRequest extends SingleShardRequest<TermVectorsRequest> implements DocumentRequest<TermVectorsRequest>, RealtimeRequest {
+public class TermVectorsRequest extends SingleShardRequest<TermVectorsRequest> implements RealtimeRequest {
 
     private String type;
 
@@ -180,7 +179,7 @@ public class TermVectorsRequest extends SingleShardRequest<TermVectorsRequest> i
         super(item.index());
         this.id = item.id();
         this.type = item.type();
-        this.selectedFields(item.fields());
+        this.selectedFields(item.storedFields());
         this.routing(item.routing());
         this.parent(item.parent());
     }
@@ -200,7 +199,6 @@ public class TermVectorsRequest extends SingleShardRequest<TermVectorsRequest> i
     /**
      * Returns the type of document to get the term vector for.
      */
-    @Override
     public String type() {
         return type;
     }
@@ -208,7 +206,6 @@ public class TermVectorsRequest extends SingleShardRequest<TermVectorsRequest> i
     /**
      * Returns the id of document the term vector is requested for.
      */
-    @Override
     public String id() {
         return id;
     }
@@ -250,18 +247,15 @@ public class TermVectorsRequest extends SingleShardRequest<TermVectorsRequest> i
     /**
      * @return The routing for this request.
      */
-    @Override
     public String routing() {
         return routing;
     }
 
-    @Override
     public TermVectorsRequest routing(String routing) {
         this.routing = routing;
         return this;
     }
 
-    @Override
     public String parent() {
         return parent;
     }
@@ -596,40 +590,36 @@ public class TermVectorsRequest extends SingleShardRequest<TermVectorsRequest> i
                     termVectorsRequest.perFieldAnalyzer(readPerFieldAnalyzer(parser.map()));
                 } else if (currentFieldName.equals("filter")) {
                     termVectorsRequest.filterSettings(readFilterSettings(parser));
-                } else multiRequestParsing(termVectorsRequest, parser, currentFieldName);
+                } else if ("_index".equals(currentFieldName)) { // the following is important for multi request parsing.
+                    termVectorsRequest.index = parser.text();
+                } else if ("_type".equals(currentFieldName)) {
+                    termVectorsRequest.type = parser.text();
+                } else if ("_id".equals(currentFieldName)) {
+                    if (termVectorsRequest.doc != null) {
+                        throw new ElasticsearchParseException("failed to parse term vectors request. either [id] or [doc] can be specified, but not both!");
+                    }
+                    termVectorsRequest.id = parser.text();
+                } else if ("doc".equals(currentFieldName)) {
+                    if (termVectorsRequest.id != null) {
+                        throw new ElasticsearchParseException("failed to parse term vectors request. either [id] or [doc] can be specified, but not both!");
+                    }
+                    termVectorsRequest.doc(jsonBuilder().copyCurrentStructure(parser));
+                } else if ("_routing".equals(currentFieldName) || "routing".equals(currentFieldName)) {
+                    termVectorsRequest.routing = parser.text();
+                } else if ("_parent".equals(currentFieldName) || "parent".equals(currentFieldName)) {
+                    termVectorsRequest.parent = parser.text();
+                } else if ("_version".equals(currentFieldName) || "version".equals(currentFieldName)) {
+                    termVectorsRequest.version = parser.longValue();
+                } else if ("_version_type".equals(currentFieldName) || "_versionType".equals(currentFieldName) || "version_type".equals(currentFieldName) || "versionType".equals(currentFieldName)) {
+                    termVectorsRequest.versionType = VersionType.fromString(parser.text());
+                } else {
+                    throw new ElasticsearchParseException("failed to parse term vectors request. unknown field [{}]", currentFieldName);
+                }
             }
         }
         if (fields.size() > 0) {
             String[] fieldsAsArray = new String[fields.size()];
             termVectorsRequest.selectedFields(fields.toArray(fieldsAsArray));
-        }
-    }
-
-    private static void multiRequestParsing(TermVectorsRequest termVectorsRequest, XContentParser parser, String currentFieldName) throws IOException {
-        if ("_index".equals(currentFieldName)) { // the following is important for multi request parsing.
-            termVectorsRequest.index = parser.text();
-        } else if ("_type".equals(currentFieldName)) {
-            termVectorsRequest.type = parser.text();
-        } else if ("_id".equals(currentFieldName)) {
-            if (termVectorsRequest.doc != null) {
-                throw new ElasticsearchParseException("failed to parse term vectors request. either [id] or [doc] can be specified, but not both!");
-            }
-            termVectorsRequest.id = parser.text();
-        } else if ("doc".equals(currentFieldName)) {
-            if (termVectorsRequest.id != null) {
-                throw new ElasticsearchParseException("failed to parse term vectors request. either [id] or [doc] can be specified, but not both!");
-            }
-            termVectorsRequest.doc(jsonBuilder().copyCurrentStructure(parser));
-        } else if ("_routing".equals(currentFieldName) || "routing".equals(currentFieldName)) {
-            termVectorsRequest.routing = parser.text();
-        } else if ("_parent".equals(currentFieldName) || "parent".equals(currentFieldName)) {
-            termVectorsRequest.parent = parser.text();
-        } else if ("_version".equals(currentFieldName) || "version".equals(currentFieldName)) {
-            termVectorsRequest.version = parser.longValue();
-        } else if ("_version_type".equals(currentFieldName) || "_versionType".equals(currentFieldName) || "version_type".equals(currentFieldName) || "versionType".equals(currentFieldName)) {
-            termVectorsRequest.versionType = VersionType.fromString(parser.text());
-        } else {
-            throw new ElasticsearchParseException("failed to parse term vectors request. unknown field [{}]", currentFieldName);
         }
     }
 

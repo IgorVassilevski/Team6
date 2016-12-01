@@ -92,7 +92,8 @@ public class TermsAggregatorFactory extends ValuesSourceAggregatorFactory<Values
             return asMultiBucketAggregator(this, context, parent);
         }
         BucketCountThresholds bucketCountThresholds = new BucketCountThresholds(this.bucketCountThresholds);
-        if (orderEqualsAndBucketCountThresholdsEquals(bucketCountThresholds)) {
+        if (!(order == InternalOrder.TERM_ASC || order == InternalOrder.TERM_DESC)
+                && bucketCountThresholds.getShardSize() == TermsAggregationBuilder.DEFAULT_BUCKET_COUNT_THRESHOLDS.getShardSize()) {
             // The user has not made a shardSize selection. Use default
             // heuristic to avoid any wrong-ranking caused by distributed
             // counting
@@ -133,7 +134,20 @@ public class TermsAggregatorFactory extends ValuesSourceAggregatorFactory<Values
                 if (Aggregator.descendsFromBucketAggregator(parent)) {
                     execution = ExecutionMode.GLOBAL_ORDINALS_HASH;
                 } else {
-                    execution = getExecutionMode(maxOrd, ratio);
+                    if (factories == AggregatorFactories.EMPTY) {
+                        if (ratio <= 0.5 && maxOrd <= 2048) {
+                            // 0.5: At least we need reduce the number of global
+                            // ordinals look-ups by half
+                            // 2048: GLOBAL_ORDINALS_LOW_CARDINALITY has
+                            // additional memory usage, which directly linked to
+                            // maxOrd, so we need to limit.
+                            execution = ExecutionMode.GLOBAL_ORDINALS_LOW_CARDINALITY;
+                        } else {
+                            execution = ExecutionMode.GLOBAL_ORDINALS;
+                        }
+                    } else {
+                        execution = ExecutionMode.GLOBAL_ORDINALS;
+                    }
                 }
             }
             SubAggCollectionMode cm = collectMode;
@@ -170,7 +184,12 @@ public class TermsAggregatorFactory extends ValuesSourceAggregatorFactory<Values
                 }
             }
             if (((ValuesSource.Numeric) valuesSource).isFloatingPoint()) {
-                return getDoubleTernsAggregator((ValuesSource.Numeric) valuesSource, parent, pipelineAggregators, metaData, bucketCountThresholds, longFilter, cm);
+                if (includeExclude != null) {
+                    longFilter = includeExclude.convertToDoubleFilter();
+                }
+                return new DoubleTermsAggregator(name, factories, (ValuesSource.Numeric) valuesSource, config.format(), order,
+                        bucketCountThresholds, context, parent, cm, showTermDocCountError, longFilter,
+                        pipelineAggregators, metaData);
             }
             if (includeExclude != null) {
                 longFilter = includeExclude.convertToLongFilter(config.format());
@@ -182,39 +201,6 @@ public class TermsAggregatorFactory extends ValuesSourceAggregatorFactory<Values
 
         throw new AggregationExecutionException("terms aggregation cannot be applied to field [" + config.fieldContext().field()
                 + "]. It can only be applied to numeric or string fields.");
-    }
-
-    private Aggregator getDoubleTernsAggregator(ValuesSource.Numeric valuesSource, Aggregator parent, List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData, BucketCountThresholds bucketCountThresholds, IncludeExclude.LongFilter longFilter, SubAggCollectionMode cm) throws IOException {
-        if (includeExclude != null) {
-            longFilter = includeExclude.convertToDoubleFilter();
-        }
-        return new DoubleTermsAggregator(name, factories, valuesSource, config.format(), order,
-                bucketCountThresholds, context, parent, cm, showTermDocCountError, longFilter,
-                pipelineAggregators, metaData);
-    }
-
-    private ExecutionMode getExecutionMode(long maxOrd, double ratio) {
-        ExecutionMode execution;
-        if (factories == AggregatorFactories.EMPTY) {
-            if (ratio <= 0.5 && maxOrd <= 2048) {
-                // 0.5: At least we need reduce the number of global
-                // ordinals look-ups by half
-                // 2048: GLOBAL_ORDINALS_LOW_CARDINALITY has
-                // additional memory usage, which directly linked to
-                // maxOrd, so we need to limit.
-                execution = ExecutionMode.GLOBAL_ORDINALS_LOW_CARDINALITY;
-            } else {
-                execution = ExecutionMode.GLOBAL_ORDINALS;
-            }
-        } else {
-            execution = ExecutionMode.GLOBAL_ORDINALS;
-        }
-        return execution;
-    }
-
-    private boolean orderEqualsAndBucketCountThresholdsEquals(BucketCountThresholds bucketCountThresholds) {
-        return !(order == InternalOrder.TERM_ASC || order == InternalOrder.TERM_DESC)
-                && bucketCountThresholds.getShardSize() == TermsAggregationBuilder.DEFAULT_BUCKET_COUNT_THRESHOLDS.getShardSize();
     }
 
     // return the SubAggCollectionMode that this aggregation should use based on the expected size

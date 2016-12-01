@@ -321,14 +321,42 @@ public class BoolQueryBuilder extends AbstractQueryBuilder<BoolQueryBuilder> {
             } else if (parseContext.isDeprecatedSetting(currentFieldName)) {
                 // skip
             } else if (token == XContentParser.Token.START_OBJECT) {
-                tokenParse(parseContext, parser, mustClauses, mustNotClauses, shouldClauses, filterClauses, currentFieldName);
-				if (parser.currentToken() != XContentParser.Token.END_OBJECT) {
-                    throw new ParsingException(parser.getTokenLocation(),
-                            "expected [END_OBJECT] but got [{}], possibly too many query clauses", parser.currentToken());
+                switch (currentFieldName) {
+                case MUST:
+                    parseContext.parseInnerQueryBuilder().ifPresent(mustClauses::add);
+                    break;
+                case SHOULD:
+                    parseContext.parseInnerQueryBuilder().ifPresent(shouldClauses::add);
+                    break;
+                case FILTER:
+                    parseContext.parseInnerQueryBuilder().ifPresent(filterClauses::add);
+                    break;
+                case MUST_NOT:
+                case MUSTNOT:
+                    parseContext.parseInnerQueryBuilder().ifPresent(mustNotClauses::add);
+                    break;
+                default:
+                    throw new ParsingException(parser.getTokenLocation(), "[bool] query does not support [" + currentFieldName + "]");
                 }
             } else if (token == XContentParser.Token.START_ARRAY) {
                 while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                    tokenParse(parseContext, parser, mustClauses, mustNotClauses, shouldClauses, filterClauses, currentFieldName);
+                    switch (currentFieldName) {
+                    case MUST:
+                        parseContext.parseInnerQueryBuilder().ifPresent(mustClauses::add);
+                        break;
+                    case SHOULD:
+                        parseContext.parseInnerQueryBuilder().ifPresent(shouldClauses::add);
+                        break;
+                    case FILTER:
+                        parseContext.parseInnerQueryBuilder().ifPresent(filterClauses::add);
+                        break;
+                    case MUST_NOT:
+                    case MUSTNOT:
+                        parseContext.parseInnerQueryBuilder().ifPresent(mustNotClauses::add);
+                        break;
+                    default:
+                        throw new ParsingException(parser.getTokenLocation(), "bool query does not support [" + currentFieldName + "]");
+                    }
                 }
             } else if (token.isValue()) {
                 if (parseContext.getParseFieldMatcher().match(currentFieldName, DISABLE_COORD_FIELD)) {
@@ -367,30 +395,6 @@ public class BoolQueryBuilder extends AbstractQueryBuilder<BoolQueryBuilder> {
         boolQuery.minimumNumberShouldMatch(minimumShouldMatch);
         boolQuery.queryName(queryName);
         return Optional.of(boolQuery);
-    }
-
-    private static void tokenParse(QueryParseContext parseContext, XContentParser parser, List<QueryBuilder> mustClauses, List<QueryBuilder> mustNotClauses, List<QueryBuilder> shouldClauses, List<QueryBuilder> filterClauses, String currentFieldName) throws ParsingException {
-        try {
-            switch (currentFieldName) {
-                case MUST:
-                    parseContext.parseInnerQueryBuilder().ifPresent(mustClauses::add);
-                    break;
-                case SHOULD:
-                    parseContext.parseInnerQueryBuilder().ifPresent(shouldClauses::add);
-                    break;
-                case FILTER:
-                    parseContext.parseInnerQueryBuilder().ifPresent(filterClauses::add);
-                    break;
-                case MUST_NOT:
-                case MUSTNOT:
-                    parseContext.parseInnerQueryBuilder().ifPresent(mustNotClauses::add);
-                    break;
-                default:
-                    throw new ParsingException(parser.getTokenLocation(), "bool query does not support [" + currentFieldName + "]");
-            }
-        } catch (IOException e){
-            // Error
-        }
     }
 
     @Override

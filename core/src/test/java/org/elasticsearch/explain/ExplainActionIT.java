@@ -46,8 +46,6 @@ import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcke
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
-/**
- */
 public class ExplainActionIT extends ESIntegTestCase {
     public void testSimple() throws Exception {
         assertAcked(prepareCreate("test")
@@ -131,7 +129,7 @@ public class ExplainActionIT extends ESIntegTestCase {
         refresh();
         ExplainResponse response = client().prepareExplain(indexOrAlias(), "test", "1")
                 .setQuery(QueryBuilders.matchAllQuery())
-                .setFields("obj1.field1").get();
+                .setStoredFields("obj1.field1").get();
         assertNotNull(response);
         assertTrue(response.isMatch());
         assertNotNull(response.getExplanation());
@@ -148,7 +146,7 @@ public class ExplainActionIT extends ESIntegTestCase {
         refresh();
         response = client().prepareExplain(indexOrAlias(), "test", "1")
                 .setQuery(QueryBuilders.matchAllQuery())
-                .setFields("obj1.field1").setFetchSource(true).get();
+                .setStoredFields("obj1.field1").setFetchSource(true).get();
         assertNotNull(response);
         assertTrue(response.isMatch());
         assertNotNull(response.getExplanation());
@@ -164,7 +162,7 @@ public class ExplainActionIT extends ESIntegTestCase {
 
         response = client().prepareExplain(indexOrAlias(), "test", "1")
                 .setQuery(QueryBuilders.matchAllQuery())
-                .setFields("obj1.field1", "obj1.field2").get();
+                .setStoredFields("obj1.field1", "obj1.field2").get();
         assertNotNull(response);
         assertTrue(response.isMatch());
         String v1 = (String) response.getGetResult().field("obj1.field1").getValue();

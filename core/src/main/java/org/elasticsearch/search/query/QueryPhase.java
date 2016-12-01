@@ -68,7 +68,8 @@ import java.util.List;
 import java.util.concurrent.Callable;
 
 /**
- *
+ * Query phase of a search request, used to run the query and get back from each shard information about the matching documents
+ * (document ids and score or sort criteria) so that matches can be reduced on the coordinating node
  */
 public class QueryPhase implements SearchPhase {
 
@@ -84,7 +85,7 @@ public class QueryPhase implements SearchPhase {
 
     @Override
     public void preProcess(SearchContext context) {
-        context.preProcess();
+        context.preProcess(true);
     }
 
     @Override
@@ -178,7 +179,25 @@ public class QueryPhase implements SearchPhase {
                     numDocs = Math.min(searchContext.size(), totalNumDocs);
                     after = scrollContext.lastEmittedDoc;
 
-                    query = getQuery(searchContext, query, numDocs, scrollContext, after);
+                    if (returnsDocsInOrder(query, searchContext.sort())) {
+                        if (scrollContext.totalHits == -1) {
+                            // first round
+                            assert scrollContext.lastEmittedDoc == null;
+                            // there is not much that we can optimize here since we want to collect all
+                            // documents in order to get the total number of hits
+                        } else {
+                            // now this gets interesting: since we sort in index-order, we can directly
+                            // skip to the desired doc and stop collecting after ${size} matches
+                            if (scrollContext.lastEmittedDoc != null) {
+                                BooleanQuery bq = new BooleanQuery.Builder()
+                                    .add(query, BooleanClause.Occur.MUST)
+                                    .add(new MinDocQuery(after.doc + 1), BooleanClause.Occur.FILTER)
+                                    .build();
+                                query = bq;
+                            }
+                            searchContext.terminateAfter(numDocs);
+                        }
+                    }
                 } else {
                     after = searchContext.searchAfter();
                 }
@@ -332,7 +351,25 @@ public class QueryPhase implements SearchPhase {
             }
 
             final boolean timeoutSet = searchContext.timeout() != null && !searchContext.timeout().equals(SearchService.NO_TIMEOUT);
-            collector = getCollector(searchContext, doProfile, collector, timeoutSet);
+            if (timeoutSet && collector != null) { // collector might be null if no collection is actually needed
+                final Collector child = collector;
+                // TODO: change to use our own counter that uses the scheduler in ThreadPool
+                // throws TimeLimitingCollector.TimeExceededException when timeout has reached
+                collector = Lucene.wrapTimeLimitingCollector(collector, searchContext.timeEstimateCounter(), searchContext.timeout().millis());
+                if (doProfile) {
+                    collector = new InternalProfileCollector(collector, CollectorResult.REASON_SEARCH_TIMEOUT,
+                            Collections.singletonList((InternalProfileCollector) child));
+                }
+            }
+
+            if (collector != null) {
+                final Collector child = collector;
+                collector = new CancellableCollector(searchContext.getTask()::isCancelled, searchContext.lowLevelCancellation(), collector);
+                if (doProfile) {
+                    collector = new InternalProfileCollector(collector, CollectorResult.REASON_SEARCH_CANCELLED,
+                        Collections.singletonList((InternalProfileCollector) child));
+                }
+            }
 
             try {
                 if (collector != null) {
@@ -367,42 +404,5 @@ public class QueryPhase implements SearchPhase {
         } catch (Exception e) {
             throw new QueryPhaseExecutionException(searchContext, "Failed to execute main query", e);
         }
-    }
-
-    private static Collector getCollector(SearchContext searchContext, boolean doProfile, Collector collector, boolean timeoutSet) {
-        if (timeoutSet && collector != null) { // collector might be null if no collection is actually needed
-            final Collector child = collector;
-            // TODO: change to use our own counter that uses the scheduler in ThreadPool
-            // throws TimeLimitingCollector.TimeExceededException when timeout has reached
-            collector = Lucene.wrapTimeLimitingCollector(collector, searchContext.timeEstimateCounter(), searchContext.timeout().millis());
-            if (doProfile) {
-                collector = new InternalProfileCollector(collector, CollectorResult.REASON_SEARCH_TIMEOUT,
-                        Collections.singletonList((InternalProfileCollector) child));
-            }
-        }
-        return collector;
-    }
-
-    private static Query getQuery(SearchContext searchContext, Query query, int numDocs, ScrollContext scrollContext, ScoreDoc after) {
-        if (returnsDocsInOrder(query, searchContext.sort())) {
-            if (scrollContext.totalHits == -1) {
-                // first round
-                assert scrollContext.lastEmittedDoc == null;
-                // there is not much that we can optimize here since we want to collect all
-                // documents in order to get the total number of hits
-            } else {
-                // now this gets interesting: since we sort in index-order, we can directly
-                // skip to the desired doc and stop collecting after ${size} matches
-                if (scrollContext.lastEmittedDoc != null) {
-                    BooleanQuery bq = new BooleanQuery.Builder()
-                        .add(query, BooleanClause.Occur.MUST)
-                        .add(new MinDocQuery(after.doc + 1), BooleanClause.Occur.FILTER)
-                        .build();
-                    query = bq;
-                }
-                searchContext.terminateAfter(numDocs);
-            }
-        }
-        return query;
     }
 }

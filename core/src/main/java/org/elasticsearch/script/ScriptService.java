@@ -35,7 +35,6 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ClusterStateListener;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.breaker.CircuitBreakingException;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -46,8 +45,6 @@ import org.elasticsearch.common.cache.RemovalNotification;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.io.Streams;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.logging.LoggerMessageFormat;
 import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.Setting;
@@ -70,7 +67,6 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
@@ -91,8 +87,6 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
         Setting.intSetting("script.max_size_in_bytes", 65535, Property.NodeScope);
     public static final Setting<Integer> SCRIPT_MAX_COMPILATIONS_PER_MINUTE =
         Setting.intSetting("script.max_compilations_per_minute", 15, 0, Property.Dynamic, Property.NodeScope);
-
-    private final String defaultLang;
 
     private final Collection<ScriptEngineService> scriptEngines;
     private final Map<String, ScriptEngineService> scriptEnginesByLang;
@@ -131,8 +125,6 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
         this.scriptContextRegistry = scriptContextRegistry;
         int cacheMaxSize = SCRIPT_CACHE_SIZE_SETTING.get(settings);
 
-        this.defaultLang = scriptSettings.getDefaultScriptLanguageSetting().get(settings);
-
         CacheBuilder<CacheKey, CompiledScript> cacheBuilder = CacheBuilder.builder();
         if (cacheMaxSize >= 0) {
             cacheBuilder.setMaximumWeight(cacheMaxSize);
@@ -140,7 +132,7 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
 
         TimeValue cacheExpire = SCRIPT_CACHE_EXPIRE_SETTING.get(settings);
         if (cacheExpire.getNanos() != 0) {
-            cacheBuilder.setExpireAfterAccess(cacheExpire.nanos());
+            cacheBuilder.setExpireAfterAccess(cacheExpire);
         }
 
         logger.debug("using script cache with max_size [{}], expire [{}]", cacheMaxSize, cacheExpire);
@@ -222,11 +214,6 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
         }
 
         String lang = script.getLang();
-
-        if (lang == null) {
-            lang = defaultLang;
-        }
-
         ScriptEngineService scriptEngineService = getScriptEngineServiceForLang(lang);
         if (canExecuteScript(lang, script.getType(), scriptContext) == false) {
             throw new IllegalStateException("scripts of type [" + script.getType() + "], operation [" + scriptContext.getKey() + "] and lang [" + lang + "] are disabled");
@@ -258,7 +245,7 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
         long timePassed = now - lastInlineCompileTime;
         lastInlineCompileTime = now;
 
-        scriptsPerMinCounter += ((double) timePassed) * compilesAllowedPerNano;
+        scriptsPerMinCounter += (timePassed) * compilesAllowedPerNano;
 
         // It's been over the time limit anyway, readjust the bucket to be level
         if (scriptsPerMinCounter > totalCompilesPerMinute) {
@@ -285,11 +272,11 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
             throw new IllegalArgumentException("The parameter script (Script) must not be null.");
         }
 
-        String lang = script.getLang() == null ? defaultLang : script.getLang();
+        String lang = script.getLang();
         ScriptType type = script.getType();
-        //script.getScript() could return either a name or code for a script,
+        //script.getIdOrCode() could return either a name or code for a script,
         //but we check for a file script name first and an indexed script name second
-        String name = script.getScript();
+        String name = script.getIdOrCode();
 
         if (logger.isTraceEnabled()) {
             logger.trace("Compiling lang: [{}] type: [{}] script: {}", lang, type, name);
@@ -309,8 +296,8 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
             return compiledScript;
         }
 
-        //script.getScript() will be code if the script type is inline
-        String code = script.getScript();
+        //script.getIdOrCode() will be code if the script type is inline
+        String code = script.getIdOrCode();
 
         if (type == ScriptType.STORED) {
             //The look up for an indexed script must be done every time in case
@@ -364,9 +351,8 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
     }
 
     private String validateScriptLanguage(String scriptLang) {
-        if (scriptLang == null) {
-            scriptLang = defaultLang;
-        } else if (scriptEnginesByLang.containsKey(scriptLang) == false) {
+        Objects.requireNonNull(scriptLang);
+        if (scriptEnginesByLang.containsKey(scriptLang) == false) {
             throw new IllegalArgumentException("script_lang not supported [" + scriptLang + "]");
         }
         return scriptLang;
@@ -482,23 +468,31 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
     /**
      * Compiles (or retrieves from cache) and executes the provided script
      */
-    public ExecutableScript executable(Script script, ScriptContext scriptContext, Map<String, String> params) {
-        return executable(compile(script, scriptContext, params), script.getParams());
+    public ExecutableScript executable(Script script, ScriptContext scriptContext) {
+        return executable(compile(script, scriptContext, script.getOptions()), script.getParams());
     }
 
     /**
      * Executes a previously compiled script provided as an argument
      */
-    public ExecutableScript executable(CompiledScript compiledScript, Map<String, Object> vars) {
-        return getScriptEngineServiceForLang(compiledScript.lang()).executable(compiledScript, vars);
+    public ExecutableScript executable(CompiledScript compiledScript, Map<String, Object> params) {
+        return getScriptEngineServiceForLang(compiledScript.lang()).executable(compiledScript, params);
     }
 
     /**
      * Compiles (or retrieves from cache) and executes the provided search script
      */
-    public SearchScript search(SearchLookup lookup, Script script, ScriptContext scriptContext, Map<String, String> params) {
-        CompiledScript compiledScript = compile(script, scriptContext, params);
-        return getScriptEngineServiceForLang(compiledScript.lang()).search(compiledScript, lookup, script.getParams());
+    public SearchScript search(SearchLookup lookup, Script script, ScriptContext scriptContext) {
+        CompiledScript compiledScript = compile(script, scriptContext, script.getOptions());
+        return search(lookup, compiledScript, script.getParams());
+    }
+
+    /**
+     * Binds provided parameters to a compiled script returning a
+     * {@link SearchScript} ready for execution
+     */
+    public SearchScript search(SearchLookup lookup, CompiledScript compiledScript,  Map<String, Object> params) {
+        return getScriptEngineServiceForLang(compiledScript.lang()).search(compiledScript, lookup, params);
     }
 
     private boolean isAnyScriptContextEnabled(String lang, ScriptType scriptType) {
@@ -630,68 +624,6 @@ public class ScriptService extends AbstractComponent implements Closeable, Clust
         @Override
         public void onFileChanged(Path file) {
             onFileInit(file);
-        }
-
-    }
-
-    /**
-     * The type of a script, more specifically where it gets loaded from:
-     * - provided dynamically at request time
-     * - loaded from an index
-     * - loaded from file
-     */
-    public enum ScriptType {
-
-        INLINE(0, "inline", "inline", false),
-        STORED(1, "id", "stored", false),
-        FILE(2, "file", "file", true);
-
-        private final int val;
-        private final ParseField parseField;
-        private final String scriptType;
-        private final boolean defaultScriptEnabled;
-
-        public static ScriptType readFrom(StreamInput in) throws IOException {
-            int scriptTypeVal = in.readVInt();
-            for (ScriptType type : values()) {
-                if (type.val == scriptTypeVal) {
-                    return type;
-                }
-            }
-            throw new IllegalArgumentException("Unexpected value read for ScriptType got [" + scriptTypeVal + "] expected one of ["
-                    + INLINE.val + "," + FILE.val + "," + STORED.val + "]");
-        }
-
-        public static void writeTo(ScriptType scriptType, StreamOutput out) throws IOException{
-            if (scriptType != null) {
-                out.writeVInt(scriptType.val);
-            } else {
-                out.writeVInt(INLINE.val); //Default to inline
-            }
-        }
-
-        ScriptType(int val, String name, String scriptType, boolean defaultScriptEnabled) {
-            this.val = val;
-            this.parseField = new ParseField(name);
-            this.scriptType = scriptType;
-            this.defaultScriptEnabled = defaultScriptEnabled;
-        }
-
-        public ParseField getParseField() {
-            return parseField;
-        }
-
-        public boolean getDefaultScriptEnabled() {
-            return defaultScriptEnabled;
-        }
-
-        public String getScriptType() {
-            return scriptType;
-        }
-
-        @Override
-        public String toString() {
-            return name().toLowerCase(Locale.ROOT);
         }
 
     }

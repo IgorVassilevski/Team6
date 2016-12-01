@@ -68,11 +68,6 @@ public class OperationRouting extends AbstractComponent {
         return preferenceActiveShardIterator(indexShard, clusterState.nodes().getLocalNodeId(), clusterState.nodes(), preference);
     }
 
-    public int searchShardsCount(ClusterState clusterState, String[] concreteIndices, @Nullable Map<String, Set<String>> routing) {
-        final Set<IndexShardRoutingTable> shards = computeTargetedShards(clusterState, concreteIndices, routing);
-        return shards.size();
-    }
-
     public GroupShardsIterator searchShards(ClusterState clusterState, String[] concreteIndices, @Nullable Map<String, Set<String>> routing, @Nullable String preference) {
         final Set<IndexShardRoutingTable> shards = computeTargetedShards(clusterState, concreteIndices, routing);
         final Set<ShardIterator> set = new HashSet<>(shards.size());
@@ -126,10 +121,22 @@ public class OperationRouting extends AbstractComponent {
             Preference preferenceType = Preference.parse(preference);
             if (preferenceType == Preference.SHARDS) {
                 // starts with _shards, so execute on specific ones
-                int index = preference.indexOf(';');
+                int index = preference.indexOf('|');
 
                 String shards;
-                boolean found = processingMethod(indexShard, preference, index);
+                if (index == -1) {
+                    shards = preference.substring(Preference.SHARDS.type().length() + 1);
+                } else {
+                    shards = preference.substring(Preference.SHARDS.type().length() + 1, index);
+                }
+                String[] ids = Strings.splitStringByCommaToArray(shards);
+                boolean found = false;
+                for (String id : ids) {
+                    if (Integer.parseInt(id) == indexShard.shardId().id()) {
+                        found = true;
+                        break;
+                    }
+                }
                 if (!found) {
                     return null;
                 }
@@ -146,7 +153,31 @@ public class OperationRouting extends AbstractComponent {
                 }
             }
             preferenceType = Preference.parse(preference);
-            return switchCaseMethods(indexShard, localNodeId, nodes, preference, preferenceType);
+            switch (preferenceType) {
+                case PREFER_NODES:
+                    final Set<String> nodesIds =
+                            Arrays.stream(
+                                    preference.substring(Preference.PREFER_NODES.type().length() + 1).split(",")
+                            ).collect(Collectors.toSet());
+                    return indexShard.preferNodeActiveInitializingShardsIt(nodesIds);
+                case LOCAL:
+                    return indexShard.preferNodeActiveInitializingShardsIt(Collections.singleton(localNodeId));
+                case PRIMARY:
+                    return indexShard.primaryActiveInitializingShardIt();
+                case REPLICA:
+                    return indexShard.replicaActiveInitializingShardIt();
+                case PRIMARY_FIRST:
+                    return indexShard.primaryFirstActiveInitializingShardsIt();
+                case REPLICA_FIRST:
+                    return indexShard.replicaFirstActiveInitializingShardsIt();
+                case ONLY_LOCAL:
+                    return indexShard.onlyNodeActiveInitializingShardsIt(localNodeId);
+                case ONLY_NODES:
+                    String nodeAttributes = preference.substring(Preference.ONLY_NODES.type().length() + 1);
+                    return indexShard.onlyNodeSelectorActiveInitializingShardsIt(nodeAttributes.split(","), nodes);
+                default:
+                    throw new IllegalArgumentException("unknown preference [" + preferenceType + "]");
+            }
         }
         // if not, then use it as the index
         if (awarenessAttributes.length == 0) {
@@ -154,52 +185,6 @@ public class OperationRouting extends AbstractComponent {
         } else {
             return indexShard.preferAttributesActiveInitializingShardsIt(awarenessAttributes, nodes, Murmur3HashFunction.hash(preference));
         }
-    }
-
-    private ShardIterator switchCaseMethods(IndexShardRoutingTable indexShard, String localNodeId, DiscoveryNodes nodes, @Nullable String preference, Preference preferenceType) {
-        switch (preferenceType) {
-            case PREFER_NODES:
-                final Set<String> nodesIds =
-                        Arrays.stream(
-                                preference.substring(Preference.PREFER_NODES.type().length() + 1).split(",")
-                        ).collect(Collectors.toSet());
-                return indexShard.preferNodeActiveInitializingShardsIt(nodesIds);
-            case LOCAL:
-                return indexShard.preferNodeActiveInitializingShardsIt(Collections.singleton(localNodeId));
-            case PRIMARY:
-                return indexShard.primaryActiveInitializingShardIt();
-            case REPLICA:
-                return indexShard.replicaActiveInitializingShardIt();
-            case PRIMARY_FIRST:
-                return indexShard.primaryFirstActiveInitializingShardsIt();
-            case REPLICA_FIRST:
-                return indexShard.replicaFirstActiveInitializingShardsIt();
-            case ONLY_LOCAL:
-                return indexShard.onlyNodeActiveInitializingShardsIt(localNodeId);
-            case ONLY_NODES:
-                String nodeAttributes = preference.substring(Preference.ONLY_NODES.type().length() + 1);
-                return indexShard.onlyNodeSelectorActiveInitializingShardsIt(nodeAttributes.split(","), nodes);
-            default:
-                throw new IllegalArgumentException("unknown preference [" + preferenceType + "]");
-        }
-    }
-
-    private boolean processingMethod(IndexShardRoutingTable indexShard, @Nullable String preference, int index) {
-        String shards;
-        if (index == -1) {
-            shards = preference.substring(Preference.SHARDS.type().length() + 1);
-        } else {
-            shards = preference.substring(Preference.SHARDS.type().length() + 1, index);
-        }
-        String[] ids = Strings.splitStringByCommaToArray(shards);
-        boolean found = false;
-        for (String id : ids) {
-            if (Integer.parseInt(id) == indexShard.shardId().id()) {
-                found = true;
-                break;
-            }
-        }
-        return found;
     }
 
     protected IndexRoutingTable indexRoutingTable(ClusterState clusterState, String index) {

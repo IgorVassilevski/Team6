@@ -411,6 +411,12 @@ public class Setting<T> extends ToXContentToBytes {
 
             @Override
             public void apply(Tuple<A, B> value, Settings current, Settings previous) {
+                if (aSettingUpdater.hasChanged(current, previous)) {
+                    logger.info("updating [{}] from [{}] to [{}]", aSetting.key, aSetting.getRaw(previous), aSetting.getRaw(current));
+                }
+                if (bSettingUpdater.hasChanged(current, previous)) {
+                    logger.info("updating [{}] from [{}] to [{}]", bSetting.key, bSetting.getRaw(previous), bSetting.getRaw(current));
+                }
                 consumer.accept(value.v1(), value.v2());
             }
 
@@ -551,10 +557,6 @@ public class Setting<T> extends ToXContentToBytes {
         return new Setting<>(key, defaultValueFn, Booleans::parseBooleanExact, properties);
     }
 
-    public static Setting<ByteSizeValue> byteSizeSetting(String key, String percentage, Property... properties) {
-        return new Setting<>(key, (s) -> percentage, (s) -> MemorySizeValue.parseBytesSizeValueOrHeapRatio(s, key), properties);
-    }
-
     public static Setting<ByteSizeValue> byteSizeSetting(String key, ByteSizeValue value, Property... properties) {
         return byteSizeSetting(key, (s) -> value.toString(), properties);
     }
@@ -582,17 +584,56 @@ public class Setting<T> extends ToXContentToBytes {
 
     public static ByteSizeValue parseByteSize(String s, ByteSizeValue minValue, ByteSizeValue maxValue, String key) {
         ByteSizeValue value = ByteSizeValue.parseBytesSizeValue(s, key);
-        if (value.bytes() < minValue.bytes()) {
+        if (value.getBytes() < minValue.getBytes()) {
             throw new IllegalArgumentException("Failed to parse value [" + s + "] for setting [" + key + "] must be >= " + minValue);
         }
-        if (value.bytes() > maxValue.bytes()) {
+        if (value.getBytes() > maxValue.getBytes()) {
             throw new IllegalArgumentException("Failed to parse value [" + s + "] for setting [" + key + "] must be <= " + maxValue);
         }
         return value;
     }
 
-    public static Setting<TimeValue> positiveTimeSetting(String key, TimeValue defaultValue, Property... properties) {
-        return timeSetting(key, defaultValue, TimeValue.timeValueMillis(0), properties);
+    /**
+     * Creates a setting which specifies a memory size. This can either be
+     * specified as an absolute bytes value or as a percentage of the heap
+     * memory.
+     *
+     * @param key the key for the setting
+     * @param defaultValue the default value for this setting
+     * @param properties properties properties for this setting like scope, filtering...
+     * @return the setting object
+     */
+    public static Setting<ByteSizeValue> memorySizeSetting(String key, ByteSizeValue defaultValue, Property... properties) {
+        return memorySizeSetting(key, (s) -> defaultValue.toString(), properties);
+    }
+
+
+    /**
+     * Creates a setting which specifies a memory size. This can either be
+     * specified as an absolute bytes value or as a percentage of the heap
+     * memory.
+     *
+     * @param key the key for the setting
+     * @param defaultValue a function that supplies the default value for this setting
+     * @param properties properties properties for this setting like scope, filtering...
+     * @return the setting object
+     */
+    public static Setting<ByteSizeValue> memorySizeSetting(String key, Function<Settings, String> defaultValue, Property... properties) {
+        return new Setting<>(key, defaultValue, (s) -> MemorySizeValue.parseBytesSizeValueOrHeapRatio(s, key), properties);
+    }
+
+    /**
+     * Creates a setting which specifies a memory size. This can either be
+     * specified as an absolute bytes value or as a percentage of the heap
+     * memory.
+     *
+     * @param key the key for the setting
+     * @param defaultPercentage the default value of this setting as a percentage of the heap memory
+     * @param properties properties properties for this setting like scope, filtering...
+     * @return the setting object
+     */
+    public static Setting<ByteSizeValue> memorySizeSetting(String key, String defaultPercentage, Property... properties) {
+        return new Setting<>(key, (s) -> defaultPercentage, (s) -> MemorySizeValue.parseBytesSizeValueOrHeapRatio(s, key), properties);
     }
 
     public static <T> Setting<List<T>> listSetting(String key, List<String> defaultStringValue, Function<String, T> singleValueParser,
@@ -750,9 +791,9 @@ public class Setting<T> extends ToXContentToBytes {
         };
     }
 
-    public static Setting<TimeValue> timeSetting(String key, Function<Settings, String> defaultValue, TimeValue minValue,
+    public static Setting<TimeValue> timeSetting(String key, Function<Settings, TimeValue> defaultValue, TimeValue minValue,
                                                  Property... properties) {
-        return new Setting<>(key, defaultValue, (s) -> {
+        return new Setting<>(key, (s) -> defaultValue.apply(s).getStringRep(), (s) -> {
             TimeValue timeValue = TimeValue.parseTimeValue(s, null, key);
             if (timeValue.millis() < minValue.millis()) {
                 throw new IllegalArgumentException("Failed to parse value [" + s + "] for setting [" + key + "] must be >= " + minValue);
@@ -762,15 +803,19 @@ public class Setting<T> extends ToXContentToBytes {
     }
 
     public static Setting<TimeValue> timeSetting(String key, TimeValue defaultValue, TimeValue minValue, Property... properties) {
-        return timeSetting(key, (s) -> defaultValue.getStringRep(), minValue, properties);
+        return timeSetting(key, (s) -> defaultValue, minValue, properties);
     }
 
     public static Setting<TimeValue> timeSetting(String key, TimeValue defaultValue, Property... properties) {
-        return new Setting<>(key, (s) -> defaultValue.toString(), (s) -> TimeValue.parseTimeValue(s, key), properties);
+        return new Setting<>(key, (s) -> defaultValue.getStringRep(), (s) -> TimeValue.parseTimeValue(s, key), properties);
     }
 
     public static Setting<TimeValue> timeSetting(String key, Setting<TimeValue> fallbackSetting, Property... properties) {
         return new Setting<>(key, fallbackSetting, (s) -> TimeValue.parseTimeValue(s, key), properties);
+    }
+
+    public static Setting<TimeValue> positiveTimeSetting(String key, TimeValue defaultValue, Property... properties) {
+        return timeSetting(key, defaultValue, TimeValue.timeValueMillis(0), properties);
     }
 
     public static Setting<Double> doubleSetting(String key, double defaultValue, double minValue, Property... properties) {

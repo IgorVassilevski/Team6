@@ -43,7 +43,6 @@ import org.elasticsearch.index.mapper.ObjectMapper;
 import org.elasticsearch.index.mapper.SourceFieldMapper;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
-import org.elasticsearch.search.SearchParseElement;
 import org.elasticsearch.search.SearchPhase;
 import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
 import org.elasticsearch.search.fetch.subphase.InnerHitsFetchSubPhase;
@@ -52,6 +51,7 @@ import org.elasticsearch.search.internal.InternalSearchHitField;
 import org.elasticsearch.search.internal.InternalSearchHits;
 import org.elasticsearch.search.internal.SearchContext;
 import org.elasticsearch.search.lookup.SourceLookup;
+import org.elasticsearch.tasks.TaskCancelledException;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -62,11 +62,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static java.util.Collections.unmodifiableMap;
 import static org.elasticsearch.common.xcontent.XContentFactory.contentBuilder;
 
 /**
- *
+ * Fetch phase of a search request, used to fetch the actual top matching documents to be returned to the client, identified
+ * after reducing all of the matches returned by the query phase
  */
 public class FetchPhase implements SearchPhase {
 
@@ -75,15 +75,6 @@ public class FetchPhase implements SearchPhase {
     public FetchPhase(List<FetchSubPhase> fetchSubPhases) {
         this.fetchSubPhases = fetchSubPhases.toArray(new FetchSubPhase[fetchSubPhases.size() + 1]);
         this.fetchSubPhases[fetchSubPhases.size()] = new InnerHitsFetchSubPhase(this);
-    }
-
-    @Override
-    public Map<String, ? extends SearchParseElement> parseElements() {
-        Map<String, SearchParseElement> parseElements = new HashMap<>();
-        for (FetchSubPhase fetchSubPhase : fetchSubPhases) {
-            parseElements.putAll(fetchSubPhase.parseElements());
-        }
-        return unmodifiableMap(parseElements);
     }
 
     @Override
@@ -109,11 +100,9 @@ public class FetchPhase implements SearchPhase {
         } else {
             for (String fieldName : context.storedFieldsContext().fieldNames()) {
                 if (fieldName.equals(SourceFieldMapper.NAME)) {
-                    if (context.hasFetchSourceContext()) {
-                        context.fetchSourceContext().fetchSource(true);
-                    } else {
-                        context.fetchSourceContext(new FetchSourceContext(true));
-                    }
+                    FetchSourceContext fetchSourceContext = context.hasFetchSourceContext() ? context.fetchSourceContext()
+                        : FetchSourceContext.FETCH_SOURCE;
+                    context.fetchSourceContext(new FetchSourceContext(true, fetchSourceContext.includes(), fetchSourceContext.excludes()));
                     continue;
                 }
                 if (Regex.isSimpleMatchPattern(fieldName)) {
@@ -148,6 +137,9 @@ public class FetchPhase implements SearchPhase {
         InternalSearchHit[] hits = new InternalSearchHit[context.docIdsToLoadSize()];
         FetchSubPhase.HitContext hitContext = new FetchSubPhase.HitContext();
         for (int index = 0; index < context.docIdsToLoadSize(); index++) {
+            if(context.isCancelled()) {
+                throw new TaskCancelledException("cancelled");
+            }
             int docId = context.docIdsToLoad()[context.docIdsToLoadFrom() + index];
             int readerIndex = ReaderUtil.subIndex(docId, context.searcher().getIndexReader().leaves());
             LeafReaderContext subReaderContext = context.searcher().getIndexReader().leaves().get(readerIndex);

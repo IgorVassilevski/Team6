@@ -1,5 +1,0 @@
-projectKey=my:complexity
-serverUrl=http://localhost:9000
-dashboardUrl=http://localhost:9000/dashboard/index/my:complexity
-ceTaskId=AViiQTLLN118Um8BLOCt
-ceTaskUrl=http://localhost:9000/api/ce/task?id=AViiQTLLN118Um8BLOCt

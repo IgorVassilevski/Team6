@@ -19,10 +19,6 @@
 
 package org.elasticsearch.rest.action.search;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.function.BiConsumer;
-
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.action.search.MultiSearchRequest;
 import org.elasticsearch.action.search.SearchRequest;
@@ -38,13 +34,16 @@ import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.query.QueryParseContext;
 import org.elasticsearch.rest.BaseRestHandler;
-import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestController;
-import      org.elasticsearch.rest.RestRequest;
+import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.action.RestActions;
 import org.elasticsearch.rest.action.RestToXContentListener;
 import org.elasticsearch.search.SearchRequestParsers;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.function.BiConsumer;
 
 import static org.elasticsearch.common.xcontent.support.XContentMapValues.lenientNodeBooleanValue;
 import static org.elasticsearch.common.xcontent.support.XContentMapValues.nodeStringArrayValue;
@@ -52,8 +51,6 @@ import static org.elasticsearch.common.xcontent.support.XContentMapValues.nodeSt
 import static org.elasticsearch.rest.RestRequest.Method.GET;
 import static org.elasticsearch.rest.RestRequest.Method.POST;
 
-/**
- */
 public class RestMultiSearchAction extends BaseRestHandler {
 
     private final boolean allowExplicitIndex;
@@ -75,9 +72,9 @@ public class RestMultiSearchAction extends BaseRestHandler {
     }
 
     @Override
-    public void handleRequest(final RestRequest request, final RestChannel channel, final NodeClient client) throws Exception {
+    public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) throws IOException {
         MultiSearchRequest multiSearchRequest = parseRequest(request, allowExplicitIndex, searchRequestParsers, parseFieldMatcher);
-        client.multiSearch(multiSearchRequest, new RestToXContentListener<>(channel));
+        return channel -> client.multiSearch(multiSearchRequest, new RestToXContentListener<>(channel));
     }
 
     /**
@@ -97,7 +94,7 @@ public class RestMultiSearchAction extends BaseRestHandler {
                 final QueryParseContext queryParseContext = new QueryParseContext(searchRequestParsers.queryParsers,
                     requestParser, parseFieldMatcher);
                 searchRequest.source(SearchSourceBuilder.fromXContent(queryParseContext,
-                    searchRequestParsers.aggParsers, searchRequestParsers.suggesters));
+                    searchRequestParsers.aggParsers, searchRequestParsers.suggesters, searchRequestParsers.searchExtParsers));
                 multiRequest.add(searchRequest);
             } catch (IOException e) {
                 throw new ElasticsearchParseException("Exception when parsing search request", e);

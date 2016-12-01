@@ -19,7 +19,6 @@
 
 package org.elasticsearch;
 
-import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.support.replication.ReplicationOperation;
 import org.elasticsearch.cluster.action.shard.ShardStateAction;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -488,7 +487,7 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
         SNAPSHOT_CREATION_EXCEPTION(org.elasticsearch.snapshots.SnapshotCreationException.class,
                 org.elasticsearch.snapshots.SnapshotCreationException::new, 27),
         DELETE_FAILED_ENGINE_EXCEPTION(org.elasticsearch.index.engine.DeleteFailedEngineException.class,
-                org.elasticsearch.index.engine.DeleteFailedEngineException::new, 28),
+                org.elasticsearch.index.engine.DeleteFailedEngineException::new, 28),// deprecated in 6.0, remove in 7.0
         DOCUMENT_MISSING_EXCEPTION(org.elasticsearch.index.engine.DocumentMissingException.class,
                 org.elasticsearch.index.engine.DocumentMissingException::new, 29),
         SNAPSHOT_EXCEPTION(org.elasticsearch.snapshots.SnapshotException.class,
@@ -524,16 +523,14 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
                 org.elasticsearch.index.shard.IndexShardRelocatedException::new, 45),
         NODE_SHOULD_NOT_CONNECT_EXCEPTION(org.elasticsearch.transport.NodeShouldNotConnectException.class,
                 org.elasticsearch.transport.NodeShouldNotConnectException::new, 46),
-        INDEX_TEMPLATE_ALREADY_EXISTS_EXCEPTION(org.elasticsearch.indices.IndexTemplateAlreadyExistsException.class,
-                org.elasticsearch.indices.IndexTemplateAlreadyExistsException::new, 47),
+        // 47 used to be for IndexTemplateAlreadyExistsException which was deprecated in 5.1 removed in 6.0
         TRANSLOG_CORRUPTED_EXCEPTION(org.elasticsearch.index.translog.TranslogCorruptedException.class,
                 org.elasticsearch.index.translog.TranslogCorruptedException::new, 48),
         CLUSTER_BLOCK_EXCEPTION(org.elasticsearch.cluster.block.ClusterBlockException.class,
                 org.elasticsearch.cluster.block.ClusterBlockException::new, 49),
         FETCH_PHASE_EXECUTION_EXCEPTION(org.elasticsearch.search.fetch.FetchPhaseExecutionException.class,
                 org.elasticsearch.search.fetch.FetchPhaseExecutionException::new, 50),
-        INDEX_SHARD_ALREADY_EXISTS_EXCEPTION(org.elasticsearch.index.IndexShardAlreadyExistsException.class,
-                org.elasticsearch.index.IndexShardAlreadyExistsException::new, 51),
+        // 51 used to be for IndexShardAlreadyExistsException which was deprecated in 5.1 removed in 6.0
         VERSION_CONFLICT_ENGINE_EXCEPTION(org.elasticsearch.index.engine.VersionConflictEngineException.class,
                 org.elasticsearch.index.engine.VersionConflictEngineException::new, 52),
         ENGINE_EXCEPTION(org.elasticsearch.index.engine.EngineException.class, org.elasticsearch.index.engine.EngineException::new, 53),
@@ -554,7 +551,7 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
                 org.elasticsearch.common.io.stream.NotSerializableExceptionWrapper::new, 62),
         ALIAS_FILTER_PARSING_EXCEPTION(org.elasticsearch.indices.AliasFilterParsingException.class,
                 org.elasticsearch.indices.AliasFilterParsingException::new, 63),
-        // 64 was DeleteByQueryFailedEngineException, which was removed in 3.0
+        // 64 was DeleteByQueryFailedEngineException, which was removed in 5.0
         GATEWAY_EXCEPTION(org.elasticsearch.gateway.GatewayException.class, org.elasticsearch.gateway.GatewayException::new, 65),
         INDEX_SHARD_NOT_RECOVERING_EXCEPTION(org.elasticsearch.index.shard.IndexShardNotRecoveringException.class,
                 org.elasticsearch.index.shard.IndexShardNotRecoveringException::new, 66),
@@ -582,7 +579,7 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
         ROUTING_MISSING_EXCEPTION(org.elasticsearch.action.RoutingMissingException.class,
                 org.elasticsearch.action.RoutingMissingException::new, 79),
         INDEX_FAILED_ENGINE_EXCEPTION(org.elasticsearch.index.engine.IndexFailedEngineException.class,
-                org.elasticsearch.index.engine.IndexFailedEngineException::new, 80),
+                org.elasticsearch.index.engine.IndexFailedEngineException::new, 80), // deprecated in 6.0, remove in 7.0
         INDEX_SHARD_RESTORE_FAILED_EXCEPTION(org.elasticsearch.index.snapshots.IndexShardRestoreFailedException.class,
                 org.elasticsearch.index.snapshots.IndexShardRestoreFailedException::new, 81),
         REPOSITORY_EXCEPTION(org.elasticsearch.repositories.RepositoryException.class,
@@ -633,8 +630,7 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
                 org.elasticsearch.repositories.RepositoryMissingException::new, 107),
         DOCUMENT_SOURCE_MISSING_EXCEPTION(org.elasticsearch.index.engine.DocumentSourceMissingException.class,
                 org.elasticsearch.index.engine.DocumentSourceMissingException::new, 109),
-        FLUSH_NOT_ALLOWED_ENGINE_EXCEPTION(org.elasticsearch.index.engine.FlushNotAllowedEngineException.class,
-                org.elasticsearch.index.engine.FlushNotAllowedEngineException::new, 110),
+        // 110 used to be FlushNotAllowedEngineException
         NO_CLASS_SETTINGS_EXCEPTION(org.elasticsearch.common.settings.NoClassSettingsException.class,
                 org.elasticsearch.common.settings.NoClassSettingsException::new, 111),
         BIND_TRANSPORT_EXCEPTION(org.elasticsearch.transport.BindTransportException.class,
@@ -694,7 +690,9 @@ public class ElasticsearchException extends RuntimeException implements ToXConte
                 ShardStateAction.NoLongerPrimaryShardException::new, 142),
         SCRIPT_EXCEPTION(org.elasticsearch.script.ScriptException.class, org.elasticsearch.script.ScriptException::new, 143),
         NOT_MASTER_EXCEPTION(org.elasticsearch.cluster.NotMasterException.class, org.elasticsearch.cluster.NotMasterException::new, 144),
-        STATUS_EXCEPTION(org.elasticsearch.ElasticsearchStatusException.class, org.elasticsearch.ElasticsearchStatusException::new, 145);
+        STATUS_EXCEPTION(org.elasticsearch.ElasticsearchStatusException.class, org.elasticsearch.ElasticsearchStatusException::new, 145),
+        TASK_CANCELLED_EXCEPTION(org.elasticsearch.tasks.TaskCancelledException.class,
+            org.elasticsearch.tasks.TaskCancelledException::new, 146);
 
         final Class<? extends ElasticsearchException> exceptionClass;
         final FunctionThatThrowsIOException<StreamInput, ? extends ElasticsearchException> constructor;

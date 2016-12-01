@@ -33,7 +33,6 @@ import org.elasticsearch.search.aggregations.PipelineAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregatorFactory;
 import org.elasticsearch.search.aggregations.bucket.histogram.HistogramAggregatorFactory;
 import org.elasticsearch.search.aggregations.pipeline.AbstractPipelineAggregationBuilder;
-import org.elasticsearch.search.aggregations.pipeline.BucketHelpers;
 import org.elasticsearch.search.aggregations.pipeline.BucketHelpers.GapPolicy;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 import org.elasticsearch.search.aggregations.pipeline.movavg.models.MovAvgModel;
@@ -391,11 +390,6 @@ public class MovAvgPipelineAggregationBuilder extends AbstractPipelineAggregatio
 
         MovAvgPipelineAggregationBuilder factory =
                 new MovAvgPipelineAggregationBuilder(pipelineAggregatorName, bucketsPaths[0]);
-        factoryCheck(movingAverageMdelParserRegistry, pipelineAggregatorName, context, parser, format, gapPolicy, window, settings, model, predict, minimize, factory);
-        return factory;
-    }
-
-    private static void factoryCheck(ParseFieldRegistry<MovAvgModel.AbstractModelParser> movingAverageMdelParserRegistry, String pipelineAggregatorName, QueryParseContext context, XContentParser parser, String format, GapPolicy gapPolicy, Integer window, Map<String, Object> settings, String model, Integer predict, Boolean minimize, MovAvgPipelineAggregationBuilder factory) {
         if (format != null) {
             factory.format(format);
         }
@@ -422,6 +416,7 @@ public class MovAvgPipelineAggregationBuilder extends AbstractPipelineAggregatio
         if (minimize != null) {
             factory.minimize(minimize);
         }
+        return factory;
     }
 
     @Override

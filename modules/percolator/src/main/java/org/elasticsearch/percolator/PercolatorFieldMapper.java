@@ -29,13 +29,13 @@ import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.queries.TermsQuery;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.BytesRefBuilder;
 import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.lucene.search.MatchNoDocsQuery;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -69,6 +69,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public class PercolatorFieldMapper extends FieldMapper {
 
@@ -89,9 +90,9 @@ public class PercolatorFieldMapper extends FieldMapper {
 
     public static class Builder extends FieldMapper.Builder<Builder, PercolatorFieldMapper> {
 
-        private final QueryShardContext queryShardContext;
+        private final Supplier<QueryShardContext> queryShardContext;
 
-        public Builder(String fieldName, QueryShardContext queryShardContext) {
+        public Builder(String fieldName, Supplier<QueryShardContext> queryShardContext) {
             super(fieldName, FIELD_TYPE, FIELD_TYPE);
             this.queryShardContext = queryShardContext;
         }
@@ -136,7 +137,7 @@ public class PercolatorFieldMapper extends FieldMapper {
 
         @Override
         public Builder parse(String name, Map<String, Object> node, ParserContext parserContext) throws MapperParsingException {
-            return new Builder(name, parserContext.queryShardContext());
+            return new Builder(name, parserContext.queryShardContextSupplier());
         }
     }
 
@@ -222,13 +223,14 @@ public class PercolatorFieldMapper extends FieldMapper {
     }
 
     private final boolean mapUnmappedFieldAsString;
-    private final QueryShardContext queryShardContext;
+    private final Supplier<QueryShardContext> queryShardContext;
     private KeywordFieldMapper queryTermsField;
     private KeywordFieldMapper extractionResultField;
     private BinaryFieldMapper queryBuilderField;
 
     public PercolatorFieldMapper(String simpleName, MappedFieldType fieldType, MappedFieldType defaultFieldType,
-                                 Settings indexSettings, MultiFields multiFields, CopyTo copyTo, QueryShardContext queryShardContext,
+                                 Settings indexSettings, MultiFields multiFields, CopyTo copyTo,
+                                 Supplier<QueryShardContext> queryShardContext,
                                  KeywordFieldMapper queryTermsField, KeywordFieldMapper extractionResultField,
                                  BinaryFieldMapper queryBuilderField) {
         super(simpleName, fieldType, defaultFieldType, indexSettings, multiFields, copyTo);
@@ -261,7 +263,7 @@ public class PercolatorFieldMapper extends FieldMapper {
 
     @Override
     public Mapper parse(ParseContext context) throws IOException {
-        QueryShardContext queryShardContext = new QueryShardContext(this.queryShardContext);
+        QueryShardContext queryShardContext = this.queryShardContext.get();
         if (context.doc().getField(queryBuilderField.name()) != null) {
             // If a percolator query has been defined in an array object then multiple percolator queries
             // could be provided. In order to prevent this we fail if we try to parse more than one query
@@ -270,7 +272,9 @@ public class PercolatorFieldMapper extends FieldMapper {
         }
 
         XContentParser parser = context.parser();
-        QueryBuilder queryBuilder = parseQueryBuilder(queryShardContext.newParseContext(parser), parser.getTokenLocation());
+        QueryBuilder queryBuilder = parseQueryBuilder(
+                queryShardContext.newParseContext(parser), parser.getTokenLocation()
+        );
         verifyQuery(queryBuilder);
         // Fetching of terms, shapes and indexed scripts happen during this rewrite:
         queryBuilder = queryBuilder.rewrite(queryShardContext);
@@ -312,7 +316,12 @@ public class PercolatorFieldMapper extends FieldMapper {
     }
 
     public static Query parseQuery(QueryShardContext context, boolean mapUnmappedFieldsAsString, XContentParser parser) throws IOException {
-        return toQuery(context, mapUnmappedFieldsAsString, parseQueryBuilder(context.newParseContext(parser), parser.getTokenLocation()));
+        return parseQuery(context, mapUnmappedFieldsAsString, context.newParseContext(parser), parser);
+    }
+
+    public static Query parseQuery(QueryShardContext context, boolean mapUnmappedFieldsAsString, QueryParseContext queryParseContext,
+                                   XContentParser parser) throws IOException {
+        return toQuery(context, mapUnmappedFieldsAsString, parseQueryBuilder(queryParseContext, parser.getTokenLocation()));
     }
 
     static Query toQuery(QueryShardContext context, boolean mapUnmappedFieldsAsString, QueryBuilder queryBuilder) throws IOException {

@@ -54,7 +54,6 @@ import org.elasticsearch.common.network.NetworkService.TcpSettings;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.concurrent.EsExecutors;
@@ -96,7 +95,7 @@ public class Netty4Transport extends TcpTransport<Channel> {
 
     public static final Setting<Integer> WORKER_COUNT =
         new Setting<>("transport.netty.worker_count",
-            (s) -> Integer.toString(EsExecutors.boundedNumberOfProcessors(s) * 2),
+            (s) -> Integer.toString(EsExecutors.numberOfProcessors(s) * 2),
             (s) -> Setting.parseInt(s, 1, "transport.netty.worker_count"), Property.NodeScope, Property.Shared);
 
     public static final Setting<ByteSizeValue> NETTY_MAX_CUMULATION_BUFFER_CAPACITY =
@@ -113,9 +112,9 @@ public class Netty4Transport extends TcpTransport<Channel> {
             "transport.netty.receive_predictor_size",
             settings -> {
                 long defaultReceiverPredictor = 512 * 1024;
-                if (JvmInfo.jvmInfo().getMem().getDirectMemoryMax().bytes() > 0) {
+                if (JvmInfo.jvmInfo().getMem().getDirectMemoryMax().getBytes() > 0) {
                     // we can guess a better default...
-                    long l = (long) ((0.3 * JvmInfo.jvmInfo().getMem().getDirectMemoryMax().bytes()) / WORKER_COUNT.get(settings));
+                    long l = (long) ((0.3 * JvmInfo.jvmInfo().getMem().getDirectMemoryMax().getBytes()) / WORKER_COUNT.get(settings));
                     defaultReceiverPredictor = Math.min(defaultReceiverPredictor, Math.max(l, 64 * 1024));
                 }
                 return new ByteSizeValue(defaultReceiverPredictor).toString();
@@ -152,11 +151,11 @@ public class Netty4Transport extends TcpTransport<Channel> {
         // See AdaptiveReceiveBufferSizePredictor#DEFAULT_XXX for default values in netty..., we can use higher ones for us, even fixed one
         this.receivePredictorMin = NETTY_RECEIVE_PREDICTOR_MIN.get(settings);
         this.receivePredictorMax = NETTY_RECEIVE_PREDICTOR_MAX.get(settings);
-        if (receivePredictorMax.bytes() == receivePredictorMin.bytes()) {
-            recvByteBufAllocator = new FixedRecvByteBufAllocator((int) receivePredictorMax.bytes());
+        if (receivePredictorMax.getBytes() == receivePredictorMin.getBytes()) {
+            recvByteBufAllocator = new FixedRecvByteBufAllocator((int) receivePredictorMax.getBytes());
         } else {
-            recvByteBufAllocator = new AdaptiveRecvByteBufAllocator((int) receivePredictorMin.bytes(),
-                (int) receivePredictorMin.bytes(), (int) receivePredictorMax.bytes());
+            recvByteBufAllocator = new AdaptiveRecvByteBufAllocator((int) receivePredictorMin.getBytes(),
+                (int) receivePredictorMin.getBytes(), (int) receivePredictorMax.getBytes());
         }
     }
 
@@ -208,13 +207,13 @@ public class Netty4Transport extends TcpTransport<Channel> {
         bootstrap.option(ChannelOption.SO_KEEPALIVE, TCP_KEEP_ALIVE.get(settings));
 
         final ByteSizeValue tcpSendBufferSize = TCP_SEND_BUFFER_SIZE.get(settings);
-        if (tcpSendBufferSize.bytes() > 0) {
-            bootstrap.option(ChannelOption.SO_SNDBUF, Math.toIntExact(tcpSendBufferSize.bytes()));
+        if (tcpSendBufferSize.getBytes() > 0) {
+            bootstrap.option(ChannelOption.SO_SNDBUF, Math.toIntExact(tcpSendBufferSize.getBytes()));
         }
 
         final ByteSizeValue tcpReceiveBufferSize = TCP_RECEIVE_BUFFER_SIZE.get(settings);
-        if (tcpReceiveBufferSize.bytes() > 0) {
-            bootstrap.option(ChannelOption.SO_RCVBUF, Math.toIntExact(tcpReceiveBufferSize.bytes()));
+        if (tcpReceiveBufferSize.getBytes() > 0) {
+            bootstrap.option(ChannelOption.SO_RCVBUF, Math.toIntExact(tcpReceiveBufferSize.getBytes()));
         }
 
         bootstrap.option(ChannelOption.RCVBUF_ALLOCATOR, recvByteBufAllocator);
@@ -251,13 +250,13 @@ public class Netty4Transport extends TcpTransport<Channel> {
 
         ByteSizeValue fallbackTcpSendBufferSize = settings.getAsBytesSize("transport.netty.tcp_send_buffer_size",
             TCP_SEND_BUFFER_SIZE.get(settings));
-        if (fallbackTcpSendBufferSize.bytes() >= 0) {
+        if (fallbackTcpSendBufferSize.getBytes() >= 0) {
             fallbackSettingsBuilder.put("tcp_send_buffer_size", fallbackTcpSendBufferSize);
         }
 
         ByteSizeValue fallbackTcpBufferSize = settings.getAsBytesSize("transport.netty.tcp_receive_buffer_size",
             TCP_RECEIVE_BUFFER_SIZE.get(settings));
-        if (fallbackTcpBufferSize.bytes() >= 0) {
+        if (fallbackTcpBufferSize.getBytes() >= 0) {
             fallbackSettingsBuilder.put("tcp_receive_buffer_size", fallbackTcpBufferSize);
         }
 
@@ -291,12 +290,12 @@ public class Netty4Transport extends TcpTransport<Channel> {
         serverBootstrap.childOption(ChannelOption.SO_KEEPALIVE, TCP_KEEP_ALIVE.get(settings));
 
         final ByteSizeValue tcpSendBufferSize = TCP_SEND_BUFFER_SIZE.getDefault(settings);
-        if (tcpSendBufferSize != null && tcpSendBufferSize.bytes() > 0) {
-            serverBootstrap.childOption(ChannelOption.SO_SNDBUF, Math.toIntExact(tcpSendBufferSize.bytes()));
+        if (tcpSendBufferSize != null && tcpSendBufferSize.getBytes() > 0) {
+            serverBootstrap.childOption(ChannelOption.SO_SNDBUF, Math.toIntExact(tcpSendBufferSize.getBytes()));
         }
 
         final ByteSizeValue tcpReceiveBufferSize = TCP_RECEIVE_BUFFER_SIZE.getDefault(settings);
-        if (tcpReceiveBufferSize != null && tcpReceiveBufferSize.bytes() > 0) {
+        if (tcpReceiveBufferSize != null && tcpReceiveBufferSize.getBytes() > 0) {
             serverBootstrap.childOption(ChannelOption.SO_RCVBUF, Math.toIntExact(tcpReceiveBufferSize.bytesAsInt()));
         }
 
@@ -333,7 +332,7 @@ public class Netty4Transport extends TcpTransport<Channel> {
     }
 
     protected NodeChannels connectToChannelsLight(DiscoveryNode node) {
-        InetSocketAddress address = ((InetSocketTransportAddress) node.getAddress()).address();
+        InetSocketAddress address = node.getAddress().address();
         ChannelFuture connect = bootstrap.connect(address);
         connect.awaitUninterruptibly((long) (connectTimeout.millis() * 1.5));
         if (!connect.isSuccess()) {
@@ -364,7 +363,7 @@ public class Netty4Transport extends TcpTransport<Channel> {
                     connectionsPerNodeState +
                     connectionsPerNodeRecovery;
             final ArrayList<ChannelFuture> connections = new ArrayList<>(numConnections);
-            final InetSocketAddress address = ((InetSocketTransportAddress) node.getAddress()).address();
+            final InetSocketAddress address = node.getAddress().address();
             for (int i = 0; i < numConnections; i++) {
                 connections.add(bootstrap.connect(address));
             }
@@ -445,19 +444,9 @@ public class Netty4Transport extends TcpTransport<Channel> {
     }
 
     @Override
-    protected void sendMessage(Channel channel, BytesReference reference, Runnable sendListener, boolean close) {
+    protected void sendMessage(Channel channel, BytesReference reference, Runnable sendListener) {
         final ChannelFuture future = channel.writeAndFlush(Netty4Utils.toByteBuf(reference));
-        if (close) {
-            future.addListener(f -> {
-                try {
-                    sendListener.run();
-                } finally {
-                    future.channel().close();
-                }
-            });
-        } else {
-            future.addListener(f -> sendListener.run());
-        }
+        future.addListener(f -> sendListener.run());
     }
 
     @Override

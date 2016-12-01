@@ -41,7 +41,6 @@ import org.elasticsearch.cluster.routing.allocation.decider.EnableAllocationDeci
 import org.elasticsearch.cluster.routing.allocation.decider.FilterAllocationDecider;
 import org.elasticsearch.cluster.routing.allocation.decider.SameShardAllocationDecider;
 import org.elasticsearch.cluster.routing.allocation.decider.ShardsLimitAllocationDecider;
-import org.elasticsearch.cluster.routing.allocation.decider.SnapshotInProgressAllocationDecider;
 import org.elasticsearch.cluster.routing.allocation.decider.ThrottlingAllocationDecider;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.logging.ESLoggerFactory;
@@ -54,17 +53,16 @@ import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.discovery.DiscoveryModule;
 import org.elasticsearch.discovery.DiscoverySettings;
+import org.elasticsearch.discovery.zen.ElectMasterService;
 import org.elasticsearch.discovery.zen.ZenDiscovery;
-import org.elasticsearch.discovery.zen.elect.ElectMasterService;
-import org.elasticsearch.discovery.zen.fd.FaultDetection;
-import org.elasticsearch.discovery.zen.ping.unicast.UnicastZenPing;
+import org.elasticsearch.discovery.zen.FaultDetection;
+import org.elasticsearch.discovery.zen.UnicastZenPing;
 import org.elasticsearch.env.Environment;
 import org.elasticsearch.env.NodeEnvironment;
 import org.elasticsearch.gateway.GatewayService;
 import org.elasticsearch.gateway.PrimaryShardAllocator;
 import org.elasticsearch.http.HttpTransportSettings;
 import org.elasticsearch.index.IndexSettings;
-import org.elasticsearch.index.store.IndexStoreConfig;
 import org.elasticsearch.indices.IndexingMemoryController;
 import org.elasticsearch.indices.IndicesQueryCache;
 import org.elasticsearch.indices.IndicesRequestCache;
@@ -183,8 +181,6 @@ public final class ClusterSettings extends AbstractScopedSettings {
                     FsRepository.REPOSITORIES_CHUNK_SIZE_SETTING,
                     FsRepository.REPOSITORIES_COMPRESS_SETTING,
                     FsRepository.REPOSITORIES_LOCATION_SETTING,
-                    IndexStoreConfig.INDICES_STORE_THROTTLE_TYPE_SETTING,
-                    IndexStoreConfig.INDICES_STORE_THROTTLE_MAX_BYTES_PER_SEC_SETTING,
                     IndicesQueryCache.INDICES_CACHE_QUERY_SIZE_SETTING,
                     IndicesQueryCache.INDICES_CACHE_QUERY_COUNT_SETTING,
                     IndicesQueryCache.INDICES_QUERIES_CACHE_ALL_SEGMENTS_SETTING,
@@ -209,7 +205,6 @@ public final class ClusterSettings extends AbstractScopedSettings {
                     SameShardAllocationDecider.CLUSTER_ROUTING_ALLOCATION_SAME_HOST_SETTING,
                     InternalClusterInfoService.INTERNAL_CLUSTER_INFO_UPDATE_INTERVAL_SETTING,
                     InternalClusterInfoService.INTERNAL_CLUSTER_INFO_TIMEOUT_SETTING,
-                    SnapshotInProgressAllocationDecider.CLUSTER_ROUTING_ALLOCATION_SNAPSHOT_RELOCATION_ENABLED_SETTING,
                     DestructiveOperations.REQUIRES_NAME_SETTING,
                     DiscoverySettings.PUBLISH_TIMEOUT_SETTING,
                     DiscoverySettings.PUBLISH_DIFF_ENABLE_SETTING,
@@ -226,7 +221,6 @@ public final class ClusterSettings extends AbstractScopedSettings {
                     NetworkModule.HTTP_DEFAULT_TYPE_SETTING,
                     NetworkModule.TRANSPORT_DEFAULT_TYPE_SETTING,
                     NetworkModule.HTTP_TYPE_SETTING,
-                    NetworkModule.TRANSPORT_SERVICE_TYPE_SETTING,
                     NetworkModule.TRANSPORT_TYPE_SETTING,
                     HttpTransportSettings.SETTING_CORS_ALLOW_CREDENTIALS,
                     HttpTransportSettings.SETTING_CORS_ENABLED,
@@ -329,7 +323,7 @@ public final class ClusterSettings extends AbstractScopedSettings {
                     NodeEnvironment.NODE_ID_SEED_SETTING,
                     DiscoverySettings.INITIAL_STATE_TIMEOUT_SETTING,
                     DiscoveryModule.DISCOVERY_TYPE_SETTING,
-                    DiscoveryModule.ZEN_MASTER_SERVICE_TYPE_SETTING,
+                    DiscoveryModule.DISCOVERY_HOSTS_PROVIDER_SETTING,
                     FaultDetection.PING_RETRIES_SETTING,
                     FaultDetection.PING_TIMEOUT_SETTING,
                     FaultDetection.REGISTER_CONNECTION_LISTENER_SETTING,
@@ -347,6 +341,7 @@ public final class ClusterSettings extends AbstractScopedSettings {
                     UnicastZenPing.DISCOVERY_ZEN_PING_UNICAST_CONCURRENT_CONNECTS_SETTING,
                     SearchService.DEFAULT_KEEPALIVE_SETTING,
                     SearchService.KEEPALIVE_INTERVAL_SETTING,
+                    SearchService.LOW_LEVEL_CANCELLATION_SETTING,
                     Node.WRITE_PORTS_FIELD_SETTING,
                     Node.NODE_NAME_SETTING,
                     Node.NODE_DATA_SETTING,
@@ -398,7 +393,6 @@ public final class ClusterSettings extends AbstractScopedSettings {
                     BootstrapSettings.MEMORY_LOCK_SETTING,
                     BootstrapSettings.SECCOMP_SETTING,
                     BootstrapSettings.CTRLHANDLER_SETTING,
-                    BootstrapSettings.IGNORE_SYSTEM_BOOTSTRAP_CHECKS,
                     IndexingMemoryController.INDEX_BUFFER_SIZE_SETTING,
                     IndexingMemoryController.MIN_INDEX_BUFFER_SIZE_SETTING,
                     IndexingMemoryController.MAX_INDEX_BUFFER_SIZE_SETTING,

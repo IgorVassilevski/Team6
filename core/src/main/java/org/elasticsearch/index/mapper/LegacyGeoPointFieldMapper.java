@@ -60,7 +60,7 @@ public class LegacyGeoPointFieldMapper extends BaseGeoPointFieldMapper implement
     public static class Defaults extends BaseGeoPointFieldMapper.Defaults{
         public static final Explicit<Boolean> COERCE = new Explicit<>(false, false);
 
-        public static final GeoPointFieldType FIELD_TYPE = new GeoPointFieldType();
+        public static final GeoPointFieldType FIELD_TYPE = new LegacyGeoPointFieldType();
 
         static {
             FIELD_TYPE.setIndexOptions(IndexOptions.DOCS);
@@ -297,7 +297,7 @@ public class LegacyGeoPointFieldMapper extends BaseGeoPointFieldMapper implement
             validPoint = true;
         }
 
-        if (coerce.value() == true && validPoint == false) {
+        if (coerce.value() && validPoint == false) {
             // by setting coerce to false we are assuming all geopoints are already in a valid coordinate system
             // thus this extra step can be skipped
             GeoUtils.normalizePoint(point, true, true);
@@ -329,6 +329,11 @@ public class LegacyGeoPointFieldMapper extends BaseGeoPointFieldMapper implement
         if (includeDefaults || coerce.explicit()) {
             builder.field(Names.COERCE, coerce.value());
         }
+    }
+
+    @Override
+    public LegacyGeoPointFieldType fieldType() {
+        return (LegacyGeoPointFieldType) super.fieldType();
     }
 
     public static class CustomGeoPointDocValuesField extends CustomDocValuesField {

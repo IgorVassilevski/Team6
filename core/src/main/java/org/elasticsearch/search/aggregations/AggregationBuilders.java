@@ -81,8 +81,6 @@ import org.elasticsearch.search.aggregations.metrics.tophits.TopHits;
 import org.elasticsearch.search.aggregations.metrics.tophits.TopHitsAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.valuecount.ValueCount;
 import org.elasticsearch.search.aggregations.metrics.valuecount.ValueCountAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.geoheatmap.GeoHeatmap;
-import org.elasticsearch.search.aggregations.metrics.geoheatmap.GeoHeatmapAggregationBuilder;
 
 /**
  * Utility class to create aggregations.
@@ -147,14 +145,7 @@ public class AggregationBuilders {
     public static FilterAggregationBuilder filter(String name, QueryBuilder filter) {
         return new FilterAggregationBuilder(name, filter);
     }
-    /**
-     * Create a new {@link GeoHeatmap} aggregation with the given name.
-     */
-    public static GeoHeatmapAggregationBuilder geoHeatmap(String name) {
-        return new GeoHeatmapAggregationBuilder(name);
-        }
 
-    /**
     /**
      * Create a new {@link Filters} aggregation with the given name.
      */

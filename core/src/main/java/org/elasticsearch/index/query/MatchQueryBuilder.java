@@ -34,11 +34,13 @@ import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.index.query.support.QueryParsers;
 import org.elasticsearch.index.search.MatchQuery;
 import org.elasticsearch.index.search.MatchQuery.ZeroTermsQuery;
+import org.apache.lucene.search.GraphQuery;
 
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.List;
 
 /**
  * Match query is a query that analyzes the text and constructs a query as the
@@ -471,6 +473,21 @@ public class MatchQueryBuilder extends AbstractQueryBuilder<MatchQueryBuilder> {
         // and multiple variations of the same word in the query (synonyms for instance).
         if (query instanceof BooleanQuery && !((BooleanQuery) query).isCoordDisabled()) {
             query = Queries.applyMinimumShouldMatch((BooleanQuery) query, minimumShouldMatch);
+
+        } else if (query instanceof GraphQuery && ((GraphQuery) query).hasBoolean()) {
+         // we have a graph query that has at least one boolean sub-query
+         // re-build and set minimum should match value on all boolean queries
+            List<Query> oldQueries = ((GraphQuery) query).getQueries();
+            Query[] queries = new Query[oldQueries.size()];
+            for (int i = 0; i < queries.length; i++) {
+                Query oldQuery = oldQueries.get(i);
+                if (oldQuery instanceof BooleanQuery) {
+                    queries[i] = Queries.applyMinimumShouldMatch((BooleanQuery) oldQuery, minimumShouldMatch);
+                    } else {
+                    queries[i] = oldQuery;
+                    }
+                }
+                    query = new GraphQuery(queries);
         } else if (query instanceof ExtendedCommonTermsQuery) {
             ((ExtendedCommonTermsQuery)query).setLowFreqMinimumNumberShouldMatch(minimumShouldMatch);
         }

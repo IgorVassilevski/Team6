@@ -56,11 +56,7 @@ public enum MultiValueMode implements Writeable {
             values.setDocument(doc);
             final int count = values.count();
             if (count > 0) {
-                long total = 0;
-                for (int index = 0; index < count; ++index) {
-                    total += values.valueAt(index);
-                }
-                return total;
+                return sumLong(values);
             } else {
                 return missingValue;
             }
@@ -73,11 +69,8 @@ public enum MultiValueMode implements Writeable {
                 long totalValue = 0;
                 for (int doc = startDoc; doc < endDoc; doc = docItr.nextDoc()) {
                     values.setDocument(doc);
-                    final int count = values.count();
-                    for (int index = 0; index < count; ++index) {
-                        totalValue += values.valueAt(index);
-                    }
-                    totalCount += count;
+                    totalValue += sumLong(values);
+                    totalCount += values.count();
                 }
                 return totalCount > 0 ? totalValue : missingValue;
             } catch (IOException ioException) {
@@ -90,11 +83,7 @@ public enum MultiValueMode implements Writeable {
             values.setDocument(doc);
             final int count = values.count();
             if (count > 0) {
-                double total = 0;
-                for (int index = 0; index < count; ++index) {
-                    total += values.valueAt(index);
-                }
-                return total;
+                return sumDouble(values);
             } else {
                 return missingValue;
             }
@@ -107,11 +96,8 @@ public enum MultiValueMode implements Writeable {
                 double totalValue = 0;
                 for (int doc = startDoc; doc < endDoc; doc = docItr.nextDoc()) {
                     values.setDocument(doc);
-                    final int count = values.count();
-                    for (int index = 0; index < count; ++index) {
-                        totalValue += values.valueAt(index);
-                    }
-                    totalCount += count;
+                    totalValue += sumDouble(values);
+                    totalCount +=  values.count();
                 }
                 return totalCount > 0 ? totalValue : missingValue;
             } catch (IOException ioException) {
@@ -124,15 +110,13 @@ public enum MultiValueMode implements Writeable {
             values.setDocument(doc);
             final int count = values.count();
             if (count > 0) {
-                double total = 0;
-                for (int index = 0; index < count; ++index) {
-                    total += values.valueAt(index);
-                }
-                return total;
+                return sumDouble(values);
             } else {
                 return missingValue;
             }
         }
+
+
     },
 
     /**
@@ -144,10 +128,7 @@ public enum MultiValueMode implements Writeable {
             values.setDocument(doc);
             final int count = values.count();
             if (count > 0) {
-                long total = 0;
-                for (int index = 0; index < count; ++index) {
-                    total += values.valueAt(index);
-                }
+                long total = sumLong(values);
                 return count > 1 ? Math.round((double)total/(double)count) : total;
             } else {
                 return missingValue;
@@ -161,11 +142,8 @@ public enum MultiValueMode implements Writeable {
                 long totalValue = 0;
                 for (int doc = startDoc; doc < endDoc; doc = docItr.nextDoc()) {
                     values.setDocument(doc);
-                    final int count = values.count();
-                    for (int index = 0; index < count; ++index) {
-                        totalValue += values.valueAt(index);
-                    }
-                    totalCount += count;
+                    totalValue += sumLong(values);
+                    totalCount += values.count();
                 }
                 if (totalCount < 1) {
                     return missingValue;
@@ -181,11 +159,7 @@ public enum MultiValueMode implements Writeable {
             values.setDocument(doc);
             final int count = values.count();
             if (count > 0) {
-                double total = 0;
-                for (int index = 0; index < count; ++index) {
-                    total += values.valueAt(index);
-                }
-                return total/count;
+                return sumDouble(values)/count;
             } else {
                 return missingValue;
             }
@@ -198,11 +172,8 @@ public enum MultiValueMode implements Writeable {
                 double totalValue = 0;
                 for (int doc = startDoc; doc < endDoc; doc = docItr.nextDoc()) {
                     values.setDocument(doc);
-                    final int count = values.count();
-                    for (int index = 0; index < count; ++index) {
-                        totalValue += values.valueAt(index);
-                    }
-                    totalCount += count;
+                    totalValue += sumDouble(values);
+                    totalCount +=  values.count();
                 }
                 if (totalCount < 1) {
                     return missingValue;
@@ -218,11 +189,7 @@ public enum MultiValueMode implements Writeable {
             values.setDocument(doc);
             final int count = values.count();
             if (count > 0) {
-                double total = 0;
-                for (int index = 0; index < count; ++index) {
-                    total += values.valueAt(index);
-                }
-                return total/count;
+                return sumDouble(values)/count;
             } else {
                 return missingValue;
             }
@@ -511,6 +478,36 @@ public enum MultiValueMode implements Writeable {
         }
     };
 
+    // ----------------
+    // MINE DAT265 PÅHL
+    protected long sumLong(SortedNumericDocValues values){
+        long total = 0;
+        final int count = values.count();
+        for (int index = 0; index < count; ++index) {
+            total += values.valueAt(index);
+        }
+        return total;
+    }
+    protected double sumDouble(SortedNumericDoubleValues values){
+        double total = 0;
+        final int count = values.count();
+        for (int index = 0; index < count; ++index) {
+            total += values.valueAt(index);
+        }
+        return total;
+    }
+    protected double sumDouble(UnsortedNumericDoubleValues values){
+        double total = 0;
+        final int count = values.count();
+        for (int index = 0; index < count; ++index) {
+            total += values.valueAt(index);
+        }
+        return total;
+    }
+
+    //-----------------
+
+
     /**
      * A case insensitive version of {@link #valueOf(String)}
      *
@@ -523,6 +520,7 @@ public enum MultiValueMode implements Writeable {
             throw new IllegalArgumentException("Illegal sort mode: " + sortMode);
         }
     }
+
 
     /**
      * Return a {@link NumericDocValues} instance that can be used to sort documents

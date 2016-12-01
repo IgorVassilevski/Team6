@@ -274,6 +274,8 @@ import org.elasticsearch.search.suggest.phrase.PhraseSuggester;
 import org.elasticsearch.search.suggest.phrase.SmoothingModel;
 import org.elasticsearch.search.suggest.phrase.StupidBackoff;
 import org.elasticsearch.search.suggest.term.TermSuggester;
+import org.elasticsearch.search.aggregations.metrics.geoheatmap.GeoHeatmapAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.geoheatmap.InternalGeoHeatmap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -462,6 +464,8 @@ public class SearchModule extends AbstractModule {
                 ScriptedMetricAggregationBuilder::parse).addResultReader(InternalScriptedMetric::new));
         registerAggregation(new AggregationSpec(ChildrenAggregationBuilder.NAME, ChildrenAggregationBuilder::new,
                 ChildrenAggregationBuilder::parse).addResultReader(InternalChildren::new));
+        registerAggregation(new AggregationSpec(GeoHeatmapAggregationBuilder.NAME, GeoHeatmapAggregationBuilder::new,
+               GeoHeatmapAggregationBuilder::parse).addResultReader(InternalGeoHeatmap::new));
 
         registerFromPlugin(plugins, SearchPlugin::getAggregations, this::registerAggregation);
     }

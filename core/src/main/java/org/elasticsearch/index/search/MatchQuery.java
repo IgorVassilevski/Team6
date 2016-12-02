@@ -20,18 +20,18 @@
 package org.elasticsearch.index.search;
 
 import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.CachingTokenFilter;
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.synonym.GraphTokenStreamFiniteStrings;
+import org.apache.lucene.analysis.tokenattributes.FlagsAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionLengthAttribute;
+import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.ExtendedCommonTermsQuery;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.*;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.FuzzyQuery;
-import org.apache.lucene.search.MultiPhraseQuery;
-import org.apache.lucene.search.MultiTermQuery;
-import org.apache.lucene.search.PhraseQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.util.QueryBuilder;
+import org.apache.lucene.util.XQueryBuilder;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -43,20 +43,14 @@ import org.elasticsearch.common.unit.Fuzziness;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.query.support.QueryParsers;
-import static org.apache.lucene.analysis.synonym.SynonymGraphFilter.GRAPH_FLAG;
-import org.apache.lucene.analysis.CachingTokenFilter;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.synonym.GraphTokenStreamFiniteStrings;
-import org.apache.lucene.analysis.tokenattributes.FlagsAttribute;
-import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
-import org.apache.lucene.analysis.tokenattributes.PositionLengthAttribute;
-import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute;
-import org.apache.lucene.search.GraphQuery;
-import org.apache.lucene.util.XQueryBuilder;
+import org.apache.lucene.search.BoostQuery;
+
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.apache.lucene.analysis.synonym.SynonymGraphFilter.GRAPH_FLAG;
 
 public class MatchQuery {
 
@@ -446,6 +440,12 @@ public class MatchQuery {
             } else if (query instanceof TermQuery) {
                 prefixQuery.add(((TermQuery) query).getTerm());
                 return prefixQuery;
+            } else if (query instanceof BoostQuery) {
+                                BoostQuery bq = (BoostQuery) query;
+                                if (bq.getQuery() instanceof TermQuery) {
+                                       prefixQuery.add(((TermQuery) bq.getQuery()).getTerm());
+                                        return prefixQuery;
+                                    }
             }
             return query;
         }

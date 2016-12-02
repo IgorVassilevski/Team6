@@ -1,5 +1,5 @@
-projectKey=my:complexity
+projectKey=my:quality
 serverUrl=http://localhost:9000
-dashboardUrl=http://localhost:9000/dashboard/index/my:complexity
-ceTaskId=AViiQTLLN118Um8BLOCt
-ceTaskUrl=http://localhost:9000/api/ce/task?id=AViiQTLLN118Um8BLOCt
+dashboardUrl=http://localhost:9000/dashboard/index/my:quality
+ceTaskId=AVi9fXJ51_LHEDtX_tLV
+ceTaskUrl=http://localhost:9000/api/ce/task?id=AVi9fXJ51_LHEDtX_tLV

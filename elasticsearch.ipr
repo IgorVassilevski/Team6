@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <option name="DEFAULT_COMPILER" value="Javac"/>
+    <resourceExtensions>
+      <entry name=".+\.(properties|xml|html|dtd|tld)"/>
+      <entry name=".+\.(gif|png|jpeg|jpg)"/>
+    </resourceExtensions>
+    <wildcardResourcePatterns>
+      <entry name="!?*.java"/>
+      <entry name="!?*.groovy"/>
+    </wildcardResourcePatterns>
+    <annotationProcessing enabled="false" useClasspath="true"/>
+    <bytecodeTargetLevel target="1.8">
+      <module name="rest" target="1.7"/>
+      <module name="sniffer" target="1.7"/>
+      <module name="client-test" target="1.7"/>
+    </bytecodeTargetLevel>
+  </component>
+  <component name="CopyrightManager" default="">
+    <module2copyright/>
+  </component>
+  <component name="DependencyValidationManager">
+    <option name="SKIP_IMPORT_STATEMENTS" value="false"/>
+  </component>
+  <component name="Encoding" useUTFGuessing="true" native2AsciiForPropertiesFiles="false"/>
+  <component name="GradleUISettings">
+    <setting name="root"/>
+  </component>
+  <component name="GradleUISettings2">
+    <setting name="root"/>
+  </component>
+  <component name="IdProvider" IDEtalkID="11DA1DB66DD62DDA1ED602B7079FE97C"/>
+  <component name="JavadocGenerationManager">
+    <option name="OUTPUT_DIRECTORY"/>
+    <option name="OPTION_SCOPE" value="protected"/>
+    <option name="OPTION_HIERARCHY" value="true"/>
+    <option name="OPTION_NAVIGATOR" value="true"/>
+    <option name="OPTION_INDEX" value="true"/>
+    <option name="OPTION_SEPARATE_INDEX" value="true"/>
+    <option name="OPTION_DOCUMENT_TAG_USE" value="false"/>
+    <option name="OPTION_DOCUMENT_TAG_AUTHOR" value="false"/>
+    <option name="OPTION_DOCUMENT_TAG_VERSION" value="false"/>
+    <option name="OPTION_DOCUMENT_TAG_DEPRECATED" value="true"/>
+    <option name="OPTION_DEPRECATED_LIST" value="true"/>
+    <option name="OTHER_OPTIONS" value=""/>
+    <option name="HEAP_SIZE"/>
+    <option name="LOCALE"/>
+    <option name="OPEN_IN_BROWSER" value="true"/>
+  </component>
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/elasticsearch.iml" filepath="$PROJECT_DIR$/elasticsearch.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/benchmarks/benchmarks.iml" filepath="$PROJECT_DIR$/benchmarks/benchmarks.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/buildSrc/build-tools.iml" filepath="$PROJECT_DIR$/buildSrc/build-tools.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/client/client.iml" filepath="$PROJECT_DIR$/client/client.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/core/core.iml" filepath="$PROJECT_DIR$/core/core.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/distribution/distribution.iml" filepath="$PROJECT_DIR$/distribution/distribution.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/docs/docs.iml" filepath="$PROJECT_DIR$/docs/docs.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/modules.iml" filepath="$PROJECT_DIR$/modules/modules.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/plugins.iml" filepath="$PROJECT_DIR$/plugins/plugins.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/qa.iml" filepath="$PROJECT_DIR$/qa/qa.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/rest-api-spec/rest-api-spec.iml" filepath="$PROJECT_DIR$/rest-api-spec/rest-api-spec.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/test/elasticsearch-test.iml" filepath="$PROJECT_DIR$/test/elasticsearch-test.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/client/benchmark/benchmark.iml" filepath="$PROJECT_DIR$/client/benchmark/benchmark.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/client/client-benchmark-noop-api-plugin/client-benchmark-noop-api-plugin.iml" filepath="$PROJECT_DIR$/client/client-benchmark-noop-api-plugin/client-benchmark-noop-api-plugin.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/client/rest/rest.iml" filepath="$PROJECT_DIR$/client/rest/rest.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/client/sniffer/sniffer.iml" filepath="$PROJECT_DIR$/client/sniffer/sniffer.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/client/test/client-test.iml" filepath="$PROJECT_DIR$/client/test/client-test.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/client/transport/transport.iml" filepath="$PROJECT_DIR$/client/transport/transport.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/distribution/deb/deb.iml" filepath="$PROJECT_DIR$/distribution/deb/deb.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/distribution/integ-test-zip/integ-test-zip.iml" filepath="$PROJECT_DIR$/distribution/integ-test-zip/integ-test-zip.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/distribution/rpm/rpm.iml" filepath="$PROJECT_DIR$/distribution/rpm/rpm.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/distribution/tar/tar.iml" filepath="$PROJECT_DIR$/distribution/tar/tar.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/distribution/zip/zip.iml" filepath="$PROJECT_DIR$/distribution/zip/zip.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/aggs-matrix-stats/aggs-matrix-stats.iml" filepath="$PROJECT_DIR$/modules/aggs-matrix-stats/aggs-matrix-stats.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/ingest-common/ingest-common.iml" filepath="$PROJECT_DIR$/modules/ingest-common/ingest-common.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/lang-expression/lang-expression.iml" filepath="$PROJECT_DIR$/modules/lang-expression/lang-expression.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/lang-groovy/lang-groovy.iml" filepath="$PROJECT_DIR$/modules/lang-groovy/lang-groovy.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/lang-mustache/lang-mustache.iml" filepath="$PROJECT_DIR$/modules/lang-mustache/lang-mustache.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/lang-painless/lang-painless.iml" filepath="$PROJECT_DIR$/modules/lang-painless/lang-painless.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/percolator/percolator.iml" filepath="$PROJECT_DIR$/modules/percolator/percolator.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/reindex/reindex.iml" filepath="$PROJECT_DIR$/modules/reindex/reindex.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/transport-netty3/transport-netty3.iml" filepath="$PROJECT_DIR$/modules/transport-netty3/transport-netty3.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/modules/transport-netty4/transport-netty4.iml" filepath="$PROJECT_DIR$/modules/transport-netty4/transport-netty4.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/analysis-icu/analysis-icu.iml" filepath="$PROJECT_DIR$/plugins/analysis-icu/analysis-icu.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/analysis-kuromoji/analysis-kuromoji.iml" filepath="$PROJECT_DIR$/plugins/analysis-kuromoji/analysis-kuromoji.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/analysis-phonetic/analysis-phonetic.iml" filepath="$PROJECT_DIR$/plugins/analysis-phonetic/analysis-phonetic.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/analysis-smartcn/analysis-smartcn.iml" filepath="$PROJECT_DIR$/plugins/analysis-smartcn/analysis-smartcn.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/analysis-stempel/analysis-stempel.iml" filepath="$PROJECT_DIR$/plugins/analysis-stempel/analysis-stempel.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/discovery-azure-classic/discovery-azure-classic.iml" filepath="$PROJECT_DIR$/plugins/discovery-azure-classic/discovery-azure-classic.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/discovery-ec2/discovery-ec2.iml" filepath="$PROJECT_DIR$/plugins/discovery-ec2/discovery-ec2.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/discovery-gce/discovery-gce.iml" filepath="$PROJECT_DIR$/plugins/discovery-gce/discovery-gce.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/ingest-attachment/ingest-attachment.iml" filepath="$PROJECT_DIR$/plugins/ingest-attachment/ingest-attachment.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/ingest-geoip/ingest-geoip.iml" filepath="$PROJECT_DIR$/plugins/ingest-geoip/ingest-geoip.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/ingest-user-agent/ingest-user-agent.iml" filepath="$PROJECT_DIR$/plugins/ingest-user-agent/ingest-user-agent.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/jvm-example/jvm-example.iml" filepath="$PROJECT_DIR$/plugins/jvm-example/jvm-example.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/lang-javascript/lang-javascript.iml" filepath="$PROJECT_DIR$/plugins/lang-javascript/lang-javascript.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/lang-python/lang-python.iml" filepath="$PROJECT_DIR$/plugins/lang-python/lang-python.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/mapper-attachments/mapper-attachments.iml" filepath="$PROJECT_DIR$/plugins/mapper-attachments/mapper-attachments.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/mapper-murmur3/mapper-murmur3.iml" filepath="$PROJECT_DIR$/plugins/mapper-murmur3/mapper-murmur3.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/mapper-size/mapper-size.iml" filepath="$PROJECT_DIR$/plugins/mapper-size/mapper-size.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/repository-azure/repository-azure.iml" filepath="$PROJECT_DIR$/plugins/repository-azure/repository-azure.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/repository-gcs/repository-gcs.iml" filepath="$PROJECT_DIR$/plugins/repository-gcs/repository-gcs.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/repository-hdfs/repository-hdfs.iml" filepath="$PROJECT_DIR$/plugins/repository-hdfs/repository-hdfs.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/repository-s3/repository-s3.iml" filepath="$PROJECT_DIR$/plugins/repository-s3/repository-s3.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/plugins/store-smb/store-smb.iml" filepath="$PROJECT_DIR$/plugins/store-smb/store-smb.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/backwards-5.0/backwards-5.0.iml" filepath="$PROJECT_DIR$/qa/backwards-5.0/backwards-5.0.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/evil-tests/evil-tests.iml" filepath="$PROJECT_DIR$/qa/evil-tests/evil-tests.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/smoke-test-client/smoke-test-client.iml" filepath="$PROJECT_DIR$/qa/smoke-test-client/smoke-test-client.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/smoke-test-http/smoke-test-http.iml" filepath="$PROJECT_DIR$/qa/smoke-test-http/smoke-test-http.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/smoke-test-ingest-disabled/smoke-test-ingest-disabled.iml" filepath="$PROJECT_DIR$/qa/smoke-test-ingest-disabled/smoke-test-ingest-disabled.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/smoke-test-ingest-with-all-dependencies/smoke-test-ingest-with-all-dependencies.iml" filepath="$PROJECT_DIR$/qa/smoke-test-ingest-with-all-dependencies/smoke-test-ingest-with-all-dependencies.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/smoke-test-multinode/smoke-test-multinode.iml" filepath="$PROJECT_DIR$/qa/smoke-test-multinode/smoke-test-multinode.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/smoke-test-plugins/smoke-test-plugins.iml" filepath="$PROJECT_DIR$/qa/smoke-test-plugins/smoke-test-plugins.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/smoke-test-reindex-with-painless/smoke-test-reindex-with-painless.iml" filepath="$PROJECT_DIR$/qa/smoke-test-reindex-with-painless/smoke-test-reindex-with-painless.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/qa/vagrant/vagrant.iml" filepath="$PROJECT_DIR$/qa/vagrant/vagrant.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/test/fixtures/fixtures.iml" filepath="$PROJECT_DIR$/test/fixtures/fixtures.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/test/framework/framework.iml" filepath="$PROJECT_DIR$/test/framework/framework.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/test/logger-usage/logger-usage.iml" filepath="$PROJECT_DIR$/test/logger-usage/logger-usage.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/test/fixtures/example-fixture/example-fixture.iml" filepath="$PROJECT_DIR$/test/fixtures/example-fixture/example-fixture.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/test/fixtures/hdfs-fixture/hdfs-fixture.iml" filepath="$PROJECT_DIR$/test/fixtures/hdfs-fixture/hdfs-fixture.iml"/>
+    </modules>
+  </component>
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" assert-keyword="true" jdk-15="true" project-jdk-type="JavaSDK" assert-jdk-15="true" project-jdk-name="1.8">
+    <output url="file://$PROJECT_DIR$/out"/>
+  </component>
+  <component name="SvnBranchConfigurationManager">
+    <option name="mySupportsUserInfoFilter" value="true"/>
+  </component>
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git"/>
+  </component>
+  <component name="masterDetails">
+    <states>
+      <state key="ArtifactsStructureConfigurable.UI">
+        <UIState>
+          <splitter-proportions>
+            <SplitterProportionsDataImpl/>
+          </splitter-proportions>
+          <settings/>
+        </UIState>
+      </state>
+      <state key="Copyright.UI">
+        <UIState>
+          <splitter-proportions>
+            <SplitterProportionsDataImpl/>
+          </splitter-proportions>
+        </UIState>
+      </state>
+      <state key="ProjectJDKs.UI">
+        <UIState>
+          <splitter-proportions>
+            <SplitterProportionsDataImpl>
+              <option name="proportions">
+                <list>
+                  <option value="0.2"/>
+                </list>
+              </option>
+            </SplitterProportionsDataImpl>
+          </splitter-proportions>
+          <last-edited>1.6</last-edited>
+        </UIState>
+      </state>
+      <state key="ScopeChooserConfigurable.UI">
+        <UIState>
+          <splitter-proportions>
+            <SplitterProportionsDataImpl/>
+          </splitter-proportions>
+          <settings/>
+        </UIState>
+      </state>
+    </states>
+  </component>
+</project>

@@ -21,7 +21,7 @@ package org.elasticsearch.test;
 import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.SeedUtils;
 import com.carrotsearch.randomizedtesting.SysGlobals;
-import com.carrotsearch.randomizedtesting.generators.RandomInts;
+import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 import com.carrotsearch.randomizedtesting.generators.RandomStrings;
 import org.apache.logging.log4j.Logger;
@@ -83,6 +83,7 @@ import org.elasticsearch.indices.fielddata.cache.IndicesFieldDataCache;
 import org.elasticsearch.indices.recovery.RecoverySettings;
 import org.elasticsearch.node.MockNode;
 import org.elasticsearch.node.Node;
+import org.elasticsearch.node.NodeValidationException;
 import org.elasticsearch.node.service.NodeService;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.script.ScriptService;
@@ -249,7 +250,7 @@ public final class InternalTestCluster extends TestCluster {
 
         boolean useDedicatedMasterNodes = randomlyAddDedicatedMasters ? random.nextBoolean() : false;
 
-        this.numSharedDataNodes = RandomInts.randomIntBetween(random, minNumDataNodes, maxNumDataNodes);
+        this.numSharedDataNodes = RandomNumbers.randomIntBetween(random, minNumDataNodes, maxNumDataNodes);
         assert this.numSharedDataNodes >= 0;
 
         if (numSharedDataNodes == 0) {
@@ -267,7 +268,7 @@ public final class InternalTestCluster extends TestCluster {
                 this.numSharedDedicatedMasterNodes = 0;
             }
             if (numClientNodes < 0) {
-                this.numSharedCoordOnlyNodes = RandomInts.randomIntBetween(random, DEFAULT_MIN_NUM_CLIENT_NODES, DEFAULT_MAX_NUM_CLIENT_NODES);
+                this.numSharedCoordOnlyNodes = RandomNumbers.randomIntBetween(random, DEFAULT_MIN_NUM_CLIENT_NODES, DEFAULT_MAX_NUM_CLIENT_NODES);
             } else {
                 this.numSharedCoordOnlyNodes = numClientNodes;
             }
@@ -321,14 +322,14 @@ public final class InternalTestCluster extends TestCluster {
         // Some tests make use of scripting quite a bit, so increase the limit for integration tests
         builder.put(ScriptService.SCRIPT_MAX_COMPILATIONS_PER_MINUTE.getKey(), 1000);
         if (TEST_NIGHTLY) {
-            builder.put(ThrottlingAllocationDecider.CLUSTER_ROUTING_ALLOCATION_NODE_CONCURRENT_INCOMING_RECOVERIES_SETTING.getKey(), RandomInts.randomIntBetween(random, 5, 10));
-            builder.put(ThrottlingAllocationDecider.CLUSTER_ROUTING_ALLOCATION_NODE_CONCURRENT_OUTGOING_RECOVERIES_SETTING.getKey(), RandomInts.randomIntBetween(random, 5, 10));
+            builder.put(ThrottlingAllocationDecider.CLUSTER_ROUTING_ALLOCATION_NODE_CONCURRENT_INCOMING_RECOVERIES_SETTING.getKey(), RandomNumbers.randomIntBetween(random, 5, 10));
+            builder.put(ThrottlingAllocationDecider.CLUSTER_ROUTING_ALLOCATION_NODE_CONCURRENT_OUTGOING_RECOVERIES_SETTING.getKey(), RandomNumbers.randomIntBetween(random, 5, 10));
         } else if (random.nextInt(100) <= 90) {
-            builder.put(ThrottlingAllocationDecider.CLUSTER_ROUTING_ALLOCATION_NODE_CONCURRENT_INCOMING_RECOVERIES_SETTING.getKey(), RandomInts.randomIntBetween(random, 2, 5));
-            builder.put(ThrottlingAllocationDecider.CLUSTER_ROUTING_ALLOCATION_NODE_CONCURRENT_OUTGOING_RECOVERIES_SETTING.getKey(), RandomInts.randomIntBetween(random, 2, 5));
+            builder.put(ThrottlingAllocationDecider.CLUSTER_ROUTING_ALLOCATION_NODE_CONCURRENT_INCOMING_RECOVERIES_SETTING.getKey(), RandomNumbers.randomIntBetween(random, 2, 5));
+            builder.put(ThrottlingAllocationDecider.CLUSTER_ROUTING_ALLOCATION_NODE_CONCURRENT_OUTGOING_RECOVERIES_SETTING.getKey(), RandomNumbers.randomIntBetween(random, 2, 5));
         }
         // always reduce this - it can make tests really slow
-        builder.put(RecoverySettings.INDICES_RECOVERY_RETRY_DELAY_STATE_SYNC_SETTING.getKey(), TimeValue.timeValueMillis(RandomInts.randomIntBetween(random, 20, 50)));
+        builder.put(RecoverySettings.INDICES_RECOVERY_RETRY_DELAY_STATE_SYNC_SETTING.getKey(), TimeValue.timeValueMillis(RandomNumbers.randomIntBetween(random, 20, 50)));
         defaultSettings = builder.build();
         executor = EsExecutors.newScaling("test runner", 0, Integer.MAX_VALUE, 0, TimeUnit.SECONDS, EsExecutors.daemonThreadFactory("test_" + clusterName), new ThreadContext(Settings.EMPTY));
     }
@@ -396,7 +397,7 @@ public final class InternalTestCluster extends TestCluster {
         }
 
         if (random.nextBoolean()) {
-            builder.put(MappingUpdatedAction.INDICES_MAPPING_DYNAMIC_TIMEOUT_SETTING.getKey(), new TimeValue(RandomInts.randomIntBetween(random, 10, 30), TimeUnit.SECONDS));
+            builder.put(MappingUpdatedAction.INDICES_MAPPING_DYNAMIC_TIMEOUT_SETTING.getKey(), new TimeValue(RandomNumbers.randomIntBetween(random, 10, 30), TimeUnit.SECONDS));
         }
 
         if (random.nextInt(10) == 0) {
@@ -406,9 +407,9 @@ public final class InternalTestCluster extends TestCluster {
 
         if (random.nextBoolean()) {
             if (random.nextInt(10) == 0) { // do something crazy slow here
-                builder.put(IndexStoreConfig.INDICES_STORE_THROTTLE_MAX_BYTES_PER_SEC_SETTING.getKey(), new ByteSizeValue(RandomInts.randomIntBetween(random, 1, 10), ByteSizeUnit.MB));
+                builder.put(IndexStoreConfig.INDICES_STORE_THROTTLE_MAX_BYTES_PER_SEC_SETTING.getKey(), new ByteSizeValue(RandomNumbers.randomIntBetween(random, 1, 10), ByteSizeUnit.MB));
             } else {
-                builder.put(IndexStoreConfig.INDICES_STORE_THROTTLE_MAX_BYTES_PER_SEC_SETTING.getKey(), new ByteSizeValue(RandomInts.randomIntBetween(random, 10, 200), ByteSizeUnit.MB));
+                builder.put(IndexStoreConfig.INDICES_STORE_THROTTLE_MAX_BYTES_PER_SEC_SETTING.getKey(), new ByteSizeValue(RandomNumbers.randomIntBetween(random, 10, 200), ByteSizeUnit.MB));
             }
         }
         if (random.nextBoolean()) {
@@ -417,21 +418,21 @@ public final class InternalTestCluster extends TestCluster {
 
         if (random.nextBoolean()) {
             if (random.nextInt(10) == 0) { // do something crazy slow here
-                builder.put(RecoverySettings.INDICES_RECOVERY_MAX_BYTES_PER_SEC_SETTING.getKey(), new ByteSizeValue(RandomInts.randomIntBetween(random, 1, 10), ByteSizeUnit.MB));
+                builder.put(RecoverySettings.INDICES_RECOVERY_MAX_BYTES_PER_SEC_SETTING.getKey(), new ByteSizeValue(RandomNumbers.randomIntBetween(random, 1, 10), ByteSizeUnit.MB));
             } else {
-                builder.put(RecoverySettings.INDICES_RECOVERY_MAX_BYTES_PER_SEC_SETTING.getKey(), new ByteSizeValue(RandomInts.randomIntBetween(random, 10, 200), ByteSizeUnit.MB));
+                builder.put(RecoverySettings.INDICES_RECOVERY_MAX_BYTES_PER_SEC_SETTING.getKey(), new ByteSizeValue(RandomNumbers.randomIntBetween(random, 10, 200), ByteSizeUnit.MB));
             }
         }
 
         if (random.nextBoolean()) {
-            builder.put(TcpTransport.PING_SCHEDULE.getKey(), RandomInts.randomIntBetween(random, 100, 2000) + "ms");
+            builder.put(TcpTransport.PING_SCHEDULE.getKey(), RandomNumbers.randomIntBetween(random, 100, 2000) + "ms");
         }
 
         if (random.nextBoolean()) {
-            builder.put(ScriptService.SCRIPT_CACHE_SIZE_SETTING.getKey(), RandomInts.randomIntBetween(random, 0, 2000));
+            builder.put(ScriptService.SCRIPT_CACHE_SIZE_SETTING.getKey(), RandomNumbers.randomIntBetween(random, 0, 2000));
         }
         if (random.nextBoolean()) {
-            builder.put(ScriptService.SCRIPT_CACHE_EXPIRE_SETTING.getKey(), TimeValue.timeValueMillis(RandomInts.randomIntBetween(random, 750, 10000000)).getStringRep());
+            builder.put(ScriptService.SCRIPT_CACHE_EXPIRE_SETTING.getKey(), TimeValue.timeValueMillis(RandomNumbers.randomIntBetween(random, 750, 10000000)).getStringRep());
         }
 
         return builder.build();
@@ -453,7 +454,7 @@ public final class InternalTestCluster extends TestCluster {
         }
     }
 
-    private synchronized NodeAndClient getOrBuildRandomNode() {
+    private synchronized NodeAndClient getOrBuildRandomNode() throws NodeValidationException {
         ensureOpen();
         NodeAndClient randomNodeAndClient = getRandomNodeAndClient();
         if (randomNodeAndClient != null) {
@@ -616,7 +617,12 @@ public final class InternalTestCluster extends TestCluster {
     public synchronized Client client() {
         ensureOpen();
         /* Randomly return a client to one of the nodes in the cluster */
-        return getOrBuildRandomNode().client(random);
+        try {
+            return getOrBuildRandomNode().client(random);
+        } catch (NodeValidationException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     /**
@@ -659,7 +665,7 @@ public final class InternalTestCluster extends TestCluster {
     /**
      * Returns a client to a coordinating only node
      */
-    public synchronized Client coordOnlyNodeClient() {
+    public synchronized Client coordOnlyNodeClient() throws NodeValidationException {
         ensureOpen();
         NodeAndClient randomNodeAndClient = getRandomNodeAndClient(new NoDataNoMasterNodePredicate());
         if (randomNodeAndClient != null) {
@@ -671,7 +677,7 @@ public final class InternalTestCluster extends TestCluster {
         return getRandomNodeAndClient(new NoDataNoMasterNodePredicate()).client(random);
     }
 
-    public synchronized String startCoordinatingOnlyNode(Settings settings) {
+    public synchronized String startCoordinatingOnlyNode(Settings settings) throws NodeValidationException {
         ensureOpen(); // currently unused
         Builder builder = Settings.builder().put(settings).put(Node.NODE_MASTER_SETTING.getKey(), false)
             .put(Node.NODE_DATA_SETTING.getKey(), false).put(Node.NODE_INGEST_SETTING.getKey(), false);
@@ -688,7 +694,12 @@ public final class InternalTestCluster extends TestCluster {
     public synchronized Client transportClient() {
         ensureOpen();
         // randomly return a transport client going to one of the nodes in the cluster
-        return getOrBuildRandomNode().transportClient();
+        try {
+            return getOrBuildRandomNode().transportClient();
+        } catch (NodeValidationException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     /**
@@ -824,7 +835,7 @@ public final class InternalTestCluster extends TestCluster {
             }
         }
 
-        void startNode() {
+        void startNode() throws NodeValidationException {
             node.start();
         }
 
@@ -916,12 +927,16 @@ public final class InternalTestCluster extends TestCluster {
     }
 
     @Override
-    public synchronized void beforeTest(Random random, double transportClientRatio) throws IOException, InterruptedException {
+    public synchronized void beforeTest(Random random, double transportClientRatio) throws IOException, InterruptedException, NodeValidationException {
         super.beforeTest(random, transportClientRatio);
-        reset(true);
+        try {
+            reset(true);
+        } catch (NodeValidationException e) {
+            e.printStackTrace();
+        }
     }
 
-    private synchronized void reset(boolean wipeData) throws IOException {
+    private synchronized void reset(boolean wipeData) throws IOException, NodeValidationException {
         // clear all rules for mock transport services
         for (NodeAndClient nodeAndClient : nodes.values()) {
             TransportService transportService = nodeAndClient.node.injector().getInstance(TransportService.class);
@@ -1484,21 +1499,21 @@ public final class InternalTestCluster extends TestCluster {
     /**
      * Starts a node with default settings and returns it's name.
      */
-    public synchronized String startNode() {
+    public synchronized String startNode() throws NodeValidationException {
         return startNode(Settings.EMPTY);
     }
 
     /**
      * Starts a node with the given settings builder and returns it's name.
      */
-    public synchronized String startNode(Settings.Builder settings) {
+    public synchronized String startNode(Settings.Builder settings) throws NodeValidationException {
         return startNode(settings.build());
     }
 
     /**
      * Starts a node with the given settings and returns it's name.
      */
-    public synchronized String startNode(Settings settings) {
+    public synchronized String startNode(Settings settings) throws NodeValidationException {
         NodeAndClient buildNode = buildNode(settings);
         buildNode.startNode();
         publishNode(buildNode);
@@ -1532,7 +1547,7 @@ public final class InternalTestCluster extends TestCluster {
         return startNodeAsync(settings1, Version.CURRENT);
     }
 
-    public synchronized String startMasterOnlyNode(Settings settings) {
+    public synchronized String startMasterOnlyNode(Settings settings) throws NodeValidationException {
         Settings settings1 = Settings.builder().put(settings).put(Node.NODE_MASTER_SETTING.getKey(), true).put(Node.NODE_DATA_SETTING.getKey(), false).build();
         return startNode(settings1);
     }
@@ -1546,7 +1561,7 @@ public final class InternalTestCluster extends TestCluster {
         return startNodeAsync(settings1, Version.CURRENT);
     }
 
-    public synchronized String startDataOnlyNode(Settings settings) {
+    public synchronized String startDataOnlyNode(Settings settings) throws NodeValidationException {
         Settings settings1 = Settings.builder().put(settings).put(Node.NODE_MASTER_SETTING.getKey(), false).put(Node.NODE_DATA_SETTING.getKey(), true).build();
         return startNode(settings1);
     }
@@ -1634,7 +1649,7 @@ public final class InternalTestCluster extends TestCluster {
         applyDisruptionSchemeToNode(nodeAndClient);
     }
 
-    public void closeNonSharedNodes(boolean wipeData) throws IOException {
+    public void closeNonSharedNodes(boolean wipeData) throws IOException, NodeValidationException {
         reset(wipeData);
     }
 

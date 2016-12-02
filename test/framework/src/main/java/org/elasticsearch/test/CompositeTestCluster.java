@@ -27,6 +27,7 @@ import org.elasticsearch.client.FilterClient;
 import org.elasticsearch.common.breaker.CircuitBreaker;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
+import org.elasticsearch.node.NodeValidationException;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -67,7 +68,7 @@ public class CompositeTestCluster extends TestCluster {
     }
 
     @Override
-    public synchronized void beforeTest(Random random, double transportClientRatio) throws IOException, InterruptedException {
+    public synchronized void beforeTest(Random random, double transportClientRatio) throws IOException, InterruptedException, NodeValidationException {
         super.beforeTest(random, transportClientRatio);
         cluster.beforeTest(random, transportClientRatio);
         Settings defaultSettings = cluster.getDefaultSettings();
@@ -96,7 +97,7 @@ public class CompositeTestCluster extends TestCluster {
      * share the same data directory. This method will return <tt>true</tt> iff a node got upgraded otherwise if no
      * external node is running it returns <tt>false</tt>
      */
-    public synchronized boolean upgradeOneNode() throws InterruptedException, IOException {
+    public synchronized boolean upgradeOneNode() throws InterruptedException, IOException, NodeValidationException {
       return upgradeOneNode(Settings.EMPTY);
     }
 
@@ -105,7 +106,7 @@ public class CompositeTestCluster extends TestCluster {
      * All nodes are shut down before the first upgrade happens.
      * @return <code>true</code> iff at least one node as upgraded.
      */
-    public synchronized boolean upgradeAllNodes() throws InterruptedException, IOException {
+    public synchronized boolean upgradeAllNodes() throws InterruptedException, IOException, NodeValidationException {
         return upgradeAllNodes(Settings.EMPTY);
     }
 
@@ -116,7 +117,7 @@ public class CompositeTestCluster extends TestCluster {
      * @return <code>true</code> iff at least one node as upgraded.
      * @param nodeSettings settings for the upgrade nodes
      */
-    public synchronized boolean upgradeAllNodes(Settings nodeSettings) throws InterruptedException, IOException {
+    public synchronized boolean upgradeAllNodes(Settings nodeSettings) throws InterruptedException, IOException, NodeValidationException {
         boolean upgradedOneNode = false;
         while(upgradeOneNode(nodeSettings)) {
             upgradedOneNode = true;
@@ -130,7 +131,7 @@ public class CompositeTestCluster extends TestCluster {
      * share the same data directory. This method will return <tt>true</tt> iff a node got upgraded otherwise if no
      * external node is running it returns <tt>false</tt>
      */
-    public synchronized boolean upgradeOneNode(Settings nodeSettings) throws InterruptedException, IOException {
+    public synchronized boolean upgradeOneNode(Settings nodeSettings) throws InterruptedException, IOException, NodeValidationException {
         Collection<ExternalNode> runningNodes = runningNodes();
         if (!runningNodes.isEmpty()) {
             final Client existingClient = cluster.client();
@@ -180,7 +181,7 @@ public class CompositeTestCluster extends TestCluster {
     /**
      * Starts a current version data node
      */
-    public void startNewNode() {
+    public void startNewNode() throws NodeValidationException {
         cluster.startNode();
     }
 

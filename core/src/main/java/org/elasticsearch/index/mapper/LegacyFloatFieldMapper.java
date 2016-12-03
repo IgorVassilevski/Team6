@@ -266,6 +266,10 @@ public class LegacyFloatFieldMapper extends LegacyNumberFieldMapper {
             }
         }
 
+        checkingFieldTypeOptionsAndValues(context, fields, value, boost);
+    }
+
+    private void checkingFieldTypeOptionsAndValues(ParseContext context, List<Field> fields, float value, float boost) {
         if (fieldType().indexOptions() != IndexOptions.NONE || fieldType().stored()) {
             CustomFloatNumericField field = new CustomFloatNumericField(value, fieldType());
             if (boost != 1f && Version.indexCreated(context.indexSettings()).before(Version.V_5_0_0_alpha1)) {

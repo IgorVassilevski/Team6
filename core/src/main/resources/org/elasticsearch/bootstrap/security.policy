@@ -26,6 +26,7 @@
 
 grant codeBase "${codebase.securesm-1.1.jar}" {
   permission java.security.AllPermission;
+ 
 };
 
 //// Very special jar permissions:
@@ -69,6 +70,8 @@ grant {
   permission java.util.PropertyPermission "user.timezone", "write";
   permission java.util.PropertyPermission "lucene.cms.override_core_count", "write";
   permission java.util.PropertyPermission "lucene.cms.override_spins", "write";
+  // permission java.util.PropertyPermission "config.properties", "read,write";
+  permission java.io.FilePermission "config.properties", "read,write";
   // messiness in LuceneTestCase: do the above, or clean this up, or simply allow to fail if its denied
   permission java.util.PropertyPermission "solr.solr.home", "write";
   permission java.util.PropertyPermission "solr.data.dir", "write";

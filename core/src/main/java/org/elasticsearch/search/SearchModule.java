@@ -18,8 +18,9 @@
  */
 
 package org.elasticsearch.search;
-import org.elasticsearch.search.fetch.subphase.highlight.UnifiedHighlighter;
+
 import org.apache.lucene.search.BooleanQuery;
+import org.elasticsearch.Configurator;
 import org.elasticsearch.common.NamedRegistry;
 import org.elasticsearch.common.geo.ShapesAvailability;
 import org.elasticsearch.common.geo.builders.ShapeBuilders;
@@ -352,8 +353,13 @@ public class SearchModule extends AbstractModule {
                 ScriptedMetricAggregationBuilder::parse).addResultReader(InternalScriptedMetric::new));
         registerAggregation(new AggregationSpec(ChildrenAggregationBuilder.NAME, ChildrenAggregationBuilder::new,
                 ChildrenAggregationBuilder::parse).addResultReader(InternalChildren::new));
+
+        if (Configurator.getInstance().getHeatMapValue()) {
         registerAggregation(new AggregationSpec(GeoHeatmapAggregationBuilder.NAME, GeoHeatmapAggregationBuilder::new,
-               GeoHeatmapAggregationBuilder::parse).addResultReader(InternalGeoHeatmap::new));
+                GeoHeatmapAggregationBuilder::parse).addResultReader(InternalGeoHeatmap::new));
+
+
+    }
 
         registerFromPlugin(plugins, SearchPlugin::getAggregations, this::registerAggregation);
     }
@@ -524,12 +530,13 @@ public class SearchModule extends AbstractModule {
         highlighters.register("fvh",  new FastVectorHighlighter(settings));
         highlighters.register("plain", new PlainHighlighter());
         highlighters.register("postings", new PostingsHighlighter());
-        UnifiedHighlighter uh = new UnifiedHighlighter();
-                highlighters.register("unified", uh);
-               highlighters.register("unified_plain", uh);
-                highlighters.register("unified_postings", uh);
-                highlighters.register("unified_fvh", uh);
-
+       if(Configurator.getInstance().getUhValue()) {
+           UnifiedHighlighter uh = new UnifiedHighlighter();
+           highlighters.register("unified", uh);
+           highlighters.register("unified_plain", uh);
+           highlighters.register("unified_postings", uh);
+           highlighters.register("unified_fvh", uh);
+       }
         highlighters.extractAndRegister(plugins, SearchPlugin::getHighlighters);
 
         return unmodifiableMap(highlighters.getRegistry());

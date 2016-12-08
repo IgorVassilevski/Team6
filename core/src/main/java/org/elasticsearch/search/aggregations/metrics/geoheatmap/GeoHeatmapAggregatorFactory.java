@@ -19,15 +19,11 @@
 
 package org.elasticsearch.search.aggregations.metrics.geoheatmap;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.lucene.spatial.prefix.PrefixTreeStrategy;
 import org.elasticsearch.common.geo.SpatialStrategy;
-import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.GeoShapeFieldMapper;
 import org.elasticsearch.index.mapper.GeoShapeFieldMapper.GeoShapeFieldType;
+import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.search.aggregations.AggregationInitializationException;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
@@ -36,6 +32,10 @@ import org.elasticsearch.search.aggregations.InternalAggregation.Type;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.locationtech.spatial4j.shape.Shape;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /**
  */

@@ -27,6 +27,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.support.XContentMapValues;
 import org.elasticsearch.index.analysis.NamedAnalyzer;
+import org.elasticsearch.index.conflictsDescription;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.plain.PagedBytesIndexFieldData;
 
@@ -262,20 +263,16 @@ public class TextFieldMapper extends FieldMapper {
             TextFieldType otherType = (TextFieldType) other;
             if (strict) {
                 if (fielddata() != otherType.fielddata()) {
-                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update [fielddata] "
-                            + "across all types.");
+                    conflicts.add(String.format(conflictsDescription.fleiddate,name()));
                 }
                 if (fielddataMinFrequency() != otherType.fielddataMinFrequency()) {
-                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update "
-                            + "[fielddata_frequency_filter.min] across all types.");
+                    conflicts.add(String.format(conflictsDescription.fielddataMinFrequency,name()));
                 }
                 if (fielddataMaxFrequency() != otherType.fielddataMaxFrequency()) {
-                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update "
-                            + "[fielddata_frequency_filter.max] across all types.");
+                    conflicts.add(String.format(conflictsDescription.fielddataMaxFrequency,name()));
                 }
                 if (fielddataMinSegmentSize() != otherType.fielddataMinSegmentSize()) {
-                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update "
-                            + "[fielddata_frequency_filter.min_segment_size] across all types.");
+                    conflicts.add(String.format(conflictsDescription.fielddataMinSegmentSize,name()));
                 }
             }
         }

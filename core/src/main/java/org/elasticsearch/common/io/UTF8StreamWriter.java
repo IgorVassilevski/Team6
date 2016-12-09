@@ -145,42 +145,14 @@ public final class UTF8StreamWriter extends Writer {
             }
         } else if ((c & 0xff200000) == 0) { // 4 bytes.
             _bytes[_index] = (byte) (0xf0 | (c >> 18));
-            if (++_index >= _bytes.length) {
-                flushBuffer();
-            }
-            _bytes[_index] = (byte) (0x80 | ((c >> 12) & 0x3f));
-            if (++_index >= _bytes.length) {
-                flushBuffer();
-            }
-            _bytes[_index] = (byte) (0x80 | ((c >> 6) & 0x3f));
-            if (++_index >= _bytes.length) {
-                flushBuffer();
-            }
-            _bytes[_index] = (byte) (0x80 | (c & 0x3f));
-            if (++_index >= _bytes.length) {
-                flushBuffer();
-            }
+            checkIndex(c);
         } else if ((c & 0xf4000000) == 0) { // 5 bytes.
             _bytes[_index] = (byte) (0xf8 | (c >> 24));
             if (++_index >= _bytes.length) {
                 flushBuffer();
             }
             _bytes[_index] = (byte) (0x80 | ((c >> 18) & 0x3f));
-            if (++_index >= _bytes.length) {
-                flushBuffer();
-            }
-            _bytes[_index] = (byte) (0x80 | ((c >> 12) & 0x3f));
-            if (++_index >= _bytes.length) {
-                flushBuffer();
-            }
-            _bytes[_index] = (byte) (0x80 | ((c >> 6) & 0x3f));
-            if (++_index >= _bytes.length) {
-                flushBuffer();
-            }
-            _bytes[_index] = (byte) (0x80 | (c & 0x3f));
-            if (++_index >= _bytes.length) {
-                flushBuffer();
-            }
+            checkIndex(c);
         } else if ((c & 0x80000000) == 0) { // 6 bytes.
             _bytes[_index] = (byte) (0xfc | (c >> 30));
             if (++_index >= _bytes.length) {
@@ -212,6 +184,24 @@ public final class UTF8StreamWriter extends Writer {
         }
     }
 
+    private void checkIndex(int c) throws IOException {
+        if (++_index >= _bytes.length) {
+            flushBuffer();
+        }
+        _bytes[_index] = (byte) (0x80 | ((c >> 12) & 0x3f));
+        if (++_index >= _bytes.length) {
+            flushBuffer();
+        }
+        _bytes[_index] = (byte) (0x80 | ((c >> 6) & 0x3f));
+        if (++_index >= _bytes.length) {
+            flushBuffer();
+        }
+        _bytes[_index] = (byte) (0x80 | (c & 0x3f));
+        if (++_index >= _bytes.length) {
+            flushBuffer();
+        }
+    }
+
     /**
      * Writes a portion of an array of characters.
      *
@@ -225,14 +215,18 @@ public final class UTF8StreamWriter extends Writer {
         final int off_plus_len = off + len;
         for (int i = off; i < off_plus_len; ) {
             char c = cbuf[i++];
-            if (c < 0x80) {
-                _bytes[_index] = (byte) c;
-                if (++_index >= _bytes.length) {
-                    flushBuffer();
-                }
-            } else {
-                write(c);
+            ckeckIndexLength(c);
+        }
+    }
+
+    private void ckeckIndexLength(char c) throws IOException {
+        if (c < 0x80) {
+            _bytes[_index] = (byte) c;
+            if (++_index >= _bytes.length) {
+                flushBuffer();
             }
+        } else {
+            write(c);
         }
     }
 
@@ -249,14 +243,7 @@ public final class UTF8StreamWriter extends Writer {
         final int off_plus_len = off + len;
         for (int i = off; i < off_plus_len; ) {
             char c = str.charAt(i++);
-            if (c < 0x80) {
-                _bytes[_index] = (byte) c;
-                if (++_index >= _bytes.length) {
-                    flushBuffer();
-                }
-            } else {
-                write(c);
-            }
+            ckeckIndexLength(c);
         }
     }
 
@@ -270,14 +257,7 @@ public final class UTF8StreamWriter extends Writer {
         final int length = csq.length();
         for (int i = 0; i < length; ) {
             char c = csq.charAt(i++);
-            if (c < 0x80) {
-                _bytes[_index] = (byte) c;
-                if (++_index >= _bytes.length) {
-                    flushBuffer();
-                }
-            } else {
-                write(c);
-            }
+            ckeckIndexLength(c);
         }
     }
 

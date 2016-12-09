@@ -260,6 +260,10 @@ public class LegacyLongFieldMapper extends LegacyNumberFieldMapper {
                 }
             }
         }
+        checkingFieldTypeOptionsAndValues(context, fields, value, boost);
+    }
+
+    private void checkingFieldTypeOptionsAndValues(ParseContext context, List<Field> fields, long value, float boost) {
         if (fieldType().indexOptions() != IndexOptions.NONE || fieldType().stored()) {
             CustomLongNumericField field = new CustomLongNumericField(value, fieldType());
             if (boost != 1f && Version.indexCreated(context.indexSettings()).before(Version.V_5_0_0_alpha1)) {

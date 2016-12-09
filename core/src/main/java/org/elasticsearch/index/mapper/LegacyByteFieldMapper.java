@@ -270,6 +270,10 @@ public class LegacyByteFieldMapper extends LegacyNumberFieldMapper {
                 }
             }
         }
+        checkingFieldTypeOptionsAndValues(context, fields, value, boost);
+    }
+
+    private void checkingFieldTypeOptionsAndValues(ParseContext context, List<Field> fields, byte value, float boost) {
         if (fieldType().indexOptions() != IndexOptions.NONE || fieldType().stored()) {
             CustomByteNumericField field = new CustomByteNumericField(value, fieldType());
             if (boost != 1f && Version.indexCreated(context.indexSettings()).before(Version.V_5_0_0_alpha1)) {

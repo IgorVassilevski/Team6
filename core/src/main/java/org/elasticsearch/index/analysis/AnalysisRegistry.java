@@ -20,6 +20,7 @@ package org.elasticsearch.index.analysis;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.util.IOUtils;
+import org.elasticsearch.Configurator;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
@@ -154,7 +155,9 @@ public final class AnalysisRegistry implements Closeable {
          * hide internal data-structures as much as possible.
          */
         tokenFilters.put("synonym", requriesAnalysisSettings((is, env, name, settings) -> new SynonymTokenFilterFactory(is, env, this, name, settings)));
-        tokenFilters.put("synonym_graph", requriesAnalysisSettings((is, env, name, settings) -> new SynonymGraphFilterFactory(is, env, this, name, settings)));
+       if(Configurator.getInstance().getGraphValue()) {
+           tokenFilters.put("synonym_graph", requriesAnalysisSettings((is, env, name, settings) -> new SynonymGraphFilterFactory(is, env, this, name, settings)));
+       }
         final Map<String, TokenFilterFactory> tokenFilterFactories = buildMapping(false, "tokenfilter", indexSettings, tokenFiltersSettings, Collections.unmodifiableMap(tokenFilters), prebuiltAnalysis.tokenFilterFactories);
         final Map<String, AnalyzerProvider<?>> analyzierFactories = buildMapping(true, "analyzer", indexSettings, analyzersSettings,
                 analyzers, prebuiltAnalysis.analyzerProviderFactories);

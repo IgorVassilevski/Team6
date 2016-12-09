@@ -27,6 +27,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.Configurator;
 
 import java.io.IOException;
 
@@ -100,8 +101,11 @@ public class MainResponse extends ActionResponse implements ToXContent {
             .field("build_date", build.date())
             .field("build_snapshot", build.isSnapshot())
             .field("lucene_version", version.luceneVersion.toString())
+            .field("Heat Map", Configurator.getInstance().getHeatMapValue())
+            .field("Synonym Graph", Configurator.getInstance().getGraphValue())
+            .field("Unified Highlighter", Configurator.getInstance().getUhValue())
             .endObject();
-        builder.field("tagline", "You Know, for Search");
+        builder.field("Team6", "You Know, The BEST");
         builder.endObject();
         return builder;
     }

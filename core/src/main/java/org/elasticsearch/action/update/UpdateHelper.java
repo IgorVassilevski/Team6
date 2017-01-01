@@ -87,9 +87,7 @@ public class UpdateHelper extends AbstractComponent {
     protected Result prepare(ShardId shardId, UpdateRequest request, final GetResult getResult) {
         long getDateNS = System.nanoTime();
         if (!getResult.isExists()) {
-            if (request.upsertRequest() == null && !request.docAsUpsert()) {
-                throw new DocumentMissingException(shardId, request.type(), request.id());
-            }
+            checkingDcoumentMethod(shardId, request);
             IndexRequest indexRequest = request.docAsUpsert() ? request.doc() : request.upsertRequest();
             TimeValue ttl = indexRequest.ttl();
             if (request.scriptedUpsert() && request.script() != null) {
@@ -220,6 +218,10 @@ public class UpdateHelper extends AbstractComponent {
             }
         }
 
+        return getResultMethod(shardId, request, getResult, updateVersion, operation, timestamp, ttl, updatedSourceAsMap, updateSourceContentType, routing, parent);
+    }
+
+    private Result getResultMethod(ShardId shardId, UpdateRequest request, GetResult getResult, long updateVersion, String operation, String timestamp, TimeValue ttl, Map<String, Object> updatedSourceAsMap, XContentType updateSourceContentType, String routing, String parent) {
         if (operation == null || "index".equals(operation)) {
             final IndexRequest indexRequest = Requests.indexRequest(request.index()).type(request.type()).id(request.id()).routing(routing).parent(parent)
                     .source(updatedSourceAsMap, updateSourceContentType)
@@ -242,6 +244,12 @@ public class UpdateHelper extends AbstractComponent {
             logger.warn("Used update operation [{}] for script [{}], doing nothing...", operation, request.script.getScript());
             UpdateResponse update = new UpdateResponse(shardId, getResult.getType(), getResult.getId(), getResult.getVersion(), DocWriteResponse.Result.NOOP);
             return new Result(update, DocWriteResponse.Result.NOOP, updatedSourceAsMap, updateSourceContentType);
+        }
+    }
+
+    private void checkingDcoumentMethod(ShardId shardId, UpdateRequest request) {
+        if (request.upsertRequest() == null && !request.docAsUpsert()) {
+            throw new DocumentMissingException(shardId, request.type(), request.id());
         }
     }
 

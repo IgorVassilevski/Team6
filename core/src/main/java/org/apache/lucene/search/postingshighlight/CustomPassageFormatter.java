@@ -18,7 +18,7 @@
  */
 
 package org.apache.lucene.search.postingshighlight;
-
+import org.apache.lucene.search.highlight.Snippet;
 import org.apache.lucene.search.highlight.Encoder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightUtils;
 

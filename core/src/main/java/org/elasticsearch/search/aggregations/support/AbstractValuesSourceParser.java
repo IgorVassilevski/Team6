@@ -135,12 +135,7 @@ public abstract class AbstractValuesSourceParser<VS extends ValuesSource>
                             "Unexpected token " + token + " [" + currentFieldName + "] in [" + aggregationName + "].");
                 }
             } else if (scriptable && token == XContentParser.Token.START_OBJECT) {
-                if (context.getParseFieldMatcher().match(currentFieldName, ScriptField.SCRIPT)) {
-                    script = Script.parse(parser, context.getParseFieldMatcher());
-                } else if (!token(aggregationName, currentFieldName, token, parser, context.getParseFieldMatcher(), otherOptions)) {
-                    throw new ParsingException(parser.getTokenLocation(),
-                            "Unexpected token " + token + " [" + currentFieldName + "] in [" + aggregationName + "].");
-                }
+                script = getScript(aggregationName, context, parser, script, otherOptions, token, currentFieldName);
             } else if (!token(aggregationName, currentFieldName, token, parser, context.getParseFieldMatcher(), otherOptions)) {
                 throw new ParsingException(parser.getTokenLocation(),
                         "Unexpected token " + token + " [" + currentFieldName + "] in [" + aggregationName + "].");
@@ -149,6 +144,21 @@ public abstract class AbstractValuesSourceParser<VS extends ValuesSource>
 
         ValuesSourceAggregationBuilder<VS, ?> factory = createFactory(aggregationName, this.valuesSourceType, this.targetValueType,
                 otherOptions);
+        checkingFactoryValue(field, script, valueType, format, missing, timezone, factory);
+        return factory;
+    }
+
+    private Script getScript(String aggregationName, QueryParseContext context, XContentParser parser, Script script, Map<ParseField, Object> otherOptions, XContentParser.Token token, String currentFieldName) throws IOException {
+        if (context.getParseFieldMatcher().match(currentFieldName, ScriptField.SCRIPT)) {
+            script = Script.parse(parser, context.getParseFieldMatcher());
+        } else if (!token(aggregationName, currentFieldName, token, parser, context.getParseFieldMatcher(), otherOptions)) {
+            throw new ParsingException(parser.getTokenLocation(),
+                    "Unexpected token " + token + " [" + currentFieldName + "] in [" + aggregationName + "].");
+        }
+        return script;
+    }
+
+    private void checkingFactoryValue(String field, Script script, ValueType valueType, String format, Object missing, DateTimeZone timezone, ValuesSourceAggregationBuilder<VS, ?> factory) {
         if (field != null) {
             factory.field(field);
         }
@@ -167,7 +177,6 @@ public abstract class AbstractValuesSourceParser<VS extends ValuesSource>
         if (timezone != null) {
             factory.timeZone(timezone);
         }
-        return factory;
     }
 
     /**

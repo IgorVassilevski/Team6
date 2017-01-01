@@ -146,34 +146,7 @@ public class CommitPoints implements Iterable<CommitPoint> {
                         throw new IOException("Can't handle object with name [" + currentFieldName + "]");
                     }
                     while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                        if (token == XContentParser.Token.FIELD_NAME) {
-                            currentFieldName = parser.currentName();
-                        } else if (token == XContentParser.Token.START_OBJECT) {
-                            String fileName = currentFieldName;
-                            String physicalName = null;
-                            long size = -1;
-                            String checksum = null;
-                            while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                                if (token == XContentParser.Token.FIELD_NAME) {
-                                    currentFieldName = parser.currentName();
-                                } else if (token.isValue()) {
-                                    if ("physical_name".equals(currentFieldName) || "physicalName".equals(currentFieldName)) {
-                                        physicalName = parser.text();
-                                    } else if ("length".equals(currentFieldName)) {
-                                        size = parser.longValue();
-                                    } else if ("checksum".equals(currentFieldName)) {
-                                        checksum = parser.text();
-                                    }
-                                }
-                            }
-                            if (physicalName == null) {
-                                throw new IOException("Malformed commit, missing physical_name for [" + fileName + "]");
-                            }
-                            if (size == -1) {
-                                throw new IOException("Malformed commit, missing length for [" + fileName + "]");
-                            }
-                            files.add(new CommitPoint.FileInfo(fileName, physicalName, size, checksum));
-                        }
+                        currentFieldName = tokenParse(parser, currentFieldName, token, files);
                     }
                 } else if (token.isValue()) {
                     if ("version".equals(currentFieldName)) {
@@ -198,5 +171,37 @@ public class CommitPoints implements Iterable<CommitPoint> {
 
             return new CommitPoint(version, name, type, indexFiles, translogFiles);
         }
+    }
+
+    private static String tokenParse(XContentParser parser, String currentFieldName, XContentParser.Token token, List<CommitPoint.FileInfo> files) throws IOException {
+        if (token == XContentParser.Token.FIELD_NAME) {
+            currentFieldName = parser.currentName();
+        } else if (token == XContentParser.Token.START_OBJECT) {
+            String fileName = currentFieldName;
+            String physicalName = null;
+            long size = -1;
+            String checksum = null;
+            while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
+                if (token == XContentParser.Token.FIELD_NAME) {
+                    currentFieldName = parser.currentName();
+                } else if (token.isValue()) {
+                    if ("physical_name".equals(currentFieldName) || "physicalName".equals(currentFieldName)) {
+                        physicalName = parser.text();
+                    } else if ("length".equals(currentFieldName)) {
+                        size = parser.longValue();
+                    } else if ("checksum".equals(currentFieldName)) {
+                        checksum = parser.text();
+                    }
+                }
+            }
+            if (physicalName == null) {
+                throw new IOException("Malformed commit, missing physical_name for [" + fileName + "]");
+            }
+            if (size == -1) {
+                throw new IOException("Malformed commit, missing length for [" + fileName + "]");
+            }
+            files.add(new CommitPoint.FileInfo(fileName, physicalName, size, checksum));
+        }
+        return currentFieldName;
     }
 }

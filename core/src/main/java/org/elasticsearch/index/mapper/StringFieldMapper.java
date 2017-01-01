@@ -33,6 +33,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.support.XContentMapValues;
 import org.elasticsearch.index.analysis.NamedAnalyzer;
+import org.elasticsearch.index.conflictsDescription;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.plain.DocValuesIndexFieldData;
 import org.elasticsearch.index.fielddata.plain.PagedBytesIndexFieldData;
@@ -193,73 +194,8 @@ public class StringFieldMapper extends FieldMapper {
 
         @Override
         public Mapper.Builder parse(String fieldName, Map<String, Object> node, ParserContext parserContext) throws MapperParsingException {
-            if (parserContext.indexVersionCreated().onOrAfter(Version.V_5_0_0_alpha1)) {
-                final Object index = node.get("index");
-                if (Arrays.asList(null, "no", "not_analyzed", "analyzed").contains(index) == false) {
-                    throw new IllegalArgumentException("Can't parse [index] value [" + index + "] for field [" + fieldName + "], expected [no], [not_analyzed] or [analyzed]");
-                }
-                final boolean keyword = index != null && "analyzed".equals(index) == false;
-
-                // Automatically upgrade simple mappings for ease of upgrade, otherwise fail
-                Set<String> autoUpgradeParameters = keyword
-                        ? SUPPORTED_PARAMETERS_FOR_AUTO_UPGRADE_TO_KEYWORD
-                        : SUPPORTED_PARAMETERS_FOR_AUTO_UPGRADE_TO_TEXT;
-                if (autoUpgradeParameters.containsAll(node.keySet())) {
-                    deprecationLogger.deprecated("The [string] field is deprecated, please use [text] or [keyword] instead on [{}]",
-                            fieldName);
-                    {
-                        // upgrade the index setting
-                        node.put("index", "no".equals(index) == false);
-                    }
-                    {
-                        // upgrade norms settings
-                        Object norms = node.remove("norms");
-                        if (norms instanceof Map) {
-                            norms = ((Map<?,?>) norms).get("enabled");
-                        }
-                        if (norms != null) {
-                            node.put("norms", TypeParsers.nodeBooleanValue("norms", norms, parserContext));
-                        }
-                        Object omitNorms = node.remove("omit_norms");
-                        if (omitNorms != null) {
-                            node.put("norms", TypeParsers.nodeBooleanValue("omit_norms", omitNorms, parserContext) == false);
-                        }
-                    }
-                    {
-                        // upgrade fielddata settings
-                        Object fielddataO = node.get("fielddata");
-                        if (fielddataO instanceof Map) {
-                            Map<?,?> fielddata = (Map<?, ?>) fielddataO;
-                            if (keyword == false) {
-                                node.put("fielddata", "disabled".equals(fielddata.get("format")) == false);
-                                Map<?,?> fielddataFilter = (Map<?, ?>) fielddata.get("filter");
-                                if (fielddataFilter != null) {
-                                    Map<?,?> frequencyFilter = (Map<?, ?>) fielddataFilter.get("frequency");
-                                    frequencyFilter.keySet().retainAll(Arrays.asList("min", "max", "min_segment_size"));
-                                    node.put("fielddata_frequency_filter", frequencyFilter);
-                                }
-                            } else {
-                                node.remove("fielddata");
-                            }
-                            final Object loading = fielddata.get("loading");
-                            if (loading != null) {
-                                node.put("eager_global_ordinals", "eager_global_ordinals".equals(loading));
-                            }
-                        }
-                    }
-                    if (keyword) {
-                        return new KeywordFieldMapper.TypeParser().parse(fieldName, node, parserContext);
-                    } else {
-                        return new TextFieldMapper.TypeParser().parse(fieldName, node, parserContext);
-                    }
-
-                }
-                Set<String> unsupportedParameters = new HashSet<>(node.keySet());
-                unsupportedParameters.removeAll(autoUpgradeParameters);
-                throw new IllegalArgumentException("The [string] type is removed in 5.0 and automatic upgrade failed because parameters "
-                        + unsupportedParameters + " are not supported for automatic upgrades. You should now use either a [text] "
-                        + "or [keyword] field instead for field [" + fieldName + "]");
-            }
+            Mapper.Builder x = upgradeMappingsV5OrOlder(fieldName, node, parserContext);
+            if (x != null) return x;
 
             StringFieldMapper.Builder builder = new StringFieldMapper.Builder(fieldName);
             // hack for the fact that string can't just accept true/false for
@@ -348,6 +284,77 @@ public class StringFieldMapper extends FieldMapper {
             }
             return builder;
         }
+
+        private Mapper.Builder upgradeMappingsV5OrOlder(String fieldName, Map<String, Object> node, ParserContext parserContext) throws IllegalArgumentException {
+            if (parserContext.indexVersionCreated().onOrAfter(Version.V_5_0_0_alpha1)) {
+                final Object index = node.get("index");
+                if (Arrays.asList(null, "no", "not_analyzed", "analyzed").contains(index) == false) {
+                    throw new IllegalArgumentException("Can't parse [index] value [" + index + "] for field [" + fieldName + "], expected [no], [not_analyzed] or [analyzed]");
+                }
+                final boolean keyword = index != null && "analyzed".equals(index) == false;
+
+                // Automatically upgrade simple mappings for ease of upgrade, otherwise fail
+                Set<String> autoUpgradeParameters = keyword
+                        ? SUPPORTED_PARAMETERS_FOR_AUTO_UPGRADE_TO_KEYWORD
+                        : SUPPORTED_PARAMETERS_FOR_AUTO_UPGRADE_TO_TEXT;
+                if (autoUpgradeParameters.containsAll(node.keySet())) {
+                    deprecationLogger.deprecated("The [string] field is deprecated, please use [text] or [keyword] instead on [{}]",
+                            fieldName);
+                    {
+                        // upgrade the index setting
+                        node.put("index", "no".equals(index) == false);
+                    }
+                    {
+                        // upgrade norms settings
+                        Object norms = node.remove("norms");
+                        if (norms instanceof Map) {
+                            norms = ((Map<?,?>) norms).get("enabled");
+                        }
+                        if (norms != null) {
+                            node.put("norms", TypeParsers.nodeBooleanValue("norms", norms, parserContext));
+                        }
+                        Object omitNorms = node.remove("omit_norms");
+                        if (omitNorms != null) {
+                            node.put("norms", TypeParsers.nodeBooleanValue("omit_norms", omitNorms, parserContext) == false);
+                        }
+                    }
+                    {
+                        // upgrade fielddata settings
+                        Object fielddataO = node.get("fielddata");
+                        if (fielddataO instanceof Map) {
+                            Map<?,?> fielddata = (Map<?, ?>) fielddataO;
+                            if (keyword == false) {
+                                node.put("fielddata", "disabled".equals(fielddata.get("format")) == false);
+                                Map<?,?> fielddataFilter = (Map<?, ?>) fielddata.get("filter");
+                                if (fielddataFilter != null) {
+                                    Map<?,?> frequencyFilter = (Map<?, ?>) fielddataFilter.get("frequency");
+                                    frequencyFilter.keySet().retainAll(Arrays.asList("min", "max", "min_segment_size"));
+                                    node.put("fielddata_frequency_filter", frequencyFilter);
+                                }
+                            } else {
+                                node.remove("fielddata");
+                            }
+                            final Object loading = fielddata.get("loading");
+                            if (loading != null) {
+                                node.put("eager_global_ordinals", "eager_global_ordinals".equals(loading));
+                            }
+                        }
+                    }
+                    if (keyword) {
+                        return new KeywordFieldMapper.TypeParser().parse(fieldName, node, parserContext);
+                    } else {
+                        return new TextFieldMapper.TypeParser().parse(fieldName, node, parserContext);
+                    }
+
+                }
+                Set<String> unsupportedParameters = new HashSet<>(node.keySet());
+                unsupportedParameters.removeAll(autoUpgradeParameters);
+                throw new IllegalArgumentException("The [string] type is removed in 5.0 and automatic upgrade failed because parameters "
+                        + unsupportedParameters + " are not supported for automatic upgrades. You should now use either a [text] "
+                        + "or [keyword] field instead for field [" + fieldName + "]");
+            }
+            return null;
+        }
     }
 
     public static final class StringFieldType extends org.elasticsearch.index.mapper.StringFieldType {
@@ -406,20 +413,17 @@ public class StringFieldMapper extends FieldMapper {
             StringFieldType otherType = (StringFieldType) other;
             if (strict) {
                 if (fielddata() != otherType.fielddata()) {
-                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update [fielddata] "
-                            + "across all types.");
+                    conflicts.add(String.format(conflictsDescription.fleiddate,name()));
                 }
                 if (fielddataMinFrequency() != otherType.fielddataMinFrequency()) {
-                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update "
-                            + "[fielddata_frequency_filter.min] across all types.");
+                    conflicts.add(String.format(conflictsDescription.fielddataMinFrequency,name()));
                 }
                 if (fielddataMaxFrequency() != otherType.fielddataMaxFrequency()) {
-                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update "
-                            + "[fielddata_frequency_filter.max] across all types.");
+
+                    conflicts.add(String.format(conflictsDescription.fielddataMaxFrequency,name()));
                 }
                 if (fielddataMinSegmentSize() != otherType.fielddataMinSegmentSize()) {
-                    conflicts.add("mapper [" + name() + "] is used by multiple types. Set update_all_types to true to update "
-                            + "[fielddata_frequency_filter.min_segment_size] across all types.");
+                    conflicts.add(String.format(conflictsDescription.fielddataMinSegmentSize,name()));
                 }
             }
         }

@@ -1,5 +1,5 @@
-projectKey=my:project
+projectKey=my:quality
 serverUrl=http://localhost:9000
-dashboardUrl=http://localhost:9000/dashboard/index/my:project
-ceTaskId=AVceZetIkra791FxjBaY
-ceTaskUrl=http://localhost:9000/api/ce/task?id=AVceZetIkra791FxjBaY
+dashboardUrl=http://localhost:9000/dashboard/index/my:quality
+ceTaskId=AVi9fXJ51_LHEDtX_tLV
+ceTaskUrl=http://localhost:9000/api/ce/task?id=AVi9fXJ51_LHEDtX_tLV

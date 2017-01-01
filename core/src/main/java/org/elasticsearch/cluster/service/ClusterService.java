@@ -618,6 +618,11 @@ public class ClusterService extends AbstractLifecycleComponent {
             return;
         }
 
+        tryArrayList(executor, tasksSummary, previousClusterState, startTimeNS, newClusterState, proccessedListeners);
+
+    }
+
+    private <T> void tryArrayList(ClusterStateTaskExecutor<T> executor, String tasksSummary, ClusterState previousClusterState, long startTimeNS, ClusterState newClusterState, ArrayList<UpdateTask<T>> proccessedListeners) {
         try {
             ArrayList<Discovery.AckListener> ackListeners = new ArrayList<>();
             if (newClusterState.nodes().isLocalNodeElectedMaster()) {
@@ -769,7 +774,6 @@ public class ClusterService extends AbstractLifecycleComponent {
                 e);
             // TODO: do we want to call updateTask.onFailure here?
         }
-
     }
 
     // this one is overridden in tests so we can control time

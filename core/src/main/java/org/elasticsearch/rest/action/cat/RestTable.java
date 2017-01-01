@@ -301,64 +301,76 @@ public class RestTable {
         if (value instanceof ByteSizeValue) {
             ByteSizeValue v = (ByteSizeValue) value;
             String resolution = request.param("bytes");
-            if ("b".equals(resolution)) {
-                return Long.toString(v.bytes());
-            } else if ("k".equals(resolution) || "kb".equals(resolution)) {
-                return Long.toString(v.kb());
-            } else if ("m".equals(resolution) || "mb".equals(resolution)) {
-                return Long.toString(v.mb());
-            } else if ("g".equals(resolution) || "gb".equals(resolution)) {
-                return Long.toString(v.gb());
-            } else if ("t".equals(resolution) || "tb".equals(resolution)) {
-                return Long.toString(v.tb());
-            } else if ("p".equals(resolution) || "pb".equals(resolution)) {
-                return Long.toString(v.pb());
-            } else {
-                return v.toString();
-            }
+            return getString(v, resolution);
         }
         if (value instanceof SizeValue) {
             SizeValue v = (SizeValue) value;
             String resolution = request.param("size");
-            if ("".equals(resolution)) {
-                return Long.toString(v.singles());
-            } else if ("k".equals(resolution)) {
-                return Long.toString(v.kilo());
-            } else if ("m".equals(resolution)) {
-                return Long.toString(v.mega());
-            } else if ("g".equals(resolution)) {
-                return Long.toString(v.giga());
-            } else if ("t".equals(resolution)) {
-                return Long.toString(v.tera());
-            } else if ("p".equals(resolution)) {
-                return Long.toString(v.peta());
-            } else {
-                return v.toString();
-            }
+            return getString(v, resolution);
         }
         if (value instanceof TimeValue) {
             TimeValue v = (TimeValue) value;
             String resolution = request.param("time");
-            if ("nanos".equals(resolution)) {
-                return Long.toString(v.nanos());
-            } else if ("micros".equals(resolution)) {
-                return Long.toString(v.micros());
-            } else if ("ms".equals(resolution)) {
-                return Long.toString(v.millis());
-            } else if ("s".equals(resolution)) {
-                return Long.toString(v.seconds());
-            } else if ("m".equals(resolution)) {
-                return Long.toString(v.minutes());
-            } else if ("h".equals(resolution)) {
-                return Long.toString(v.hours());
-            } else if ("d".equals(resolution)) {
-                return Long.toString(v.days());
-            } else {
-                return v.toString();
-            }
+            return getString(v, resolution);
         }
         // Add additional built in data points we can render based on request parameters?
         return value.toString();
+    }
+
+    private static String getString(TimeValue v, String resolution) {
+        if ("nanos".equals(resolution)) {
+            return Long.toString(v.nanos());
+        } else if ("micros".equals(resolution)) {
+            return Long.toString(v.micros());
+        } else if ("ms".equals(resolution)) {
+            return Long.toString(v.millis());
+        } else if ("s".equals(resolution)) {
+            return Long.toString(v.seconds());
+        } else if ("m".equals(resolution)) {
+            return Long.toString(v.minutes());
+        } else if ("h".equals(resolution)) {
+            return Long.toString(v.hours());
+        } else if ("d".equals(resolution)) {
+            return Long.toString(v.days());
+        } else {
+            return v.toString();
+        }
+    }
+
+    private static String getString(SizeValue v, String resolution) {
+        if ("".equals(resolution)) {
+            return Long.toString(v.singles());
+        } else if ("k".equals(resolution)) {
+            return Long.toString(v.kilo());
+        } else if ("m".equals(resolution)) {
+            return Long.toString(v.mega());
+        } else if ("g".equals(resolution)) {
+            return Long.toString(v.giga());
+        } else if ("t".equals(resolution)) {
+            return Long.toString(v.tera());
+        } else if ("p".equals(resolution)) {
+            return Long.toString(v.peta());
+        } else {
+            return v.toString();
+        }
+    }
+
+    private static String getString(ByteSizeValue v, String resolution) {
+        if ("b".equals(resolution)) {
+            return Long.toString(v.bytes());
+        } else if ("k".equals(resolution) || "kb".equals(resolution)) {
+            return Long.toString(v.kb());
+        } else if ("m".equals(resolution) || "mb".equals(resolution)) {
+            return Long.toString(v.mb());
+        } else if ("g".equals(resolution) || "gb".equals(resolution)) {
+            return Long.toString(v.gb());
+        } else if ("t".equals(resolution) || "tb".equals(resolution)) {
+            return Long.toString(v.tb());
+        } else if ("p".equals(resolution) || "pb".equals(resolution)) {
+            return Long.toString(v.pb());
+        } else {
+            return v.toString();
+        }
     }
 
     static class DisplayHeader {

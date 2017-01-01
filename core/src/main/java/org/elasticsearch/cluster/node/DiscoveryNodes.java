@@ -673,16 +673,16 @@ public class DiscoveryNodes extends AbstractDiffable<DiscoveryNodes> implements 
             for (ObjectObjectCursor<String, DiscoveryNode> nodeEntry : nodes) {
                 if (nodeEntry.value.isDataNode()) {
                     dataNodesBuilder.put(nodeEntry.key, nodeEntry.value);
-                    minNonClientNodeVersion = Version.smallest(minNonClientNodeVersion, nodeEntry.value.getVersion());
+                    minNonClientNodeVersion = Version.min(minNonClientNodeVersion, nodeEntry.value.getVersion());
                 }
                 if (nodeEntry.value.isMasterNode()) {
                     masterNodesBuilder.put(nodeEntry.key, nodeEntry.value);
-                    minNonClientNodeVersion = Version.smallest(minNonClientNodeVersion, nodeEntry.value.getVersion());
+                    minNonClientNodeVersion = Version.min(minNonClientNodeVersion, nodeEntry.value.getVersion());
                 }
                 if (nodeEntry.value.isIngestNode()) {
                     ingestNodesBuilder.put(nodeEntry.key, nodeEntry.value);
                 }
-                minNodeVersion = Version.smallest(minNodeVersion, nodeEntry.value.getVersion());
+                minNodeVersion = Version.min(minNodeVersion, nodeEntry.value.getVersion());
             }
 
             return new DiscoveryNodes(

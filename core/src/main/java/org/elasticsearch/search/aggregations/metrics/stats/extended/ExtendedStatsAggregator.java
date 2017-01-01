@@ -141,20 +141,7 @@ public class ExtendedStatsAggregator extends NumericMetricsAggregator.MultiValue
     @Override
     public double metric(String name, long owningBucketOrd) {
         if (valuesSource == null || owningBucketOrd >= counts.size()) {
-            switch(InternalExtendedStats.Metrics.resolve(name)) {
-                case count: return 0;
-                case sum: return 0;
-                case min: return Double.POSITIVE_INFINITY;
-                case max: return Double.NEGATIVE_INFINITY;
-                case avg: return Double.NaN;
-                case sum_of_squares: return 0;
-                case variance: return Double.NaN;
-                case std_deviation: return Double.NaN;
-                case std_upper: return Double.NaN;
-                case std_lower: return Double.NaN;
-                default:
-                    throw new IllegalArgumentException("Unknown value [" + name + "] in common stats aggregation");
-            }
+            return MetricsResolverSwitchCase(name);
         }
         switch(InternalExtendedStats.Metrics.resolve(name)) {
             case count: return counts.get(owningBucketOrd);
@@ -169,6 +156,23 @@ public class ExtendedStatsAggregator extends NumericMetricsAggregator.MultiValue
                 return (sums.get(owningBucketOrd) / counts.get(owningBucketOrd)) + (Math.sqrt(variance(owningBucketOrd)) * this.sigma);
             case std_lower:
                 return (sums.get(owningBucketOrd) / counts.get(owningBucketOrd)) - (Math.sqrt(variance(owningBucketOrd)) * this.sigma);
+            default:
+                throw new IllegalArgumentException("Unknown value [" + name + "] in common stats aggregation");
+        }
+    }
+
+    private double MetricsResolverSwitchCase(String name) {
+        switch(InternalExtendedStats.Metrics.resolve(name)) {
+            case count: return 0;
+            case sum: return 0;
+            case min: return Double.POSITIVE_INFINITY;
+            case max: return Double.NEGATIVE_INFINITY;
+            case avg: return Double.NaN;
+            case sum_of_squares: return 0;
+            case variance: return Double.NaN;
+            case std_deviation: return Double.NaN;
+            case std_upper: return Double.NaN;
+            case std_lower: return Double.NaN;
             default:
                 throw new IllegalArgumentException("Unknown value [" + name + "] in common stats aggregation");
         }

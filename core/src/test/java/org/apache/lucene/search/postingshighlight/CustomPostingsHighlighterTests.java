@@ -38,6 +38,7 @@ import org.apache.lucene.search.highlight.DefaultEncoder;
 import org.apache.lucene.store.Directory;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightUtils;
 import org.elasticsearch.test.ESTestCase;
+import org.apache.lucene.search.highlight.Snippet;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 

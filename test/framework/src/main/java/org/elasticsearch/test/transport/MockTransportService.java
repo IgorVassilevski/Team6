@@ -626,13 +626,7 @@ public class MockTransportService extends TransportService {
             }
         }
 
-        @Override
-        protected void traceReceivedResponse(long requestId, DiscoveryNode sourceNode, String action) {
-            super.traceReceivedResponse(requestId, sourceNode, action);
-            for (Tracer tracer : activeTracers) {
-                tracer.receivedResponse(requestId, sourceNode, action);
-            }
-        }
+
 
         @Override
         protected void traceRequestSent(DiscoveryNode node, long requestId, String action, TransportRequestOptions options) {

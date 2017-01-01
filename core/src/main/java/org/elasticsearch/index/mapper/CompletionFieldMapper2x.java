@@ -378,39 +378,12 @@ public class CompletionFieldMapper2x extends FieldMapper {
                     }
                 } else if (Fields.CONTEXT.equals(currentFieldName)) {
                     SortedMap<String, ContextConfig> configs = new TreeMap<>();
-                    if (token == Token.START_OBJECT) {
-                        while ((token = parser.nextToken()) != Token.END_OBJECT) {
-                            String name = parser.currentName();
-                            ContextMapping mapping = fieldType().getContextMapping().get(name);
-                            if (mapping == null) {
-                                throw new ElasticsearchParseException("context [{}] is not defined", name);
-                            } else {
-                                token = parser.nextToken();
-                                configs.put(name, mapping.parseContext(context, parser));
-                            }
-                        }
-                        contextConfig = new TreeMap<>();
-                        for (ContextMapping mapping : fieldType().getContextMapping().values()) {
-                            ContextConfig config = configs.get(mapping.name());
-                            contextConfig.put(mapping.name(), config == null ? mapping.defaultConfig() : config);
-                        }
-                    } else {
-                        throw new ElasticsearchParseException("context must be an object");
-                    }
+                    contextConfig = getStringContextConfigSortedMap(context, parser, token, configs);
                 } else if (Fields.CONTENT_FIELD_NAME_PAYLOAD.equals(currentFieldName)) {
                     if (!isStoringPayloads()) {
                         throw new MapperException("Payloads disabled in mapping");
                     }
-                    if (token == XContentParser.Token.START_OBJECT) {
-                        XContentBuilder payloadBuilder =
-                            XContentFactory.contentBuilder(parser.contentType()).copyCurrentStructure(parser);
-                        payload = payloadBuilder.bytes().toBytesRef();
-                        payloadBuilder.close();
-                    } else if (token.isValue()) {
-                        payload = parser.utf8BytesOrNull();
-                    } else {
-                        throw new MapperException("payload doesn't support type " + token);
-                    }
+                    payload = getBytesRef(parser, token);
                 } else if (token == XContentParser.Token.VALUE_STRING) {
                     if (Fields.CONTENT_FIELD_NAME_OUTPUT.equals(currentFieldName)) {
                         surfaceForm = parser.text();
@@ -479,6 +452,45 @@ public class CompletionFieldMapper2x extends FieldMapper {
             }
         }
         return null;
+    }
+
+    private BytesRef getBytesRef(XContentParser parser, Token token) throws IOException {
+        BytesRef payload;
+        if (token == Token.START_OBJECT) {
+            XContentBuilder payloadBuilder =
+                XContentFactory.contentBuilder(parser.contentType()).copyCurrentStructure(parser);
+            payload = payloadBuilder.bytes().toBytesRef();
+            payloadBuilder.close();
+        } else if (token.isValue()) {
+            payload = parser.utf8BytesOrNull();
+        } else {
+            throw new MapperException("payload doesn't support type " + token);
+        }
+        return payload;
+    }
+
+    private SortedMap<String, ContextConfig> getStringContextConfigSortedMap(ParseContext context, XContentParser parser, Token token, SortedMap<String, ContextConfig> configs) throws IOException {
+        SortedMap<String, ContextConfig> contextConfig;
+        if (token == Token.START_OBJECT) {
+            while ((token = parser.nextToken()) != Token.END_OBJECT) {
+                String name = parser.currentName();
+                ContextMapping mapping = fieldType().getContextMapping().get(name);
+                if (mapping == null) {
+                    throw new ElasticsearchParseException("context [{}] is not defined", name);
+                } else {
+                    token = parser.nextToken();
+                    configs.put(name, mapping.parseContext(context, parser));
+                }
+            }
+            contextConfig = new TreeMap<>();
+            for (ContextMapping mapping : fieldType().getContextMapping().values()) {
+                ContextConfig config = configs.get(mapping.name());
+                contextConfig.put(mapping.name(), config == null ? mapping.defaultConfig() : config);
+            }
+        } else {
+            throw new ElasticsearchParseException("context must be an object");
+        }
+        return contextConfig;
     }
 
     private void checkWeight(long weight) {

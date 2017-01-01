@@ -585,27 +585,7 @@ public class TopHitsAggregationBuilder extends AbstractAggregationBuilder<TopHit
             if (token == XContentParser.Token.FIELD_NAME) {
                 currentFieldName = parser.currentName();
             } else if (token.isValue()) {
-                if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.FROM_FIELD)) {
-                    factory.from(parser.intValue());
-                } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.SIZE_FIELD)) {
-                    factory.size(parser.intValue());
-                } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.VERSION_FIELD)) {
-                    factory.version(parser.booleanValue());
-                } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.EXPLAIN_FIELD)) {
-                    factory.explain(parser.booleanValue());
-                } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.TRACK_SCORES_FIELD)) {
-                    factory.trackScores(parser.booleanValue());
-                } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder._SOURCE_FIELD)) {
-                    factory.fetchSource(FetchSourceContext.parse(context));
-                } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.STORED_FIELDS_FIELD)) {
-                    factory.storedFieldsContext =
-                        StoredFieldsContext.fromXContent(SearchSourceBuilder.STORED_FIELDS_FIELD.getPreferredName(), context);
-                } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.SORT_FIELD)) {
-                    factory.sort(parser.text());
-                } else {
-                    throw new ParsingException(parser.getTokenLocation(), "Unknown key for a " + token + " in [" + currentFieldName + "].",
-                            parser.getTokenLocation());
-                }
+                checkingValue(context, factory, token, currentFieldName, parser);
             } else if (token == XContentParser.Token.START_OBJECT) {
                 if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder._SOURCE_FIELD)) {
                     factory.fetchSource(FetchSourceContext.parse(context));
@@ -632,13 +612,7 @@ public class TopHitsAggregationBuilder extends AbstractAggregationBuilder<TopHit
                                                 parser.getTokenLocation());
                                     }
                                 } else if (token == XContentParser.Token.START_OBJECT) {
-                                    if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.SCRIPT_FIELD)) {
-                                        script = Script.parse(parser, context.getParseFieldMatcher());
-                                    } else {
-                                        throw new ParsingException(parser.getTokenLocation(),
-                                                "Unknown key for a " + token + " in [" + currentFieldName + "].",
-                                                parser.getTokenLocation());
-                                    }
+                                    script = getScript(context, token, currentFieldName, parser);
                                 } else {
                                     throw new ParsingException(parser.getTokenLocation(),
                                             "Unknown key for a " + token + " in [" + currentFieldName + "].", parser.getTokenLocation());
@@ -668,12 +642,7 @@ public class TopHitsAggregationBuilder extends AbstractAggregationBuilder<TopHit
                 } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.DOCVALUE_FIELDS_FIELD)) {
                     List<String> fieldDataFields = new ArrayList<>();
                     while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                        if (token == XContentParser.Token.VALUE_STRING) {
-                            fieldDataFields.add(parser.text());
-                        } else {
-                            throw new ParsingException(parser.getTokenLocation(), "Expected [" + XContentParser.Token.VALUE_STRING
-                                    + "] in [" + currentFieldName + "] but found [" + token + "]", parser.getTokenLocation());
-                        }
+                        checkTokenAgainstValue_String(token, currentFieldName, parser, fieldDataFields);
                     }
                     factory.fieldDataFields(fieldDataFields);
                 } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.SORT_FIELD)) {
@@ -691,6 +660,51 @@ public class TopHitsAggregationBuilder extends AbstractAggregationBuilder<TopHit
             }
         }
         return factory;
+    }
+
+    private static Script getScript(QueryParseContext context, XContentParser.Token token, String currentFieldName, XContentParser parser) throws IOException {
+        Script script;
+        if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.SCRIPT_FIELD)) {
+            script = Script.parse(parser, context.getParseFieldMatcher());
+        } else {
+            throw new ParsingException(parser.getTokenLocation(),
+                    "Unknown key for a " + token + " in [" + currentFieldName + "].",
+                    parser.getTokenLocation());
+        }
+        return script;
+    }
+
+    private static void checkTokenAgainstValue_String(XContentParser.Token token, String currentFieldName, XContentParser parser, List<String> fieldDataFields) throws IOException {
+        if (token == XContentParser.Token.VALUE_STRING) {
+            fieldDataFields.add(parser.text());
+        } else {
+            throw new ParsingException(parser.getTokenLocation(), "Expected [" + XContentParser.Token.VALUE_STRING
+                    + "] in [" + currentFieldName + "] but found [" + token + "]", parser.getTokenLocation());
+        }
+    }
+
+    private static void checkingValue(QueryParseContext context, TopHitsAggregationBuilder factory, XContentParser.Token token, String currentFieldName, XContentParser parser) throws IOException {
+        if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.FROM_FIELD)) {
+            factory.from(parser.intValue());
+        } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.SIZE_FIELD)) {
+            factory.size(parser.intValue());
+        } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.VERSION_FIELD)) {
+            factory.version(parser.booleanValue());
+        } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.EXPLAIN_FIELD)) {
+            factory.explain(parser.booleanValue());
+        } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.TRACK_SCORES_FIELD)) {
+            factory.trackScores(parser.booleanValue());
+        } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder._SOURCE_FIELD)) {
+            factory.fetchSource(FetchSourceContext.parse(context));
+        } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.STORED_FIELDS_FIELD)) {
+            factory.storedFieldsContext =
+                StoredFieldsContext.fromXContent(SearchSourceBuilder.STORED_FIELDS_FIELD.getPreferredName(), context);
+        } else if (context.getParseFieldMatcher().match(currentFieldName, SearchSourceBuilder.SORT_FIELD)) {
+            factory.sort(parser.text());
+        } else {
+            throw new ParsingException(parser.getTokenLocation(), "Unknown key for a " + token + " in [" + currentFieldName + "].",
+                    parser.getTokenLocation());
+        }
     }
 
     @Override

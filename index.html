@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Configurator</title>
+    <link rel="shortcut icon" href="cogwheel.jpg"/>
+    <link rel="stylesheet" type="text/css" href="stylesheet.css">
+    <script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+    <script src="custom.js"></script>
+  </head>
+  <body>
+    <h1>ElasticSearch Configurator</h1>
+    <p id="greytext">Select features to use:</p>
+    <label class="heatmapcheckbox">
+      Heat map
+      <input id="heatmap" type="checkbox" name="hm">
+    </label><br>
+
+    <label class="graphcheckbox">
+      Synonym Graph
+      <input id="graph" type="checkbox" name="sg">
+    </label><br>
+
+    <label class="uhcheckbox">
+      Unified Highlighter
+      <input id="highlighter" type="checkbox" name="uh">
+    </label><br>
+
+    <button style="margin-top:10px" class="submitbtn">Download config</button>
+    <!--p id="greytext">Submitting will download the configuration as a file</p-->
+    <p id="output"></p>
+  </body>
+</html>

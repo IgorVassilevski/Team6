@@ -30,6 +30,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.discovery.DiscoveryModule;
 import org.elasticsearch.discovery.DiscoverySettings;
 import org.elasticsearch.env.NodeEnvironment;
+import org.elasticsearch.node.NodeValidationException;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.test.InternalTestCluster;
 import org.elasticsearch.test.NodeConfigurationSource;
@@ -187,7 +188,7 @@ public class InternalTestClusterTests extends ESTestCase {
         }
     }
 
-    public void testDataFolderAssignmentAndCleaning() throws IOException, InterruptedException {
+    public void testDataFolderAssignmentAndCleaning() throws IOException, InterruptedException, NodeValidationException {
         long clusterSeed = randomLong();
         boolean masterNodes = randomBoolean();
         // we need one stable node

@@ -41,11 +41,8 @@ import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.metadata.MetaDataCreateIndexService;
 import org.elasticsearch.cluster.metadata.MetaDataIndexUpgradeService;
 import org.elasticsearch.cluster.metadata.RepositoriesMetaData;
-import org.elasticsearch.cluster.routing.IndexRoutingTable;
-import org.elasticsearch.cluster.routing.IndexShardRoutingTable;
+import org.elasticsearch.cluster.routing.*;
 import org.elasticsearch.cluster.routing.RecoverySource.SnapshotRecoverySource;
-import org.elasticsearch.cluster.routing.RoutingTable;
-import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.allocation.AllocationService;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.cluster.service.ClusterService;
@@ -65,6 +62,7 @@ import org.elasticsearch.common.util.concurrent.ConcurrentCollections;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.indices.IndexCreationException;
 import org.elasticsearch.repositories.RepositoriesService;
 import org.elasticsearch.repositories.Repository;
 import org.elasticsearch.repositories.RepositoryData;
@@ -255,55 +253,7 @@ public class RestoreService extends AbstractComponent implements ClusterStateLis
                             IndexMetaData currentIndexMetaData = currentState.metaData().index(renamedIndexName);
                             IntSet ignoreShards = new IntHashSet();
                             final Index renamedIndex;
-                            if (currentIndexMetaData == null) {
-                                // Index doesn't exist - create it and start recovery
-                                // Make sure that the index we are about to create has a validate name
-                                MetaDataCreateIndexService.validateIndexName(renamedIndexName, currentState);
-                                createIndexService.validateIndexSettings(renamedIndexName, snapshotIndexMetaData.getSettings());
-                                IndexMetaData.Builder indexMdBuilder = IndexMetaData.builder(snapshotIndexMetaData).state(IndexMetaData.State.OPEN).index(renamedIndexName);
-                                indexMdBuilder.settings(Settings.builder().put(snapshotIndexMetaData.getSettings()).put(IndexMetaData.SETTING_INDEX_UUID, UUIDs.randomBase64UUID()));
-                                if (!request.includeAliases() && !snapshotIndexMetaData.getAliases().isEmpty()) {
-                                    // Remove all aliases - they shouldn't be restored
-                                    indexMdBuilder.removeAllAliases();
-                                } else {
-                                    for (ObjectCursor<String> alias : snapshotIndexMetaData.getAliases().keys()) {
-                                        aliases.add(alias.value);
-                                    }
-                                }
-                                IndexMetaData updatedIndexMetaData = indexMdBuilder.build();
-                                if (partial) {
-                                    populateIgnoredShards(index, ignoreShards);
-                                }
-                                rtBuilder.addAsNewRestore(updatedIndexMetaData, recoverySource, ignoreShards);
-                                blocks.addBlocks(updatedIndexMetaData);
-                                mdBuilder.put(updatedIndexMetaData, true);
-                                renamedIndex = updatedIndexMetaData.getIndex();
-                            } else {
-                                validateExistingIndex(currentIndexMetaData, snapshotIndexMetaData, renamedIndexName, partial);
-                                // Index exists and it's closed - open it in metadata and start recovery
-                                IndexMetaData.Builder indexMdBuilder = IndexMetaData.builder(snapshotIndexMetaData).state(IndexMetaData.State.OPEN);
-                                indexMdBuilder.version(Math.max(snapshotIndexMetaData.getVersion(), currentIndexMetaData.getVersion() + 1));
-                                if (!request.includeAliases()) {
-                                    // Remove all snapshot aliases
-                                    if (!snapshotIndexMetaData.getAliases().isEmpty()) {
-                                        indexMdBuilder.removeAllAliases();
-                                    }
-                                    /// Add existing aliases
-                                    for (ObjectCursor<AliasMetaData> alias : currentIndexMetaData.getAliases().values()) {
-                                        indexMdBuilder.putAlias(alias.value);
-                                    }
-                                } else {
-                                    for (ObjectCursor<String> alias : snapshotIndexMetaData.getAliases().keys()) {
-                                        aliases.add(alias.value);
-                                    }
-                                }
-                                indexMdBuilder.settings(Settings.builder().put(snapshotIndexMetaData.getSettings()).put(IndexMetaData.SETTING_INDEX_UUID, currentIndexMetaData.getIndexUUID()));
-                                IndexMetaData updatedIndexMetaData = indexMdBuilder.index(renamedIndexName).build();
-                                rtBuilder.addAsRestore(updatedIndexMetaData, recoverySource);
-                                blocks.updateBlocks(updatedIndexMetaData);
-                                mdBuilder.put(updatedIndexMetaData, true);
-                                renamedIndex = updatedIndexMetaData.getIndex();
-                            }
+                            renamedIndex = getIndex(currentState, mdBuilder, blocks, rtBuilder, aliases, index, partial, recoverySource, renamedIndexName, snapshotIndexMetaData, currentIndexMetaData, ignoreShards);
 
                             for (int shard = 0; shard < snapshotIndexMetaData.getNumberOfShards(); shard++) {
                                 if (!ignoreShards.contains(shard)) {
@@ -340,6 +290,60 @@ public class RestoreService extends AbstractComponent implements ClusterStateLis
                             ClusterState.builder(updatedState).routingTable(rt).build(),
                             "restored snapshot [" + snapshot + "]");
                     return ClusterState.builder(updatedState).routingResult(routingResult).build();
+                }
+
+                private Index getIndex(ClusterState currentState, MetaData.Builder mdBuilder, ClusterBlocks.Builder blocks, RoutingTable.Builder rtBuilder, Set<String> aliases, String index, boolean partial, SnapshotRecoverySource recoverySource, String renamedIndexName, IndexMetaData snapshotIndexMetaData, IndexMetaData currentIndexMetaData, IntSet ignoreShards) throws IndexCreationException {
+                    Index renamedIndex;
+                    if (currentIndexMetaData == null) {
+                        // Index doesn't exist - create it and start recovery
+                        // Make sure that the index we are about to create has a validate name
+                        MetaDataCreateIndexService.validateIndexName(renamedIndexName, currentState);
+                        createIndexService.validateIndexSettings(renamedIndexName, snapshotIndexMetaData.getSettings());
+                        IndexMetaData.Builder indexMdBuilder = IndexMetaData.builder(snapshotIndexMetaData).state(IndexMetaData.State.OPEN).index(renamedIndexName);
+                        indexMdBuilder.settings(Settings.builder().put(snapshotIndexMetaData.getSettings()).put(IndexMetaData.SETTING_INDEX_UUID, UUIDs.randomBase64UUID()));
+                        if (!request.includeAliases() && !snapshotIndexMetaData.getAliases().isEmpty()) {
+                            // Remove all aliases - they shouldn't be restored
+                            indexMdBuilder.removeAllAliases();
+                        } else {
+                            for (ObjectCursor<String> alias : snapshotIndexMetaData.getAliases().keys()) {
+                                aliases.add(alias.value);
+                            }
+                        }
+                        IndexMetaData updatedIndexMetaData = indexMdBuilder.build();
+                        if (partial) {
+                            populateIgnoredShards(index, ignoreShards);
+                        }
+                        rtBuilder.addAsNewRestore(updatedIndexMetaData, recoverySource, ignoreShards);
+                        blocks.addBlocks(updatedIndexMetaData);
+                        mdBuilder.put(updatedIndexMetaData, true);
+                        renamedIndex = updatedIndexMetaData.getIndex();
+                    } else {
+                        validateExistingIndex(currentIndexMetaData, snapshotIndexMetaData, renamedIndexName, partial);
+                        // Index exists and it's closed - open it in metadata and start recovery
+                        IndexMetaData.Builder indexMdBuilder = IndexMetaData.builder(snapshotIndexMetaData).state(IndexMetaData.State.OPEN);
+                        indexMdBuilder.version(Math.max(snapshotIndexMetaData.getVersion(), currentIndexMetaData.getVersion() + 1));
+                        if (!request.includeAliases()) {
+                            // Remove all snapshot aliases
+                            if (!snapshotIndexMetaData.getAliases().isEmpty()) {
+                                indexMdBuilder.removeAllAliases();
+                            }
+                            /// Add existing aliases
+                            for (ObjectCursor<AliasMetaData> alias : currentIndexMetaData.getAliases().values()) {
+                                indexMdBuilder.putAlias(alias.value);
+                            }
+                        } else {
+                            for (ObjectCursor<String> alias : snapshotIndexMetaData.getAliases().keys()) {
+                                aliases.add(alias.value);
+                            }
+                        }
+                        indexMdBuilder.settings(Settings.builder().put(snapshotIndexMetaData.getSettings()).put(IndexMetaData.SETTING_INDEX_UUID, currentIndexMetaData.getIndexUUID()));
+                        IndexMetaData updatedIndexMetaData = indexMdBuilder.index(renamedIndexName).build();
+                        rtBuilder.addAsRestore(updatedIndexMetaData, recoverySource);
+                        blocks.updateBlocks(updatedIndexMetaData);
+                        mdBuilder.put(updatedIndexMetaData, true);
+                        renamedIndex = updatedIndexMetaData.getIndex();
+                    }
+                    return renamedIndex;
                 }
 
                 private void checkAliasNameConflicts(Map<String, String> renamedIndices, Set<String> aliases) {
@@ -567,27 +571,7 @@ public class RestoreService extends AbstractComponent implements ClusterStateLis
                             }
                         }
 
-                        if (shardsBuilder != null) {
-                            ImmutableOpenMap<ShardId, ShardRestoreStatus> shards = shardsBuilder.build();
-                            if (!completed(shards)) {
-                                entries.add(new RestoreInProgress.Entry(entry.snapshot(), RestoreInProgress.State.STARTED, entry.indices(), shards));
-                            } else {
-                                logger.info("restore [{}] is done", entry.snapshot());
-                                if (batchedRestoreInfo == null) {
-                                    batchedRestoreInfo = new HashMap<>();
-                                }
-                                assert !batchedRestoreInfo.containsKey(entry.snapshot());
-                                batchedRestoreInfo.put(entry.snapshot(),
-                                    new Tuple<>(
-                                        new RestoreInfo(entry.snapshot().getSnapshotId().getName(),
-                                                        entry.indices(),
-                                                        shards.size(),
-                                                        shards.size() - failedShards(shards)),
-                                        shards));
-                            }
-                        } else {
-                            entries.add(entry);
-                        }
+                        newEx(entries, entry, shardsBuilder);
                     }
 
                     if (changedCount > 0) {
@@ -598,6 +582,30 @@ public class RestoreService extends AbstractComponent implements ClusterStateLis
                     }
                 }
                 return currentState;
+            }
+
+            private void newEx(List<RestoreInProgress.Entry> entries, RestoreInProgress.Entry entry, ImmutableOpenMap.Builder<ShardId, ShardRestoreStatus> shardsBuilder) {
+                if (shardsBuilder != null) {
+                    ImmutableOpenMap<ShardId, ShardRestoreStatus> shards = shardsBuilder.build();
+                    if (!completed(shards)) {
+                        entries.add(new RestoreInProgress.Entry(entry.snapshot(), RestoreInProgress.State.STARTED, entry.indices(), shards));
+                    } else {
+                        logger.info("restore [{}] is done", entry.snapshot());
+                        if (batchedRestoreInfo == null) {
+                            batchedRestoreInfo = new HashMap<>();
+                        }
+                        assert !batchedRestoreInfo.containsKey(entry.snapshot());
+                        batchedRestoreInfo.put(entry.snapshot(),
+                            new Tuple<>(
+                                new RestoreInfo(entry.snapshot().getSnapshotId().getName(),
+                                                entry.indices(),
+                                                shards.size(),
+                                                shards.size() - failedShards(shards)),
+                                shards));
+                    }
+                } else {
+                    entries.add(entry);
+                }
             }
 
             @Override

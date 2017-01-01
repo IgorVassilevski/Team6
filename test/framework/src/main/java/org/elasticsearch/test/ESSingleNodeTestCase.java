@@ -41,6 +41,7 @@ import org.elasticsearch.index.IndexService;
 import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.node.MockNode;
 import org.elasticsearch.node.Node;
+import org.elasticsearch.node.NodeValidationException;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.internal.SearchContext;
@@ -68,13 +69,13 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
 
     private static Node NODE = null;
 
-    private void reset() throws IOException {
+    private void reset() throws IOException, NodeValidationException {
         assert NODE != null;
         stopNode();
         startNode();
     }
 
-    protected void startNode() {
+    protected void startNode() throws NodeValidationException {
         assert NODE == null;
         NODE = newNode();
         // we must wait for the node to actually be up and running. otherwise the node might have started, elected itself master but might not yet have removed the
@@ -95,7 +96,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
         IOUtils.close(node);
     }
 
-    private void cleanup(boolean resetNode) throws IOException {
+    private void cleanup(boolean resetNode) throws IOException, NodeValidationException {
         assertAcked(client().admin().indices().prepareDelete("*").get());
         if (resetNode) {
             reset();
@@ -163,7 +164,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
         return Settings.EMPTY;
     }
 
-    private Node newNode() {
+    private Node newNode() throws NodeValidationException {
         final Path tempDir = createTempDir();
         Settings settings = Settings.builder()
             .put(ClusterName.CLUSTER_NAME_SETTING.getKey(), InternalTestCluster.clusterName("single-node-cluster", randomLong()))

@@ -427,18 +427,7 @@ public class InternalSearchHit implements SearchHit {
     public XContentBuilder toInnerXContent(XContentBuilder builder, Params params) throws IOException {
         List<SearchHitField> metaFields = new ArrayList<>();
         List<SearchHitField> otherFields = new ArrayList<>();
-        if (fields != null && !fields.isEmpty()) {
-            for (SearchHitField field : fields.values()) {
-                if (field.values().isEmpty()) {
-                    continue;
-                }
-                if (field.isMetadataField()) {
-                    metaFields.add(field);
-                } else {
-                    otherFields.add(field);
-                }
-            }
-        }
+        newFields(metaFields, otherFields);
 
         // For inner_hit hits shard is null and that is ok, because the parent search hit has all this information.
         // Even if this was included in the inner_hit hits this would be the same, so better leave it out.
@@ -473,33 +462,8 @@ public class InternalSearchHit implements SearchHit {
         if (source != null) {
             XContentHelper.writeRawField("_source", source, builder, params);
         }
-        if (!otherFields.isEmpty()) {
-            builder.startObject(Fields.FIELDS);
-            for (SearchHitField field : otherFields) {
-                builder.startArray(field.name());
-                for (Object value : field.getValues()) {
-                    builder.value(value);
-                }
-                builder.endArray();
-            }
-            builder.endObject();
-        }
-        if (highlightFields != null && !highlightFields.isEmpty()) {
-            builder.startObject(Fields.HIGHLIGHT);
-            for (HighlightField field : highlightFields.values()) {
-                builder.field(field.name());
-                if (field.fragments() == null) {
-                    builder.nullValue();
-                } else {
-                    builder.startArray();
-                    for (Text fragment : field.fragments()) {
-                        builder.value(fragment);
-                    }
-                    builder.endArray();
-                }
-            }
-            builder.endObject();
-        }
+        newOtherFields(builder, otherFields);
+        newHighlight(builder);
         if (sortValues != null && sortValues.length > 0) {
             builder.startArray(Fields.SORT);
             for (Object sortValue : sortValues) {
@@ -518,6 +482,11 @@ public class InternalSearchHit implements SearchHit {
             builder.field(Fields._EXPLANATION);
             buildExplanation(builder, explanation());
         }
+        newInnerHits(builder, params);
+        return builder;
+    }
+
+    private void newInnerHits(XContentBuilder builder, Params params) throws IOException {
         if (innerHits != null) {
             builder.startObject(Fields.INNER_HITS);
             for (Map.Entry<String, InternalSearchHits> entry : innerHits.entrySet()) {
@@ -527,7 +496,54 @@ public class InternalSearchHit implements SearchHit {
             }
             builder.endObject();
         }
-        return builder;
+    }
+
+    private void newOtherFields(XContentBuilder builder, List<SearchHitField> otherFields) throws IOException {
+        if (!otherFields.isEmpty()) {
+            builder.startObject(Fields.FIELDS);
+            for (SearchHitField field : otherFields) {
+                builder.startArray(field.name());
+                for (Object value : field.getValues()) {
+                    builder.value(value);
+                }
+                builder.endArray();
+            }
+            builder.endObject();
+        }
+    }
+
+    private void newFields(List<SearchHitField> metaFields, List<SearchHitField> otherFields) {
+        if (fields != null && !fields.isEmpty()) {
+            for (SearchHitField field : fields.values()) {
+                if (field.values().isEmpty()) {
+                    continue;
+                }
+                if (field.isMetadataField()) {
+                    metaFields.add(field);
+                } else {
+                    otherFields.add(field);
+                }
+            }
+        }
+    }
+
+    private void newHighlight(XContentBuilder builder) throws IOException {
+        if (highlightFields != null && !highlightFields.isEmpty()) {
+            builder.startObject(Fields.HIGHLIGHT);
+            for (HighlightField field : highlightFields.values()) {
+                builder.field(field.name());
+                if (field.fragments() == null) {
+                    builder.nullValue();
+                } else {
+                    builder.startArray();
+                    for (Text fragment : field.fragments()) {
+                        builder.value(fragment);
+                    }
+                    builder.endArray();
+                }
+            }
+            builder.endObject();
+        }
     }
 
     private void buildExplanation(XContentBuilder builder, Explanation explanation) throws IOException {

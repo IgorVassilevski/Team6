@@ -29,6 +29,7 @@ import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.indices.IndexTemplateMissingException;
+import org.elasticsearch.node.NodeValidationException;
 import org.elasticsearch.repositories.RepositoryMissingException;
 
 import java.io.Closeable;
@@ -63,7 +64,7 @@ public abstract class TestCluster implements Closeable {
     /**
      * This method should be executed before each test to reset the cluster to its initial state.
      */
-    public void beforeTest(Random random, double transportClientRatio) throws IOException, InterruptedException {
+    public void beforeTest(Random random, double transportClientRatio) throws IOException, InterruptedException, NodeValidationException {
         assert transportClientRatio >= 0.0 && transportClientRatio <= 1.0;
         logger.debug("Reset test cluster with transport client ratio: [{}]", transportClientRatio);
         this.transportClientRatio = transportClientRatio;
